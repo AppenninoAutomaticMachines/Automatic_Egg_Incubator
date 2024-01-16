@@ -1,0 +1,37 @@
+INPUT
+OUTPUT
+
+relè
+
+scatolina di transistor assortiti [BNGGD]
+mosfet + transistor
+  
+[BNGGD]
+
+  
+- presa + alimentatore 220V to 12V
+- step down 12V to 5V
+- Raspberry + alimentatore
+- monitor HDMI + tastiera + mouse
+- Arduino + cavo USB connessione
+- BLE Module per eventuale tramissione di dati a cellulare [BNGGD]
+- Presa 220V per attaccarsi con PC
+- Connettori 12V per eventuali servizi [BNGGD]
+- [2 DO]Sriscia LED Incubator + Zona schiusa [contare i metri]
+- [2 DO] relè per main_heater & auxiliary_heater [BNGGD]
+- [2 DO] relè per main_fan & auxiliary_fan 
+- [2 DO] water atomizator + auxiliary_fan [BNGGD]
+- [] stepper + driver [BNGGD] kit cno 4 motori per stampante?
+- [1 I2C DI] external temperature sensor
+- [? I2C DI] internal temperature sensors 2/4
+- [2 DO] motori laterali saracinesca per ricambio aria (+ ventolina?)
+- [1] DHT 11 sensore di temperatura + umidità [BNGGD]
+
+// Future expansions
+- [1/2 DI] encoder di posizione
+- [1 DI] induttore apertura porta frigo
+- [] stepper per saracinesca. Uno stepper dietro che aziona leveraggio per apertura di saracinesche laterali. Controllo di posizione e % di apertura della saracinesca.
+- collegare LED con mosfet / PWM per variare luminosità, di notte per esempio.
+
+
+
