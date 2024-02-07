@@ -38,7 +38,6 @@ void loop() {
     // Pian piano lo svuoto. Oppure mi metto in while e mi blocco a leggere tutto
     if (incomingCommand.length() > 0) {
       Serial.println(incomingCommand);  
-      Serial.print("Point1");    
       //Serial.flush();
     }
   }
@@ -91,5 +90,6 @@ void ledBlink(byte pinNumber, unsigned long timingInterval){
       ledState_ledBlink = LOW;      
       digitalWrite(pinNumber, ledState_ledBlink);
     }
+    Serial.print(ledState_ledBlink);
   }
 }
