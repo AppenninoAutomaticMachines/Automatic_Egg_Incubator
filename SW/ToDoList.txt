@@ -1,0 +1,4 @@
+- Se Arduino si spegne, ripristinare la connessione seriale.
+- HandShake all'avvio: vogli che Raspberry si accorga che arduino si è spento e, eventualmente, non si sta riprendendo.
+- bit di Alive (vabbè che è la comunicazione seriale stessa...). Anzi, potrei farlo con un digitalOutput di arduino e 
+  rileggerlo con un GPIO di raspberry, così non passo per la seriale se dovesse aver dei problemi.
