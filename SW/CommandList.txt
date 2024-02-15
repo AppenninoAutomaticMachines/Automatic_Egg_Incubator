@@ -11,8 +11,8 @@ If need to set numbers: what follows the _is the number to be used, according to
 #xx_123
 
 ## COMMAND ID ## DESCRIPTION ##
-      aa          Rpy authorizing Arduino to proceed forward in the code
-      ab
+      aa            RPY authorizing INO to proceed forward in the code
+      nc            No commands. RPY doesn't have to send nothing to INO
       ac
 
 
