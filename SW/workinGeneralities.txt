@@ -1,0 +1,27 @@
+
+principi di funzionamento gnerale.
+
+RPY cicla.                   Arduino cicla
+readingDataFromArduino     readingCommandsFromRPY
+                           # reply --> readingDone (series of commands needs to have a EOT End Of Tranmission Char)
+  .                                .
+  .                                .
+  .                                .
+  .                                .
+sendingCommandsToArduino   sendingDataToArduino
+
+
+RPY lo faccio che cicla sempre.
+Se per un po' di cicli salta la comunicazione no problem e uso i dati precedenti/uso flag di communicationUpdated = True
+Faccio un conteggio oltre il quale se arduino non risponde allora triggero messaggio di comunicazione e mando un reset.
+
+Arduino pure cicla sempre. Se non ha comandi fa le sue cose di monitoraggio e mi ritorna semplicemente i dati.
+Se deve fare cose, allroa rimarrà impegnato nella sua routine che fa cose e si, in questo caso, prolungherà un po' il 
+tempo di esecuzione (e quindi di risposta nella comunicazione).
+
+Voglio leggere più comandi in serie. Quindi mi servono dei while(Serial.available() > 0). 
+Per fare questo ho bisogno di terminatori EOT End Of Tranmission e dei sengali di sincronizzazione
+
+durante il corso del programma faccio una lista commandsToSend, che passo passo popolo con le cose che devo fare.
+commandsToSend.append['xx']. Ovviamente controllo sulla lunghezza massima + eventuale memoria/secondo array di comando.
+
