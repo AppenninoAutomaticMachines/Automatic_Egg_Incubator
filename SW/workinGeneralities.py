@@ -25,3 +25,28 @@ Per fare questo ho bisogno di terminatori EOT End Of Tranmission e dei sengali d
 durante il corso del programma faccio una lista commandsToSend, che passo passo popolo con le cose che devo fare.
 commandsToSend.append['xx']. Ovviamente controllo sulla lunghezza massima + eventuale memoria/secondo array di comando.
 
+
+Commands are from RPY --> Arduino
+Readings are from Arduino --> RPY
+
+Commands in format:
+let's use 2 letters to identify commands
+26 letters on the keyboards * 2 with Maiusc = 52 letters
+52*52 = 2704 possibile combinations of commands
+
+If need to set numbers: what follows the _is the number to be used, according to the command.
+
+#xx_123
+
+## COMMAND ID ## DESCRIPTION ##
+      aa            RPY authorizing INO to proceed forward in the code
+      nc            No commands. RPY doesn't have to send nothing to INO
+      ac
+
+
+#001 the following command is #34 (value t be setted in the corresponding parameter)
+
+Series of commands:
+#GNRL001#SET001#34
+
+Which is the maximum length of series of command I can send?
