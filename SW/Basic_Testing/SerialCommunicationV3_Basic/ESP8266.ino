@@ -332,7 +332,6 @@ void loop() {
   }
   else{
     //Serial.println('$'); // if code is following this branch, I want to notify Arduino I'm gonna be SLOW
-    delay(5);
     if(oneTimeVar_1){
       /* printing first page */
       client.flush();
@@ -597,7 +596,6 @@ void loop() {
         lowerFanOn_varOld = false;
       }
 
-      serialFlush(); 
       for(byte i = 0; i < listofDataToSend_numberOfData; i++){
         Serial.print(listofDataToSend[i]); 
       }
