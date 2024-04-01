@@ -154,9 +154,6 @@ void loop() {
   listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(strcat(bufferChar, fbuffChar), ">"), '\0');
   listofDataToSend_numberOfData++;
 
-  // printing over serial buffer:
-  serialFlush();
-  delay(1);
   
   for(byte i = 0; i < listofDataToSend_numberOfData; i++){
     Serial.print(listofDataToSend[i]);
