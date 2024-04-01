@@ -63,6 +63,11 @@ void setup() {
   pinMode(stepPin, OUTPUT);
   digitalWrite(stepPin, LOW);
 
+  pinMode(12, OUTPUT);
+  pinMode(11, OUTPUT);
+  pinMode(10, OUTPUT);
+  pinMode(9, OUTPUT);
+
   Serial.begin(9600); // che scrive veloce verso ESP8266
   
   serialFlush();
@@ -112,7 +117,7 @@ void loop() {
 
   if(move){
     digitalWrite(stepPin, HIGH);
-    delay(1);
+    delay(10);
     digitalWrite(stepPin, LOW);
   }
   else{
@@ -175,7 +180,7 @@ void loop() {
             digitalWrite(directionPin, LOW);
           }
           if(tempReceivedCommand.indexOf("stepperMotorBackwardOff") >= 0){
-           move = false;
+            move = false;
           }
           if(tempReceivedCommand.indexOf("mainHeaterOn") >= 0){
             digitalWrite(12, HIGH);
