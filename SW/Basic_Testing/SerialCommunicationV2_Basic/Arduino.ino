@@ -11,6 +11,8 @@
  Arduino UNO modalità funzionamento + comunicazione seriale con ESP8266: Arduino Uno normale Mode 4 (SW1 and SW2 are On)
 */
 
+#include <SoftwareSerial.h>
+
 /* TEMPERATURES SECTION */
 #include <OneWire.h>
 #include <DallasTemperature.h>
@@ -25,6 +27,8 @@ DallasTemperature sensors(&oneWire);
 DeviceAddress Thermometer[MAX_SENSORS];
 byte numberOfDevices;
 byte Limit;
+unsigned long conversionTime_DS18B20_sensors; // in millis
+unsigned long lastTempRequest;
 
 #if !defined(DEVICE_DISCONNECTED)
 #define DEVICE_DISCONNECTED -127
@@ -76,6 +80,11 @@ void setup() {
   /* TEMPERATURES SECTION */
   sensors.begin();
   numberOfDevices = sensors.getDeviceCount();
+  sensors.setWaitForConversion(false);
+  sensors.requestTemperatures();
+  lastTempRequest = millis(); 
+  conversionTime_DS18B20_sensors = 750 / (1 << (12 - TEMPERATURE_PRECISION));  // res in {9,10,11,12}
+
 
   if (numberOfDevices > MAX_SENSORS){
     Limit = MAX_SENSORS;
@@ -83,38 +92,40 @@ void setup() {
   else{
     Limit = numberOfDevices;
   }
-
+  
   for(byte index = 0; index < Limit; index++){
     if(sensors.getAddress(Thermometer[index], index)){
       sensors.setResolution(Thermometer[index], TEMPERATURE_PRECISION);
-      delay(750/ (1 << (12-TEMPERATURE_PRECISION)));
+      //delay(750/ (1 << (12-TEMPERATURE_PRECISION)));
     }
   }
 }
 
 void loop() {    
   // NORMAL CODE
-  sensors.requestTemperatures();
-
-  for(byte index = 0; index < Limit; index++){
-    float tempC = sensors.getTempC(Thermometer[index]);
-    if (tempC == DEVICE_DISCONNECTED) {
-      ;//Serial.print(F("Error getting temperature"));
-    } 
-    else {
-      //Serial.print(tempC);
-      if(index == 0){
-        temp_sensor1 = tempC;
-      }
-      else if(index == 1){
-        temp_sensor2 = tempC;
-      }
-      else if(index == 2){
-        temp_sensor3 = tempC;
+  if(millis() - lastTempRequest >= conversionTime_DS18B20_sensors){
+    for(byte index = 0; index < Limit; index++){
+      float tempC = sensors.getTempC(Thermometer[index]);
+      if (tempC == DEVICE_DISCONNECTED) {
+        ;//Serial.print(F("Error getting temperature"));
+      } 
+      else {
+        //Serial.print(tempC);
+        if(index == 0){
+          temp_sensor1 = tempC;
+        }
+        else if(index == 1){
+          temp_sensor2 = tempC;
+        }
+        else if(index == 2){
+          temp_sensor3 = tempC;
+        }
       }
     }
+    sensors.requestTemperatures();
+    lastTempRequest = millis();
   }
-
+    
   if(move){
     digitalWrite(stepPin, HIGH);
     delay(10);
@@ -123,7 +134,7 @@ void loop() {
   else{
     digitalWrite(stepPin, LOW);
   }
-
+  
   if(!ESP8266_superSlowCode_isExecuting){
     // riempo i dati per la trasmissione
     listofDataToSend_numberOfData = 0; // ad ogni giro lo azzero    
