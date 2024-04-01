@@ -217,6 +217,15 @@ String html_stepper_2 = R"=====(
  
 #include <ESP8266WiFi.h>
 
+#include <SoftwareSerial.h>
+const byte rxPin = 12;
+const byte txPin = 16;
+
+SoftwareSerial toArduinoSerial(rxPin, txPin);
+
+// Set up a new SoftwareSerial object
+SoftwareSerial mySerial (rxPin, txPin);
+
 // NETWORK CONFIGURATION
 #define ACCESS_POINT_CONFIGURATION 
 //#define TPLINK_CONFIGURATION 
@@ -273,6 +282,8 @@ byte listofDataToSend_numberOfData = 0;
 
 void setup() {
   Serial.begin(9600);
+
+  toArduinoSerial.begin(9600);
 
   #ifdef ACCESS_POINT_CONFIGURATION
     WiFi.softAPConfig(local_IP, gateway, subnet);
