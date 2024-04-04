@@ -9,12 +9,15 @@ class temperatureController{
   public:
     temperatureController();
 
-    void periodicRun(float *temperatures);
-    void setReferenceTemperature(float referenceTemperature);
+    void periodicRun(float *temperatures, byte dimension);
     void setTemperatureHysteresis(float lowerTemperature, float higherTemperature);
     void setControlModality(byte controlModality);
 
     bool getOutputState(void);
+    
+    // debug
+    float debug_getActualTemperature(void);
+    byte debug_getHysteresisState(void);
 
   private:
     // hysteresis parameters
