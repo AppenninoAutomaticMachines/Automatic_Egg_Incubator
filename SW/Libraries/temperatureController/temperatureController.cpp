@@ -13,6 +13,7 @@ temperatureController::temperatureController(){
 }
 
 // aggiungi eventuale costruttore dove gli passi subito il pin che deve controllare del/dei riscaldatori
+// in tal caso metto anche due metodini per fare la forzatura ON OFF dell'attuatore, per fare override del comando automatico in caso di necessità.
 
 
 void temperatureController::periodicRun(float *temperatures){   
