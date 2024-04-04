@@ -14,6 +14,7 @@
 #include <SoftwareSerial.h>
 
 /* TEMPERATURES SECTION */
+#include <temperatureController.h>
 #include <OneWire.h>
 #include <DallasTemperature.h>
 
@@ -22,6 +23,7 @@ OneWire oneWire(ONE_WIRE_BUS);
 
 DallasTemperature sensors(&oneWire);
 
+#define MAX_REACHABLE_TEMPERATURE_SATURATION 40.0
 #define TEMPERATURE_PRECISION 9 // DS18B20 digital termometer provides 9-bit to 12-bit Celsius temperature measurements
 #define MAX_SENSORS 10
 DeviceAddress Thermometer[MAX_SENSORS];
@@ -33,7 +35,12 @@ unsigned long lastTempRequest;
 #if !defined(DEVICE_DISCONNECTED)
 #define DEVICE_DISCONNECTED -127
 #endif
+
+// temperature control
+
+temperatureController temperatureController;
 /* END TEMPERATURES SECTION */
+
 
 /* MOTORS SECTION */
 byte directionPin = 7;
@@ -78,6 +85,8 @@ void setup() {
   delay(5);
 
   /* TEMPERATURES SECTION */
+  temperatureController.setTemperatureHysteresis(20.0, 22.0);
+
   sensors.begin();
   numberOfDevices = sensors.getDeviceCount();
   sensors.setWaitForConversion(false);
@@ -99,32 +108,26 @@ void setup() {
       //delay(750/ (1 << (12-TEMPERATURE_PRECISION)));
     }
   }
+  /* END TEMPERATURES SECTION */
 }
 
 void loop() {    
-  // NORMAL CODE
+  /* TEMPERATURES SECTION */
+  float temperatures[Limit]; // declaring it here, once I know the dimension
+
   if(millis() - lastTempRequest >= conversionTime_DS18B20_sensors){
     for(byte index = 0; index < Limit; index++){
-      float tempC = sensors.getTempC(Thermometer[index]);
-      if (tempC == DEVICE_DISCONNECTED) {
-        ;//Serial.print(F("Error getting temperature"));
-      } 
-      else {
-        //Serial.print(tempC);
-        if(index == 0){
-          temp_sensor1 = tempC;
-        }
-        else if(index == 1){
-          temp_sensor2 = tempC;
-        }
-        else if(index == 2){
-          temp_sensor3 = tempC;
-        }
-      }
+      temperatures[index] = sensors.getTempC(Thermometer[index]);
     }
     sensors.requestTemperatures();
     lastTempRequest = millis();
   }
+
+  temperatureController.periodicRun(temperatures);
+
+  bool heatingOn = temperatureController.getOutputState();
+
+  /* END TEMPERATURES SECTION */
     
   if(move){
     digitalWrite(stepPin, HIGH);
