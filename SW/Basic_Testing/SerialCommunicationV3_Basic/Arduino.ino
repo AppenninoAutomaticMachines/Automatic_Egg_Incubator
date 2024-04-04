@@ -123,7 +123,7 @@ void loop() {
     lastTempRequest = millis();
   }
 
-  temperatureController.periodicRun(temperatures);
+  temperatureController.periodicRun(temperatures, Limit);
 
   bool heatingOn = temperatureController.getOutputState();
 
