@@ -16,7 +16,7 @@ temperatureController::temperatureController(){
 // in tal caso metto anche due metodini per fare la forzatura ON OFF dell'attuatore, per fare override del comando automatico in caso di necessità.
 
 
-void temperatureController::periodicRun(float *temperatures){   
+void temperatureController::periodicRun(float *temperatures, byte dimension){  
 
   switch(_controlModality){
     case 0:
@@ -24,7 +24,7 @@ void temperatureController::periodicRun(float *temperatures){
 
     case 1:
       float maxTemperature = temperatures[0];
-      for (int i = 0; i < (sizeof(temperatures) / sizeof(temperatures[0])); i++) {
+      for (int i = 0; i < dimension; i++) {
         if (temperatures[i] > maxTemperature) {
           maxTemperature = temperatures[i];
         }
@@ -36,10 +36,10 @@ void temperatureController::periodicRun(float *temperatures){
     case 2:
       float meanTemperature;
       float sum = 0.0;
-      for (int i = 0; i < (sizeof(temperatures) / sizeof(temperatures[0])); i++) {
+      for (int i = 0; i < dimension; i++) {
         sum = sum + temperatures[i];
       }
-      _actualTemperature = sum / sizeof(temperatures);
+      _actualTemperature = sum / dimension;
 
       break;
 
@@ -57,7 +57,7 @@ void temperatureController::periodicRun(float *temperatures){
       else if(_actualTemperature > _higherTemperature){
         _hysteresisState = 2;              
       }
-      else{
+      else{ // se sono nel mezzo dell'intervallo, NON heating tratto sotto
         _hysteresisState = 2;
       }
       break;
@@ -72,7 +72,7 @@ void temperatureController::periodicRun(float *temperatures){
       break;
 
     case 2: // tratto sotto di not heating
-      _outputState = false; //heating 
+      _outputState = false; //not heating 
         
       if(_actualTemperature < _lowerTemperature){
         _hysteresisState = 1;     
@@ -86,3 +86,30 @@ void temperatureController::periodicRun(float *temperatures){
   /* TIMING COUNT: conteggio di quanto sta ON l'attuatore. */
   
 }
+
+void temperatureController::setTemperatureHysteresis(float lowerTemperature, float higherTemperature){
+  _higherTemperature = higherTemperature;
+  _lowerTemperature = lowerTemperature;
+}
+
+void temperatureController::setControlModality(byte controlModality){
+  _controlModality = controlModality;
+}
+
+bool temperatureController::getOutputState(void){
+  return _outputState;
+}
+
+float temperatureController::debug_getActualTemperature(void){
+  return _actualTemperature;
+}
+
+byte temperatureController::debug_getHysteresisState(void){
+  return _hysteresisState;
+}
+
+
+
+
+
+
