@@ -30,7 +30,7 @@ void setup() {
   Serial.begin(9600);
 
   /* TEMPERATURES SECTION */
-  temperatureController.setTemperatureHysteresis(22.0, 26.0);
+  temperatureController.setTemperatureHysteresis(25.0, 27.0);
 
   sensors.begin();
   numberOfDevices = sensors.getDeviceCount();
