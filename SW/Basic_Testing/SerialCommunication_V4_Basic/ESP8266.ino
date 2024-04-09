@@ -78,7 +78,7 @@ String manualControl_html_1 = R"=====(
  
     function updateTemp() 
     {  
-       ajaxLoad('getTemp3'); 
+       ajaxLoad("getTemp3"); 
     }
  
     var ajaxRequest = null;
@@ -202,32 +202,34 @@ String automaticControl_html_1 = R"=====(
   </style>
  
   <script> 
-    function updateTime() 
-    {  
+    function updateTime(){  
        var d = new Date();
        var t = "";
        t = d.toLocaleTimeString();
        document.getElementById('P_time').innerHTML = t;
     }
  
-    function updateTemp() 
-    {  
-       ajaxLoad('getTemp4'); 
+    function updateTemp(){  
+       ajaxLoad("/getTemp4"); 
     }
  
     var ajaxRequest = null;
-    if (window.XMLHttpRequest)  { ajaxRequest =new XMLHttpRequest(); }
-    else                        { ajaxRequest =new ActiveXObject("Microsoft.XMLHTTP"); }
+
+    if (window.XMLHttpRequest){ 
+      ajaxRequest =new XMLHttpRequest(); 
+    }
+    else{ 
+      ajaxRequest =new ActiveXObject("Microsoft.XMLHTTP"); 
+    }
  
-    function ajaxLoad(ajaxURL)
-    {
-      if(!ajaxRequest){ alert('AJAX is not supported.'); return; }
+    function ajaxLoad(ajaxURL){
+      if(!ajaxRequest){ 
+        alert('AJAX is not supported.'); return; 
+      }
  
       ajaxRequest.open('GET',ajaxURL,true);
-      ajaxRequest.onreadystatechange = function()
-      {
-        if(ajaxRequest.readyState == 4 && ajaxRequest.status==200)
-        {
+      ajaxRequest.onreadystatechange = function(){
+        if(ajaxRequest.readyState == 4 && ajaxRequest.status==200){
           var ajaxResult = ajaxRequest.responseText;
           var tmpArray = ajaxResult.split("|");
           document.getElementById('temp_sensor1').innerHTML = tmpArray[0];
@@ -242,7 +244,7 @@ String automaticControl_html_1 = R"=====(
     var myVar1 = setInterval(updateTemp, 750);  
     var myVar2 = setInterval(updateTime, 750);  
 
-    document.addEventListener("DOMContentLoaded", function (event) {
+    document.addEventListener("DOMContentLoaded", function (event){
         var scrollpos = sessionStorage.getItem('scrollpos');
         if (scrollpos) {
             window.scrollTo(0, scrollpos);
@@ -250,9 +252,16 @@ String automaticControl_html_1 = R"=====(
         }
     });
 
-    window.addEventListener("beforeunload", function (e) {
+    window.addEventListener("beforeunload", function (e){
         sessionStorage.setItem('scrollpos', window.scrollY);
     });
+
+    function submitForm() {
+        var number = document.getElementById("numberInput").value;
+        var xhr = new XMLHttpRequest();
+        xhr.open("POST", "numberInput, " + number, true);
+        xhr.send();
+    }
  
   </script>
 
@@ -275,6 +284,11 @@ String automaticControl_html_1 = R"=====(
      <div id='content_control_variables_section'> 
        <h2>Temperatura di controllo:</h2>
        <p> <span id='actualTemperature'>--.-</span> &deg;C </p>
+       <form id="numberForm">
+          <label for="numberInput">Enter a Number:</label><br>
+          <input type="number" id="numberInput" name="numberInput"><br><br>
+          <button type="button" onclick="submitForm()">Submit</button>
+      </form>
      </div>
     </div>
    <div id='commands_section'>     
@@ -567,7 +581,7 @@ void loop() {
       //Serial.println('@'); 
     }
     else{
-      //Serial.println(request);
+      Serial.println(request);
       /* HANDLING WEB PAGES REQUESTS */
       if(request.indexOf("getTemp3") >= 0){
         sensor1_value = getFloatFromString(receivedCommands[0], ','); 
@@ -594,6 +608,7 @@ void loop() {
             client.print(sensor1_value);   client.print( "|" );  client.print(sensor2_value);   client.print( "|" );  client.print(sensor3_value);  client.print( "|" );  client.print(actualTemperature_value);
             
         }
+        
         //Serial.println('@'); 
         return; // perché se procedessi giù rigenero la pagina HTML da capo
       }
@@ -937,6 +952,24 @@ float getFloatFromString(String string, char divider){
   }
 
   return string.substring(index, (string.length()-1)).toFloat();
+}
+
+int getIntFromStringHtmlPage(String string){ //<inputNumber, 23>
+  int index;
+  byte firstIndex;
+  byte secondIndex;
+  for(byte i =0; i < string.length(); i++) {
+    char c = string[i];
+    
+    if(c == ','){
+      firstIndex = index;
+    }
+    if(c == '>'){
+      secondIndex = index;
+    }
+  }
+
+  return string.substring(firstIndex, secondIndex).toInt();
 }
 
 void serialFlush(){
