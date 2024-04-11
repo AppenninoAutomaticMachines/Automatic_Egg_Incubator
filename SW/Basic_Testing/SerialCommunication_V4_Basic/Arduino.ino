@@ -78,6 +78,8 @@ byte listofDataToSend_numberOfData = 0;
 char bufferChar[35];
 char fbuffChar[10];
 
+float higherHysteresisLimit, lowerHysteresisLimit;
+
 void setup() {
   pinMode(directionPin, OUTPUT);
   digitalWrite(directionPin, LOW);
@@ -96,7 +98,8 @@ void setup() {
   delay(5);
 
   /* TEMPERATURES SECTION */
-  temperatureController.setTemperatureHysteresis(24.0, 26.0);
+  higherHysteresisLimit = 26.0;
+  lowerHysteresisLimit = 24.0;
 
   sensors.begin();
   numberOfDevices = sensors.getDeviceCount();
@@ -134,6 +137,7 @@ void loop() {
     lastTempRequest = millis();
   }
 
+  temperatureController.setTemperatureHysteresis(lowerHysteresisLimit, higherHysteresisLimit);
   temperatureController.periodicRun(temperatures, Limit);
 
   if(automaticControl_var){
@@ -170,7 +174,7 @@ void loop() {
   strcpy(bufferChar, "<temp2, ");
   dtostrf( temperatures[1], 1, 1, fbuffChar); 
   listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(strcat(bufferChar, fbuffChar), ">"), '\0');
-  listofDataToSend_numberOfData++;
+  listofDataToSend_numberOfData++; 
 
   strcpy(bufferChar, "<temp3, ");
   dtostrf( temperatures[2], 1, 1, fbuffChar); 
@@ -179,6 +183,16 @@ void loop() {
 
   strcpy(bufferChar, "<actualTemperature, ");
   dtostrf(temperatureController.debug_getActualTemperature(), 1, 1, fbuffChar); 
+  listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(strcat(bufferChar, fbuffChar), ">"), '\0');
+  listofDataToSend_numberOfData++;
+
+  strcpy(bufferChar, "<hHystLim_INO, "); //hHystLim_INO
+  dtostrf(higherHysteresisLimit, 1, 1, fbuffChar); 
+  listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(strcat(bufferChar, fbuffChar), ">"), '\0');
+  listofDataToSend_numberOfData++;
+
+  strcpy(bufferChar, "<lHystLim_INO, "); //lHystLim_INO
+  dtostrf(lowerHysteresisLimit, 1, 1, fbuffChar); 
   listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(strcat(bufferChar, fbuffChar), ">"), '\0');
   listofDataToSend_numberOfData++;
 
@@ -239,6 +253,12 @@ void loop() {
         }
         if(tempReceivedCommand.indexOf("automaticControlOff") >= 0){
           automaticControl_var = false;
+        }
+        if(tempReceivedCommand.indexOf("hHystLim") >= 0){ // setting the higherHysteresisLimit
+          higherHysteresisLimit = getFloatFromString(tempReceivedCommand, ',');
+        }
+        if(tempReceivedCommand.indexOf("lHystLim") >= 0){ // setting the lowerHysteresisLimit
+          lowerHysteresisLimit = getFloatFromString(tempReceivedCommand, ',');
         }
       }
   } 
