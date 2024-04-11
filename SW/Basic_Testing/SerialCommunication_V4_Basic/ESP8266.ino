@@ -210,7 +210,7 @@ String automaticControl_html_1 = R"=====(
     }
  
     function updateTemp(){  
-       ajaxLoad("/getTemp4"); 
+       ajaxLoad("/getVariables"); 
     }
  
     var ajaxRequest = null;
@@ -235,14 +235,16 @@ String automaticControl_html_1 = R"=====(
           document.getElementById('temp_sensor1').innerHTML = tmpArray[0];
           document.getElementById('temp_sensor2').innerHTML = tmpArray[1];
           document.getElementById('temp_sensor3').innerHTML = tmpArray[2];
-          document.getElementById('actualTemperature').innerHTML = tmpArray[3];
+          document.getElementById('actualT').innerHTML = tmpArray[3];
+          document.getElementById('hHystLimINO').innerHTML = tmpArray[4];
+          document.getElementById('lHystLimINO').innerHTML = tmpArray[5];
         }
       }
       ajaxRequest.send();
     }
  
-    var myVar1 = setInterval(updateTemp, 750);  
-    var myVar2 = setInterval(updateTime, 750);  
+    var myVar1 = setInterval(updateTemp, 500);  
+    var myVar2 = setInterval(updateTime, 500);  
 
     document.addEventListener("DOMContentLoaded", function (event){
         var scrollpos = sessionStorage.getItem('scrollpos');
@@ -256,10 +258,17 @@ String automaticControl_html_1 = R"=====(
         sessionStorage.setItem('scrollpos', window.scrollY);
     });
 
-    function submitForm() {
-        var number = document.getElementById("numberInput").value;
+    function submitForm_higherHysteresisLimit() {
+        var number = document.getElementById("hHystLimHt").value;
         var xhr = new XMLHttpRequest();
-        xhr.open("POST", "numberInput, " + number, true);
+        xhr.open("POST", "hHystLimHt," + number + ";", true);
+        xhr.send();
+    }
+
+    function submitForm_lowerHysteresisLimit() {
+        var number = document.getElementById("lHystLimHt").value;
+        var xhr = new XMLHttpRequest();
+        xhr.open("POST", "lHystLimHt," + number + ";", true);
         xhr.send();
     }
  
@@ -283,11 +292,21 @@ String automaticControl_html_1 = R"=====(
     <div id='control_variables_section'>     
      <div id='content_control_variables_section'> 
        <h2>Temperatura di controllo:</h2>
-       <p> <span id='actualTemperature'>--.-</span> &deg;C </p>
+       <p> <span id='actualT'>--.-</span> &deg;C </p>
        <form id="numberForm">
-          <label for="numberInput">Enter a Number:</label><br>
-          <input type="number" id="numberInput" name="numberInput"><br><br>
-          <button type="button" onclick="submitForm()">Submit</button>
+          <label for="hHystLimHt">T Alta:</label><br>
+          <input type="number" id="hHystLimHt" name="hHystLimHt">
+          <span id='hHystLimINO'>--.-</span> &deg;C
+          <br><br>
+          <button type="button" onclick="submitForm_higherHysteresisLimit()">Submit</button>
+          <br><br>
+
+          <label for="lHystLimHt">T Bassa:</label><br>
+          <input type="number" id="lHystLimHt" name="lHystLimHt">
+          <span id='lHystLimINO'>--.-</span> &deg;C
+          <br><br>
+          <button type="button" onclick="submitForm_lowerHysteresisLimit()">Submit</button>
+          <br><br>
       </form>
      </div>
     </div>
@@ -504,6 +523,11 @@ bool lowerFanOn_var = false;
 bool lowerFanOn_varOld = false;
 
 float sensor1_value, sensor2_value, sensor3_value, actualTemperature_value;
+float higherHysteresisLimit_arduino_html, lowerHysteresisLimit_arduino_html;
+int higherHysteresisLimit_user_html, lowerHysteresisLimit_user_html;
+
+bool send_higherHysteresisLimit_user_html = false;
+bool send_lowerHysteresisLimit_user_html = false;
 
 // RECEIVING FROM ARDUINO
 #define MAX_NUMBER_OF_COMMANDS_FROM_BOARD 20
@@ -515,6 +539,9 @@ byte numberOfCommandsFromBoard;
 #define MAX_NUMBER_OF_COMMANDS_TO_BOARD 20
 String listofDataToSend[MAX_NUMBER_OF_COMMANDS_TO_BOARD];
 byte listofDataToSend_numberOfData = 0;
+
+char bufferChar[35];
+char fbuffChar[10];
 
 void setup() {
   Serial.begin(9600);
@@ -581,7 +608,7 @@ void loop() {
       //Serial.println('@'); 
     }
     else{
-      Serial.println(request);
+      //Serial.println(request);
       /* HANDLING WEB PAGES REQUESTS */
       if(request.indexOf("getTemp3") >= 0){
         sensor1_value = getFloatFromString(receivedCommands[0], ','); 
@@ -597,20 +624,33 @@ void loop() {
         return; // perché se procedessi giù rigenero la pagina HTML da capo
       }
 
-      if(request.indexOf("getTemp4") >= 0){
+      if(request.indexOf("getVariables") >= 0){
         sensor1_value = getFloatFromString(receivedCommands[0], ','); 
         sensor2_value = getFloatFromString(receivedCommands[1], ','); 
         sensor3_value = getFloatFromString(receivedCommands[2], ','); 
         actualTemperature_value = getFloatFromString(receivedCommands[3], ',');
+        higherHysteresisLimit_arduino_html = getFloatFromString(receivedCommands[4], ',');
+        lowerHysteresisLimit_arduino_html = getFloatFromString(receivedCommands[5], ',');
 
         if (!isnan(sensor1_value) && !isnan(sensor2_value) && !isnan(sensor3_value) && !isnan(actualTemperature_value)){
             client.print(header);
             client.print(sensor1_value);   client.print( "|" );  client.print(sensor2_value);   client.print( "|" );  client.print(sensor3_value);  client.print( "|" );  client.print(actualTemperature_value);
+            client.print( "|" );  client.print(higherHysteresisLimit_arduino_html); client.print( "|" );  client.print(lowerHysteresisLimit_arduino_html);
             
         }
         
         //Serial.println('@'); 
         return; // perché se procedessi giù rigenero la pagina HTML da capo
+      }
+
+      if(request.indexOf("hHystLimHt") >= 0){ // il formato è del tipo: hHystLimHt,20;   , + numero + termino con ;
+        higherHysteresisLimit_user_html = getIntFromStringHtmlPage(request); 
+        send_higherHysteresisLimit_user_html = true;
+      }
+
+      if(request.indexOf("lHystLimHt") >= 0){ // il formato è del tipo: higherHysteresisLimit_user_html,20;  ,+ numero + termino con ;
+        lowerHysteresisLimit_user_html = getIntFromStringHtmlPage(request); 
+        send_lowerHysteresisLimit_user_html = true;
       }
 
       if(request.indexOf("favicon.ico") >= 0){
@@ -893,6 +933,22 @@ void loop() {
         automaticControl_varOld = false;
       }
 
+      if(send_higherHysteresisLimit_user_html){
+        strcpy(bufferChar, "<hHystLim, ");
+        dtostrf(float(higherHysteresisLimit_user_html), 1, 1, fbuffChar); 
+        listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(strcat(bufferChar, fbuffChar), ">"), "\0");
+        listofDataToSend_numberOfData++;
+        send_higherHysteresisLimit_user_html = false;
+      }
+
+      if(send_lowerHysteresisLimit_user_html){
+        strcpy(bufferChar, "<lHystLim, ");
+        dtostrf(float(lowerHysteresisLimit_user_html), 1, 1, fbuffChar); 
+        listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(strcat(bufferChar, fbuffChar), ">"), "\0");
+        listofDataToSend_numberOfData++;
+        send_lowerHysteresisLimit_user_html = false;
+      }
+
       if(listofDataToSend_numberOfData >0 ){
         for(byte i = 0; i < listofDataToSend_numberOfData; i++){
           Serial.print(listofDataToSend[i]); 
@@ -954,22 +1010,36 @@ float getFloatFromString(String string, char divider){
   return string.substring(index, (string.length()-1)).toFloat();
 }
 
-int getIntFromStringHtmlPage(String string){ //<inputNumber, 23>
+int getIntFromStringHtmlPage(String string){ //inputNumber, 23;
   int index;
   byte firstIndex;
-  byte secondIndex;
+  bool memorize = false;
+  const byte numChars = 5;
+  char receivedChars[numChars];   // an array to store the received data
+  byte index_receivedChars = 0;
+
   for(byte i =0; i < string.length(); i++) {
     char c = string[i];
     
     if(c == ','){
       firstIndex = index;
+      memorize = true;
     }
-    if(c == '>'){
-      secondIndex = index;
+    else if(c == ';'){
+      byte next = firstIndex + 1; // posto successivo alla ,
+      if(index == next){
+        return 0;
+      }
+      break;
+    }
+    else{
+      if(memorize){
+        receivedChars[index_receivedChars] = c;
+        index_receivedChars = index_receivedChars + 1;
+      }
     }
   }
-
-  return string.substring(firstIndex, secondIndex).toInt();
+  return atoi(receivedChars);  
 }
 
 void serialFlush(){
