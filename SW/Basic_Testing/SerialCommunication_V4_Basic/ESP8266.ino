@@ -259,16 +259,16 @@ String automaticControl_html_1 = R"=====(
     });
 
     function submitForm_higherHysteresisLimit() {
-        var number = document.getElementById("hHystLimHt").value;
+        var number = document.getElementById("hHL").value;
         var xhr = new XMLHttpRequest();
-        xhr.open("POST", "hHystLimHt," + number + ";", true);
+        xhr.open("POST", "hHL," + number + ";", true);
         xhr.send();
     }
 
     function submitForm_lowerHysteresisLimit() {
-        var number = document.getElementById("lHystLimHt").value;
+        var number = document.getElementById("lHL").value;
         var xhr = new XMLHttpRequest();
-        xhr.open("POST", "lHystLimHt," + number + ";", true);
+        xhr.open("POST", "lHL," + number + ";", true);
         xhr.send();
     }
  
@@ -294,15 +294,15 @@ String automaticControl_html_1 = R"=====(
        <h2>Temperatura di controllo:</h2>
        <p> <span id='actualT'>--.-</span> &deg;C </p>
        <form id="numberForm">
-          <label for="hHystLimHt">T Alta:</label><br>
-          <input type="number" id="hHystLimHt" name="hHystLimHt">
+          <label for="hHL">T Alta:</label><br>
+          <input type="number" id="hHL" name="hHL">
           <span id='hHystLimINO'>--.-</span> &deg;C
           <br><br>
           <button type="button" onclick="submitForm_higherHysteresisLimit()">Submit</button>
           <br><br>
 
-          <label for="lHystLimHt">T Bassa:</label><br>
-          <input type="number" id="lHystLimHt" name="lHystLimHt">
+          <label for="lHL">T Bassa:</label><br>
+          <input type="number" id="lHL" name="lHL">
           <span id='lHystLimINO'>--.-</span> &deg;C
           <br><br>
           <button type="button" onclick="submitForm_lowerHysteresisLimit()">Submit</button>
@@ -451,6 +451,8 @@ String stepperControl_html_2 = R"=====(
 
 /* ADDITIONAL SERIAL BUS */
 #include <SoftwareSerial.h>
+#define SERIAL_SPEED 19200 
+
 const byte rxPin = 12;
 const byte txPin = 16;
 SoftwareSerial toArduinoSerial(rxPin, txPin);
@@ -544,7 +546,7 @@ char bufferChar[35];
 char fbuffChar[10];
 
 void setup() {
-  Serial.begin(9600);
+  Serial.begin(SERIAL_SPEED);
 
   toArduinoSerial.begin(9600);
 
@@ -625,12 +627,12 @@ void loop() {
       }
 
       if(request.indexOf("getVariables") >= 0){
-        sensor1_value = getFloatFromString(receivedCommands[0], ','); 
-        sensor2_value = getFloatFromString(receivedCommands[1], ','); 
-        sensor3_value = getFloatFromString(receivedCommands[2], ','); 
-        actualTemperature_value = getFloatFromString(receivedCommands[3], ',');
-        higherHysteresisLimit_arduino_html = getFloatFromString(receivedCommands[4], ',');
-        lowerHysteresisLimit_arduino_html = getFloatFromString(receivedCommands[5], ',');
+        sensor1_value = getFloatFromString(receivedCommands[0], ','); //<t1, 0.00>
+        sensor2_value = getFloatFromString(receivedCommands[1], ','); //<t2, 0.00>
+        sensor3_value = getFloatFromString(receivedCommands[2], ','); //<t3, 0.00>
+        actualTemperature_value = getFloatFromString(receivedCommands[3], ','); //<aT, 0.00>
+        higherHysteresisLimit_arduino_html = getFloatFromString(receivedCommands[4], ','); //<hHL, 0.00>
+        lowerHysteresisLimit_arduino_html = getFloatFromString(receivedCommands[5], ','); //<lHL, 0.00>
 
         if (!isnan(sensor1_value) && !isnan(sensor2_value) && !isnan(sensor3_value) && !isnan(actualTemperature_value)){
             client.print(header);
@@ -643,12 +645,12 @@ void loop() {
         return; // perché se procedessi giù rigenero la pagina HTML da capo
       }
 
-      if(request.indexOf("hHystLimHt") >= 0){ // il formato è del tipo: hHystLimHt,20;   , + numero + termino con ;
+      if(request.indexOf("hHL") >= 0){ // higherHysteresisLimit il formato è del tipo: hHL,20;   , + numero + termino con ;
         higherHysteresisLimit_user_html = getIntFromStringHtmlPage(request); 
         send_higherHysteresisLimit_user_html = true;
       }
 
-      if(request.indexOf("lHystLimHt") >= 0){ // il formato è del tipo: higherHysteresisLimit_user_html,20;  ,+ numero + termino con ;
+      if(request.indexOf("lHL") >= 0){ // lowerHysteresisLimit il formato è del tipo: higherHysteresisLimit_user_html,20;  ,+ numero + termino con ;
         lowerHysteresisLimit_user_html = getIntFromStringHtmlPage(request); 
         send_lowerHysteresisLimit_user_html = true;
       }
@@ -852,89 +854,111 @@ void loop() {
           break;
       }
       
-      /* commands */
+      /* COMMAND TO ARDUINO */
+      /* LIST:
+      STP01 = stepperMotorForwardOn
+      STP02 = stepperMotorForwardOff
+      STP03 = stepperMotorBackwardOn
+      STP04 = stepperMotorBackwardOff
+
+      TMP01 = mainHeaterOn
+      TMP02 = mainHeaterOff
+      TMP03 = auxHeaterOn
+      TMP04 = auxHeaterOff
+      TMP05 = higherHysteresisLimit from ESP8266 HMTL page
+      TMP06 = lowerHysteresisLimit from ESP8266 HMTL page
+
+      ACT01 = upperFanOn
+      ACT02 = upperFanOff
+      ACT03 = lowerFanOn
+      ACT04 = lowerFanOff
+
+      GNR01 = automaticControlOn
+      GNR02 = automaticControlOff
+      
+      */
 
       listofDataToSend_numberOfData = 0;
 
       if(stepperMotorForward_var && !stepperMotorForward_varOld){
-        listofDataToSend[listofDataToSend_numberOfData] = "<stepperMotorForwardOn>";
+        listofDataToSend[listofDataToSend_numberOfData] = "<STP01>"; //stepperMotorForwardOn
         listofDataToSend_numberOfData ++;
         stepperMotorForward_varOld = true;
       }
       if(!stepperMotorForward_var && stepperMotorForward_varOld){
-        listofDataToSend[listofDataToSend_numberOfData] = "<stepperMotorForwardOff>";
+        listofDataToSend[listofDataToSend_numberOfData] = "<STP02>"; //stepperMotorForwardOff
         listofDataToSend_numberOfData ++;
         stepperMotorForward_varOld = false;
       }
 
       if(stepperMotorBackward_var && !stepperMotorBackward_varOld){
-        listofDataToSend[listofDataToSend_numberOfData] = "<stepperMotorBackwardOn>";
+        listofDataToSend[listofDataToSend_numberOfData] = "<STP03>"; //stepperMotorBackwardOn
         listofDataToSend_numberOfData ++;
         stepperMotorBackward_varOld = true;
       }
       if(!stepperMotorBackward_var && stepperMotorBackward_varOld){
-        listofDataToSend[listofDataToSend_numberOfData] = "<stepperMotorBackwardOff>";
+        listofDataToSend[listofDataToSend_numberOfData] = "<STP04>"; //stepperMotorBackwardOff
         listofDataToSend_numberOfData ++;
         stepperMotorBackward_varOld = false;
       }
 
       if(mainHeaterOn_var && !mainHeaterOn_varOld){
-        listofDataToSend[listofDataToSend_numberOfData] = "<mainHeaterOn>";
+        listofDataToSend[listofDataToSend_numberOfData] = "<TMP01>"; //mainHeaterOn
         listofDataToSend_numberOfData ++;
         mainHeaterOn_varOld = true;
       }
       if(!mainHeaterOn_var && mainHeaterOn_varOld){
-        listofDataToSend[listofDataToSend_numberOfData] = "<mainHeaterOff>";
+        listofDataToSend[listofDataToSend_numberOfData] = "<TMP02>"; //mainHeaterOff
         listofDataToSend_numberOfData ++;
         mainHeaterOn_varOld = false;
       }
 
       if(auxHeaterOn_var && !auxHeaterOn_varOld){
-        listofDataToSend[listofDataToSend_numberOfData] = "<auxHeaterOn>";
+        listofDataToSend[listofDataToSend_numberOfData] = "<TMP03>"; //auxHeaterOn
         listofDataToSend_numberOfData ++;
         auxHeaterOn_varOld = true;
       }
       if(!auxHeaterOn_var && auxHeaterOn_varOld){
-        listofDataToSend[listofDataToSend_numberOfData] = "<auxHeaterOff>";
+        listofDataToSend[listofDataToSend_numberOfData] = "<TMP04>"; //auxHeaterOff
         listofDataToSend_numberOfData ++;
         auxHeaterOn_varOld = false;
       }
 
       if(upperFanOn_var && !upperFanOn_varOld){
-        listofDataToSend[listofDataToSend_numberOfData] = "<upperFanOn>";
+        listofDataToSend[listofDataToSend_numberOfData] = "<ACT01>"; //upperFanOn
         listofDataToSend_numberOfData ++;
         upperFanOn_varOld = true;
       }
       if(!upperFanOn_var && upperFanOn_varOld){
-        listofDataToSend[listofDataToSend_numberOfData] = "<upperFanOff>";
+        listofDataToSend[listofDataToSend_numberOfData] = "<ACT02>"; //upperFanOff
         listofDataToSend_numberOfData ++;
         upperFanOn_varOld = false;
       }
 
       if(lowerFanOn_var && !lowerFanOn_varOld){
-        listofDataToSend[listofDataToSend_numberOfData] = "<lowerFanOn>";
+        listofDataToSend[listofDataToSend_numberOfData] = "<ACT03>"; //lowerFanOn
         listofDataToSend_numberOfData ++;
         lowerFanOn_varOld = true;
       }
       if(!lowerFanOn_var && lowerFanOn_varOld){
-        listofDataToSend[listofDataToSend_numberOfData] = "<lowerFanOff>";
+        listofDataToSend[listofDataToSend_numberOfData] = "<ACT04>"; //lowerFanOff
         listofDataToSend_numberOfData ++;
         lowerFanOn_varOld = false;
       }
 
       if(automaticControl_var && !automaticControl_varOld){
-        listofDataToSend[listofDataToSend_numberOfData] = "<automaticControlOn>";
+        listofDataToSend[listofDataToSend_numberOfData] = "<GNR01>"; //automaticControlOn
         listofDataToSend_numberOfData ++;
         automaticControl_varOld = true;
       }
       if(!automaticControl_var && automaticControl_varOld){
-        listofDataToSend[listofDataToSend_numberOfData] = "<automaticControlOff>";
+        listofDataToSend[listofDataToSend_numberOfData] = "<GNR02>"; //automaticControlOff
         listofDataToSend_numberOfData ++;
         automaticControl_varOld = false;
       }
 
       if(send_higherHysteresisLimit_user_html){
-        strcpy(bufferChar, "<hHystLim, ");
+        strcpy(bufferChar, "<TMP05, "); //higherHysteresisLimit from ESP8266 HMTL page
         dtostrf(float(higherHysteresisLimit_user_html), 1, 1, fbuffChar); 
         listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(strcat(bufferChar, fbuffChar), ">"), "\0");
         listofDataToSend_numberOfData++;
@@ -942,7 +966,7 @@ void loop() {
       }
 
       if(send_lowerHysteresisLimit_user_html){
-        strcpy(bufferChar, "<lHystLim, ");
+        strcpy(bufferChar, "<TMP06, "); //lowerysteresisLimit from ESP8266 HMTL page
         dtostrf(float(lowerHysteresisLimit_user_html), 1, 1, fbuffChar); 
         listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(strcat(bufferChar, fbuffChar), ">"), "\0");
         listofDataToSend_numberOfData++;
