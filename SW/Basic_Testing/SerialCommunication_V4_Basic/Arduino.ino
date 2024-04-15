@@ -57,6 +57,8 @@ bool upperFan_var = false;
 
 bool lowerFan_var = false;
 #define LOWER_FAN_PIN 9
+
+float temperatures[3]; // declaring it here, once I know the dimension
 /* END TEMPERATURES SECTION */
 
 
@@ -129,12 +131,13 @@ void setup() {
       //delay(750/ (1 << (12-TEMPERATURE_PRECISION)));
     }
   }
+  
   /* END TEMPERATURES SECTION */
 }
 
 void loop() {    
   /* TEMPERATURES SECTION */
-  float temperatures[Limit]; // declaring it here, once I know the dimension
+  
 
   if(millis() - lastTempRequest >= (2*conversionTime_DS18B20_sensors)){
     for(byte index = 0; index < Limit; index++){
@@ -220,7 +223,7 @@ void loop() {
   for(byte i = 0; i < listofDataToSend_numberOfData; i++){
     Serial.print(listofDataToSend[i]);
   }
-  Serial.print("#"); // end transmission for Arduino
+  Serial.println("#"); // end transmission for Arduino
   delay(1);
   
 
