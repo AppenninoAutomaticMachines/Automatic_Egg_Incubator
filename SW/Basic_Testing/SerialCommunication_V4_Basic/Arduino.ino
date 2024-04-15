@@ -223,7 +223,7 @@ void loop() {
   for(byte i = 0; i < listofDataToSend_numberOfData; i++){
     Serial.print(listofDataToSend[i]);
   }
-  Serial.println("#"); // end transmission for Arduino
+  Serial.print("#"); // end transmission for Arduino
   delay(1);
   
 
@@ -233,7 +233,7 @@ void loop() {
       // Guardiamo che comandi ci sono arrivati
       for(byte j = 0; j < numberOfCommandsFromBoard; j++){
         String tempReceivedCommand = receivedCommands[j];
-        Serial.println(tempReceivedCommand);
+        //Serial.println(tempReceivedCommand);
         if(tempReceivedCommand.indexOf("STP01") >= 0){ //stepperMotorForwardOn
           move = true;
           digitalWrite(directionPin, HIGH);
