@@ -9,9 +9,12 @@
 
  Arduino UNO modalità programmazione: Arduino Uno normale Mode 1 (SW3 and SW4 are On )
  Arduino UNO modalità funzionamento + comunicazione seriale con ESP8266: Arduino Uno normale Mode 4 (SW1 and SW2 are On)
+
+ https://lastminuteengineers.com/multiple-ds18b20-arduino-tutorial/ reading temperature by address
 */
 
 #include <SoftwareSerial.h>
+#define SERIAL_SPEED 19200 
 
 /* TEMPERATURES SECTION */
 #include <temperatureController.h>
@@ -39,7 +42,9 @@ unsigned long lastTempRequest;
 temperatureController temperatureController;
 
 bool automaticControl_var = false;
-/* END TEMPERATURES SECTION */
+#define AUTOMATIC_CONTROL_CHECK_PIN 6
+
+float higherHysteresisLimit, lowerHysteresisLimit;
 
 bool mainHeater_var = false;
 #define MAIN_HEATER_PIN 12
@@ -52,6 +57,7 @@ bool upperFan_var = false;
 
 bool lowerFan_var = false;
 #define LOWER_FAN_PIN 9
+/* END TEMPERATURES SECTION */
 
 
 /* MOTORS SECTION */
@@ -78,7 +84,7 @@ byte listofDataToSend_numberOfData = 0;
 char bufferChar[35];
 char fbuffChar[10];
 
-float higherHysteresisLimit, lowerHysteresisLimit;
+
 
 void setup() {
   pinMode(directionPin, OUTPUT);
@@ -91,8 +97,9 @@ void setup() {
   pinMode(AUX_HEATER_PIN, OUTPUT);
   pinMode(UPPER_FAN_PIN, OUTPUT);
   pinMode(LOWER_FAN_PIN, OUTPUT);
+  pinMode(AUTOMATIC_CONTROL_CHECK_PIN, OUTPUT);
 
-  Serial.begin(9600); // che scrive veloce verso ESP8266
+  Serial.begin(SERIAL_SPEED);
   
   serialFlush();
   delay(5);
@@ -129,9 +136,12 @@ void loop() {
   /* TEMPERATURES SECTION */
   float temperatures[Limit]; // declaring it here, once I know the dimension
 
-  if(millis() - lastTempRequest >= conversionTime_DS18B20_sensors){
+  if(millis() - lastTempRequest >= (2*conversionTime_DS18B20_sensors)){
     for(byte index = 0; index < Limit; index++){
-      temperatures[index] = sensors.getTempC(Thermometer[index]);
+      float temporaryTemp = sensors.getTempC(Thermometer[index]);
+      if(temporaryTemp >= 1.0 && temporaryTemp <= 70.0){
+        temperatures[index] = temporaryTemp;
+      }     
     }
     sensors.requestTemperatures();
     lastTempRequest = millis();
@@ -139,17 +149,28 @@ void loop() {
 
   temperatureController.setTemperatureHysteresis(lowerHysteresisLimit, higherHysteresisLimit);
   temperatureController.periodicRun(temperatures, Limit);
-
+  /*
+  Serial.print("T1: ");
+  Serial.print(temperatures[0]);
+  Serial.print(" T2: ");
+  Serial.print(temperatures[1]);
+  Serial.print(" T3: ");
+  Serial.print(temperatures[2]);
+  Serial.print(" aT: ");
+  Serial.println(temperatureController.debug_getActualTemperature());
+  */
   if(automaticControl_var){
+    digitalWrite(MAIN_HEATER_PIN, temperatureController.getOutputState());
     digitalWrite(UPPER_FAN_PIN, HIGH); 
     digitalWrite(LOWER_FAN_PIN, HIGH); 
-    digitalWrite(MAIN_HEATER_PIN, temperatureController.getOutputState());
+    digitalWrite(AUTOMATIC_CONTROL_CHECK_PIN, HIGH);
   }
   else{
     digitalWrite(MAIN_HEATER_PIN, mainHeater_var);
     digitalWrite(AUX_HEATER_PIN, auxHeater_var);
     digitalWrite(UPPER_FAN_PIN, upperFan_var); 
     digitalWrite(LOWER_FAN_PIN, lowerFan_var);
+    digitalWrite(AUTOMATIC_CONTROL_CHECK_PIN, LOW);
   }
   /* END TEMPERATURES SECTION */
     
@@ -161,37 +182,36 @@ void loop() {
   else{
     digitalWrite(stepPin, LOW);
   }
-  
 
   // riempo i dati per la trasmissione
   listofDataToSend_numberOfData = 0; // ad ogni giro lo azzero    
 
-  strcpy(bufferChar, "<temp1, ");
+  strcpy(bufferChar, "<t1, ");
   dtostrf( temperatures[0], 1, 1, fbuffChar); 
   listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(strcat(bufferChar, fbuffChar), ">"), '\0');
   listofDataToSend_numberOfData++;
 
-  strcpy(bufferChar, "<temp2, ");
+  strcpy(bufferChar, "<t2, ");
   dtostrf( temperatures[1], 1, 1, fbuffChar); 
   listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(strcat(bufferChar, fbuffChar), ">"), '\0');
   listofDataToSend_numberOfData++; 
 
-  strcpy(bufferChar, "<temp3, ");
+  strcpy(bufferChar, "<t3, ");
   dtostrf( temperatures[2], 1, 1, fbuffChar); 
   listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(strcat(bufferChar, fbuffChar), ">"), '\0');
   listofDataToSend_numberOfData++;
 
-  strcpy(bufferChar, "<actualTemperature, ");
+  strcpy(bufferChar, "<aT, "); // actualTemperature
   dtostrf(temperatureController.debug_getActualTemperature(), 1, 1, fbuffChar); 
   listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(strcat(bufferChar, fbuffChar), ">"), '\0');
   listofDataToSend_numberOfData++;
 
-  strcpy(bufferChar, "<hHystLim_INO, "); //hHystLim_INO
+  strcpy(bufferChar, "<hHL, "); //higher Hysteresis Limit from Arduino
   dtostrf(higherHysteresisLimit, 1, 1, fbuffChar); 
   listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(strcat(bufferChar, fbuffChar), ">"), '\0');
   listofDataToSend_numberOfData++;
 
-  strcpy(bufferChar, "<lHystLim_INO, "); //lHystLim_INO
+  strcpy(bufferChar, "<lHL, "); //lower Hysteresis Limit from Arduino
   dtostrf(lowerHysteresisLimit, 1, 1, fbuffChar); 
   listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(strcat(bufferChar, fbuffChar), ">"), '\0');
   listofDataToSend_numberOfData++;
@@ -210,54 +230,55 @@ void loop() {
       // Guardiamo che comandi ci sono arrivati
       for(byte j = 0; j < numberOfCommandsFromBoard; j++){
         String tempReceivedCommand = receivedCommands[j];
-        if(tempReceivedCommand.indexOf("stepperMotorForwardOn") >= 0){
+        Serial.println(tempReceivedCommand);
+        if(tempReceivedCommand.indexOf("STP01") >= 0){ //stepperMotorForwardOn
           move = true;
           digitalWrite(directionPin, HIGH);
         }
-        if(tempReceivedCommand.indexOf("stepperMotorForwardOff") >= 0){
+        if(tempReceivedCommand.indexOf("STP02") >= 0){ //stepperMotorForwardOff
           move = false;
         }
-        if(tempReceivedCommand.indexOf("stepperMotorBackwardOn") >= 0){
+        if(tempReceivedCommand.indexOf("STP03") >= 0){ //stepperMotorBackwardOn
           move = true;
           digitalWrite(directionPin, LOW);
         }
-        if(tempReceivedCommand.indexOf("stepperMotorBackwardOff") >= 0){
+        if(tempReceivedCommand.indexOf("STP04") >= 0){ //stepperMotorBackwardOff
           move = false;
         }
-        if(tempReceivedCommand.indexOf("mainHeaterOn") >= 0){
+        if(tempReceivedCommand.indexOf("TMP01") >= 0){ //mainHeaterOn
           mainHeater_var = true;
         }
-        if(tempReceivedCommand.indexOf("mainHeaterOff") >= 0){
+        if(tempReceivedCommand.indexOf("TMP02") >= 0){ //mainHeaterOff
           mainHeater_var = false;
         }
-        if(tempReceivedCommand.indexOf("auxHeaterOn") >= 0){
+        if(tempReceivedCommand.indexOf("TMP03") >= 0){ //auxHeaterOn
           auxHeater_var = true;
         }
-        if(tempReceivedCommand.indexOf("auxHeaterOff") >= 0){
+        if(tempReceivedCommand.indexOf("TMP04") >= 0){ //auxHeaterOff
           auxHeater_var = false;
         }
-        if(tempReceivedCommand.indexOf("upperFanOn") >= 0){
+        if(tempReceivedCommand.indexOf("ACT01") >= 0){ //upperFanOn
           upperFan_var = true;
         }
-        if(tempReceivedCommand.indexOf("upperFanOff") >= 0){
+        if(tempReceivedCommand.indexOf("ACT02") >= 0){ //upperFanOff
           upperFan_var = false;
         }
-        if(tempReceivedCommand.indexOf("lowerFanOn") >= 0){
+        if(tempReceivedCommand.indexOf("ACT03") >= 0){ //lowerFanOn
           lowerFan_var = true;
         }
-        if(tempReceivedCommand.indexOf("lowerFanOff") >= 0){
+        if(tempReceivedCommand.indexOf("ACT04") >= 0){ //lowerFanOff
           lowerFan_var = false;
         }
-        if(tempReceivedCommand.indexOf("automaticControlOn") >= 0){
+        if(tempReceivedCommand.indexOf("GNR01") >= 0){ //automaticControlOn
           automaticControl_var = true;
         }
-        if(tempReceivedCommand.indexOf("automaticControlOff") >= 0){
+        if(tempReceivedCommand.indexOf("GNR02") >= 0){ //automaticControlOff
           automaticControl_var = false;
         }
-        if(tempReceivedCommand.indexOf("hHystLim") >= 0){ // setting the higherHysteresisLimit
+        if(tempReceivedCommand.indexOf("TMP05") >= 0){ //setting higherHysteresisLimit from ESP8266 HMTL page
           higherHysteresisLimit = getFloatFromString(tempReceivedCommand, ',');
         }
-        if(tempReceivedCommand.indexOf("lHystLim") >= 0){ // setting the lowerHysteresisLimit
+        if(tempReceivedCommand.indexOf("TMP06") >= 0){ //setting lowerHysteresisLimit from ESP8266 HMTL page
           lowerHysteresisLimit = getFloatFromString(tempReceivedCommand, ',');
         }
       }
