@@ -5,3 +5,4 @@ To Do List:
  - controllo su temperature che rimangono 'vive'
  - oggetto encoder.limits e encoder.motion. Devo fissare dei timeout che, se dopo un po' che ricevono un'abilitazione non vedono il segnale che cambia, allora non va bene.
  - sezione di messaggi nella pagina HTML
+ - oggetto messaggio di allarme, colori + torretta luminosa (?)
