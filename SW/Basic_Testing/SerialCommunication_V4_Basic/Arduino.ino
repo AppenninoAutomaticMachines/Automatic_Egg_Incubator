@@ -11,12 +11,17 @@
  Arduino UNO modalità funzionamento + comunicazione seriale con ESP8266: Arduino Uno normale Mode 4 (SW1 and SW2 are On)
 
  https://lastminuteengineers.com/multiple-ds18b20-arduino-tutorial/ reading temperature by address
+ To Do List:
+ - controllo su sensore staccato
+ - controllo su temperature che rimangono 'vive'
+ - oggetto ENCODER, uno guarda i limiti e uno guarda il movimento
 */
 
 #include <SoftwareSerial.h>
 #define SERIAL_SPEED 19200 
 
 /* TEMPERATURES SECTION */
+// ricorda di mettere una alimentazione forte e indipendente per i sensori. Ha migliorato molto la stabilità della lettura.
 #include <temperatureController.h>
 #include <OneWire.h>
 #include <DallasTemperature.h>
