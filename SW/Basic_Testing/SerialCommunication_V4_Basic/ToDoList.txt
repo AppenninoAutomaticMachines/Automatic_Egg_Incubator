@@ -3,4 +3,5 @@ To Do List:
  - mettere selezione modalità di funzionamento
  - controllo su sensore staccato
  - controllo su temperature che rimangono 'vive'
- - oggetto ENCODER, uno guarda i limiti e uno guarda il movimento
+ - oggetto encoder.limits e encoder.motion. Devo fissare dei timeout che, se dopo un po' che ricevono un'abilitazione non vedono il segnale che cambia, allora non va bene.
+ - sezione di messaggi nella pagina HTML
