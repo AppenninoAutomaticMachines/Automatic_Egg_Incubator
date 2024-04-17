@@ -1,0 +1,6 @@
+To Do List:
+ - mettere luci attuatori attivi  o no nella pagina di controllo automatico
+ - mettere selezione modalità di funzionamento
+ - controllo su sensore staccato
+ - controllo su temperature che rimangono 'vive'
+ - oggetto ENCODER, uno guarda i limiti e uno guarda il movimento
