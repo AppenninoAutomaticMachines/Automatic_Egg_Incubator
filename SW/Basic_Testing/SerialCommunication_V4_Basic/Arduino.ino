@@ -164,7 +164,9 @@ void loop() {
   Serial.println(temperatureController.debug_getActualTemperature());
   */
   if(automaticControl_var){
-    digitalWrite(MAIN_HEATER_PIN, temperatureController.getOutputState());
+    mainHeater_var = temperatureController.getOutputState();
+    auxHeater_var = false;
+    digitalWrite(MAIN_HEATER_PIN, mainHeater_var);
     digitalWrite(UPPER_FAN_PIN, HIGH); 
     digitalWrite(LOWER_FAN_PIN, HIGH); 
     digitalWrite(AUTOMATIC_CONTROL_CHECK_PIN, HIGH);
@@ -218,6 +220,12 @@ void loop() {
   strcpy(bufferChar, "<lHL, "); //lower Hysteresis Limit from Arduino
   dtostrf(lowerHysteresisLimit, 1, 1, fbuffChar); 
   listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(strcat(bufferChar, fbuffChar), ">"), '\0');
+  listofDataToSend_numberOfData++;
+
+  listofDataToSend[listofDataToSend_numberOfData] = mainHeater_var ? "<mHO, 1>":"<mHO, 0>"; // converting bool to string
+  listofDataToSend_numberOfData++;
+
+  listofDataToSend[listofDataToSend_numberOfData] = auxHeater_var ? "<aHO, 1>":"<aHO, 0>"; // converting bool to string
   listofDataToSend_numberOfData++;
 
   
