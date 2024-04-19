@@ -64,7 +64,13 @@ String manualControl_html_1 = R"=====(
       border: 4px solid #C20000; /* red */
     }
 
-    
+    .lamp {
+      width: 25px;
+      height: 25px;
+      background-color: #FFFFFF; /* default color white */
+      border-radius: 50%;
+      transition: background-color 0.5s ease;
+    }   
   </style>
  
   <script> 
@@ -76,7 +82,7 @@ String manualControl_html_1 = R"=====(
        document.getElementById('P_time').innerHTML = t;
     }
  
-    function updateTemp() 
+    function updateVariables() 
     {  
        ajaxLoad("getTemp3"); 
     }
@@ -104,7 +110,7 @@ String manualControl_html_1 = R"=====(
       ajaxRequest.send();
     }
  
-    var myVar1 = setInterval(updateTemp, 750);  
+    var myVar1 = setInterval(updateVariables, 750);  
     var myVar2 = setInterval(updateTime, 750);  
 
     document.addEventListener("DOMContentLoaded", function (event) {
@@ -198,6 +204,14 @@ String automaticControl_html_1 = R"=====(
       border: 4px solid #C20000; /* red */
     }
 
+    .lamp {
+      width: 20px;
+      height: 20px;
+      background-color: #FFFFFF; /* default color */
+      border-radius: 50%;
+      margin: auto 0;
+    }
+
     
   </style>
  
@@ -209,7 +223,7 @@ String automaticControl_html_1 = R"=====(
        document.getElementById('P_time').innerHTML = t;
     }
  
-    function updateTemp(){  
+    function updateVariables(){  
        ajaxLoad("/getVariables"); 
     }
  
@@ -238,12 +252,26 @@ String automaticControl_html_1 = R"=====(
           document.getElementById('actualT').innerHTML = tmpArray[3];
           document.getElementById('hHystLimINO').innerHTML = tmpArray[4];
           document.getElementById('lHystLimINO').innerHTML = tmpArray[5];
+
+          var lamp_mainHeater = document.getElementById('lamp_mainHeater');
+          if (tmpArray[6] === "1") {
+            lamp_mainHeater.style.backgroundColor = '#FF0000'; // color when boolean is true
+          } else {
+            lamp_mainHeater.style.backgroundColor = '#A0A0A0'; // default color when boolean is false
+          }
+
+          var lamp_auxHeater = document.getElementById('lamp_auxHeater');
+          if (tmpArray[7] === "1") {
+            lamp_auxHeater.style.backgroundColor = '#FF0000'; // color when boolean is true
+          } else {
+            lamp_auxHeater.style.backgroundColor = '#A0A0A0'; // default color when boolean is false
+          }
         }
       }
       ajaxRequest.send();
     }
  
-    var myVar1 = setInterval(updateTemp, 500);  
+    var myVar1 = setInterval(updateVariables, 500);  
     var myVar2 = setInterval(updateTime, 500);  
 
     document.addEventListener("DOMContentLoaded", function (event){
@@ -271,7 +299,29 @@ String automaticControl_html_1 = R"=====(
         xhr.open("POST", "lHL," + number + ";", true);
         xhr.send();
     }
- 
+
+
+    var mainHeaterOn_html = false;
+    var auxHeaterOn_html = false;
+
+    function updateLampColor() {
+      var lamp_mainHeater = document.getElementById('lamp_mainHeater');
+      if (lamp_mainHeater === "1") {
+        lamp_mainHeater.style.backgroundColor = '#FF0000'; // color when boolean is true
+      } else {
+        lamp_mainHeater.style.backgroundColor = '#A0A0A0'; // default color when boolean is false
+      }
+
+      var lamp_auxHeater = document.getElementById('lamp_auxHeater');
+      if (lamp_auxHeater === "1") {
+        lamp_auxHeater.style.backgroundColor = '#FF0000'; // color when boolean is true
+      } else {
+        lamp_auxHeater.style.backgroundColor = '#A0A0A0'; // default color when boolean is false
+      }
+    }
+
+    // Call the function to set the initial state
+    updateLampColor();
   </script>
 
  </head>
@@ -291,8 +341,16 @@ String automaticControl_html_1 = R"=====(
     </div>
     <div id='control_variables_section'>     
      <div id='content_control_variables_section'> 
-       <h2>Temperatura di controllo:</h2>
+       <h2>T controllo:</h2>
        <p> <span id='actualT'>--.-</span> &deg;C </p>
+       <div style="display: flex;">
+        <p>Risc Principale: </p> 
+        <div class="lamp" id="lamp_mainHeater"></div>
+       </div>
+       <div style="display: flex;">
+        <p>Risc Ausiliario: </p> 
+        <div class="lamp" id="lamp_auxHeater"></div>
+       </div>
        <form id="numberForm">
           <label for="hHL">T Alta:</label><br>
           <input type="number" id="hHL" name="hHL">
@@ -526,7 +584,8 @@ bool lowerFanOn_varOld = false;
 
 float sensor1_value, sensor2_value, sensor3_value, actualTemperature_value;
 float higherHysteresisLimit_arduino_html, lowerHysteresisLimit_arduino_html;
-int higherHysteresisLimit_user_html, lowerHysteresisLimit_user_html;
+int higherHysteresisLimit_user_html, lowerHysteresisLimit_user_html, mainHeaterOn_fromArduino_toHTML, auxHeaterOn_fromArduino_toHTML;
+
 
 bool send_higherHysteresisLimit_user_html = false;
 bool send_lowerHysteresisLimit_user_html = false;
@@ -633,11 +692,19 @@ void loop() {
         actualTemperature_value = getFloatFromString(receivedCommands[3], ','); //<aT, 0.00>
         higherHysteresisLimit_arduino_html = getFloatFromString(receivedCommands[4], ','); //<hHL, 0.00>
         lowerHysteresisLimit_arduino_html = getFloatFromString(receivedCommands[5], ','); //<lHL, 0.00>
+        mainHeaterOn_fromArduino_toHTML = getIntFromString(receivedCommands[6], ','); // <mHO, 0> receivedCommands[6].substring(6, 11); //<mHO, false> [6:10]
+        auxHeaterOn_fromArduino_toHTML = getIntFromString(receivedCommands[7], ',');//<aHO, true>
 
         if (!isnan(sensor1_value) && !isnan(sensor2_value) && !isnan(sensor3_value) && !isnan(actualTemperature_value)){
             client.print(header);
-            client.print(sensor1_value);   client.print( "|" );  client.print(sensor2_value);   client.print( "|" );  client.print(sensor3_value);  client.print( "|" );  client.print(actualTemperature_value);
-            client.print( "|" );  client.print(higherHysteresisLimit_arduino_html); client.print( "|" );  client.print(lowerHysteresisLimit_arduino_html);
+            client.print(sensor1_value);   
+            client.print( "|" );  client.print(sensor2_value);   
+            client.print( "|" );  client.print(sensor3_value);  
+            client.print( "|" );  client.print(actualTemperature_value);
+            client.print( "|" );  client.print(higherHysteresisLimit_arduino_html); 
+            client.print( "|" );  client.print(lowerHysteresisLimit_arduino_html);
+            client.print( "|" );  client.print(mainHeaterOn_fromArduino_toHTML);
+            client.print( "|" );  client.print(auxHeaterOn_fromArduino_toHTML);
             
         }
         
@@ -1031,7 +1098,21 @@ float getFloatFromString(String string, char divider){
     }
   }
 
-  return string.substring(index, (string.length()-1)).toFloat();
+  return string.substring(index, string.length()).toFloat();
+}
+
+int getIntFromString(String string, char divider){
+  int index;
+  for(byte i =0; i < string.length(); i++) {
+    char c = string[i];
+    
+    if(c == divider){
+      index = i + 2;
+      break;
+    }
+  }
+
+  return string.substring(index, string.length()).toInt();
 }
 
 int getIntFromStringHtmlPage(String string){ //inputNumber, 23;
