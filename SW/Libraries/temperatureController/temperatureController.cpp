@@ -38,7 +38,7 @@ void temperatureController::periodicRun(float *temperatures, byte dimension){
     case 2:
       float sum = 0.0;
       byte goodTemperaturesCounter = 0;
-      for(int i = 0; i < dimension; i++){
+      for(byte i = 0; i < dimension; i++){
         float tempC = temperatures[i];
 
         if(tempC != DEVICE_DISCONNECTED_C){ // calcoliamo nella media solo le temperature che sono corrette.
