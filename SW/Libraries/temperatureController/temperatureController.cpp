@@ -1,6 +1,8 @@
 #include "Arduino.h"
 #include "temperatureController.h"
 
+#define DEVICE_DISCONNECTED_C -127
+
 temperatureController::temperatureController(){
   _referenceTemperature = DEFAULT_REFERENCE_TEMPERATURE; // 37.5°C
   _higherTemperature = DEFAULT_REFERENCE_TEMPERATURE + DEFAULT_HYSTERESIS_RANGE; // 39.5°C
@@ -17,15 +19,15 @@ temperatureController::temperatureController(){
 
 
 void temperatureController::periodicRun(float *temperatures, byte dimension){  
-
   switch(_controlModality){
     case 0:
       break;
 
     case 1:
+      // qui non devo controllare il sensore disconnesso: tanto è -127, quindi sicuramente non lo considero.
       float maxTemperature = temperatures[0];
-      for (int i = 0; i < dimension; i++) {
-        if (temperatures[i] > maxTemperature) {
+      for(byte i = 0; i < dimension; i++){
+        if(temperatures[i] > maxTemperature){
           maxTemperature = temperatures[i];
         }
       }
@@ -34,12 +36,21 @@ void temperatureController::periodicRun(float *temperatures, byte dimension){
       break;
 
     case 2:
-      float meanTemperature;
       float sum = 0.0;
-      for (int i = 0; i < dimension; i++) {
-        sum = sum + temperatures[i];
+      byte goodTemperaturesCounter = 0;
+      for(int i = 0; i < dimension; i++){
+        float tempC = temperatures[i];
+
+        if(tempC != DEVICE_DISCONNECTED_C){ // calcoliamo nella media solo le temperature che sono corrette.
+          sum = sum + tempC;
+          goodTemperaturesCounter = goodTemperaturesCounter + 1;
+        }
+        else{
+          ;
+          // FAULT HANDLING. tira su un bit per dire che il sensore associato a questo posto nel vettore ha creato problema.
+        }        
       }
-      _actualTemperature = sum / dimension;
+      _actualTemperature = sum / goodTemperaturesCounter;
 
       break;
 
@@ -107,9 +118,3 @@ float temperatureController::debug_getActualTemperature(void){
 byte temperatureController::debug_getHysteresisState(void){
   return _hysteresisState;
 }
-
-
-
-
-
-
