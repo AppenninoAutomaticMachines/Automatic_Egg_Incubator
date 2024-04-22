@@ -1,0 +1,10 @@
+To Do List:
+ - OK mettere luci attuatori attivi  o no nella pagina di controllo automatico
+ - mettere selezione modalità di funzionamento
+ - controllo su sensore staccato
+ - modifica ONEWIRE singolo + watchdog che evita il bloccaggio
+ - oggetto encoder.limits e encoder.motion. Devo fissare dei timeout che, se dopo un po' che ricevono un'abilitazione non vedono il segnale che cambia, allora non va bene.
+ - sezione di messaggi nella pagina HTML
+ - oggetto messaggio di allarme, colori + torretta luminosa (?)
+ - se sono in pagina dei motori, non invio il comando di get delle temperature: provo a risparmiare delle comunicazioni inutili.
+ - QR Code alla rete WiFi ESP8266
