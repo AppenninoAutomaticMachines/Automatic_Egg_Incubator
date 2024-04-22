@@ -3,6 +3,7 @@ To Do List:
  - mettere selezione modalità di funzionamento
  - controllo su sensore staccato
  - modifica ONEWIRE singolo + watchdog che evita il bloccaggio
+ - PWM del riscaldatore
  - oggetto encoder.limits e encoder.motion. Devo fissare dei timeout che, se dopo un po' che ricevono un'abilitazione non vedono il segnale che cambia, allora non va bene.
  - sezione di messaggi nella pagina HTML
  - oggetto messaggio di allarme, colori + torretta luminosa (?)
