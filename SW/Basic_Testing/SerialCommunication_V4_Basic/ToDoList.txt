@@ -1,8 +1,8 @@
 To Do List:
- - mettere luci attuatori attivi  o no nella pagina di controllo automatico
+ - OK mettere luci attuatori attivi  o no nella pagina di controllo automatico
  - mettere selezione modalità di funzionamento
  - controllo su sensore staccato
- - controllo su temperature che rimangono 'vive'
+ - modifica ONEWIRE singolo + watchdog che evita il bloccaggio
  - oggetto encoder.limits e encoder.motion. Devo fissare dei timeout che, se dopo un po' che ricevono un'abilitazione non vedono il segnale che cambia, allora non va bene.
  - sezione di messaggi nella pagina HTML
  - oggetto messaggio di allarme, colori + torretta luminosa (?)
