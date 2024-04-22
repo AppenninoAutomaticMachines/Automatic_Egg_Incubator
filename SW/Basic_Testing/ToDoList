@@ -10,3 +10,4 @@ To Do List:
  - oggetto messaggio di allarme, colori + torretta luminosa (?)
  - se sono in pagina dei motori, non invio il comando di get delle temperature: provo a risparmiare delle comunicazioni inutili.
  - QR Code alla rete WiFi ESP8266
+ - chat GPT codice che memorizza temperature per fare grafico youtube
