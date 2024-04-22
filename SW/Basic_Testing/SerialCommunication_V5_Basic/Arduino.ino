@@ -230,20 +230,22 @@ void loop() {
   
   // feedback about TEMPERATURE CONTROL MODALITY value
   char bufferCharArray[25];	
-  listofDataToSend[listofDataToSend_numberOfData] = sprintf(bufferCharArray, "<tCM, %d>", temperatureControlModality);
+  byte charCount = sprintf(bufferCharArray, "<TMP07, %d>", temperatureControlModality); //sprintf function returns the number of characters written to the array
+  listofDataToSend[listofDataToSend_numberOfData] = bufferCharArray;
   listofDataToSend_numberOfData++;
 
-  
-  for(byte i = 0; i < listofDataToSend_numberOfData; i++){
-    Serial.print(listofDataToSend[i]);
+  if(listofDataToSend_numberOfData > 0){
+    Serial.print("#"); // SYMBOL TO START BOARDS TRANSMISSION
+    for(byte i = 0; i < listofDataToSend_numberOfData; i++){
+      Serial.print(listofDataToSend[i]); 
+    }
+    Serial.print("@"); // SYMBOL TO END BOARDS TRANSMISSION
   }
-  Serial.print("#"); // end transmission for Arduino
-  delay(1);
   
 
   // appena il buffer è pieno, mi blocco a leggerlo. Significa che ESP8266 ha pubblicato dei dati.
   if(Serial.available() > 0){ 
-      numberOfCommandsFromBoard = readFromBoard('@'); // from ESP8266. It has @ as terminator character
+      numberOfCommandsFromBoard = readFromBoard(); // from ESP8266. It has @ as terminator character
       // Guardiamo che comandi ci sono arrivati
       for(byte j = 0; j < numberOfCommandsFromBoard; j++){
         String tempReceivedCommand = receivedCommands[j];
@@ -308,33 +310,43 @@ void loop() {
   
 }
 
-int readFromBoard(char endOfCommunication){ // returns the number of commands received
+int readFromBoard(){ // returns the number of commands received
   receivingDataFromBoard = true;
   byte rcIndex = 0;
   char bufferChar[30];
   bool saving = false;
+  bool enableReading = false;
   byte receivedCommandsIndex = 0;
+
   while(receivingDataFromBoard){
+    // qui è bloccante...assumo che prima o poi arduino pubblichi
     if(Serial.available() > 0){ // no while, perché potrei avere un attimo il buffer vuoto...senza aver ancora ricevuto il terminatore
       char rc = Serial.read(); 
 
-      if(rc == '<'){ // starting char
-        saving = true;
+      if(rc == '#'){ // // SYMBOL TO START TRANSMISSION (tutto quello che c'era prima era roba spuria che ho pulito)
+        enableReading = true;
       }
-      else if(rc == '>'){ // ending char
-        bufferChar[rcIndex] = '\0';
-        receivedCommands[receivedCommandsIndex] = bufferChar;
-        receivedCommandsIndex ++;
-        rcIndex = 0;
-        saving = false;// starting char
-      }
-      else if(rc == endOfCommunication){ // ending communication from board
-        receivingDataFromBoard = false; // buffer vuoto, vado avanti
-      }
-      else{
-        if(saving){
-          bufferChar[rcIndex] = rc;
-          rcIndex ++;
+
+      if(enableReading){
+        if(rc == '<'){ // SYMBOL TO START MESSAGE
+          saving = true;
+        }
+        else if(rc == '>'){ // SYMBOL TO END MESSAGE
+          bufferChar[rcIndex] = '\0';
+          receivedCommands[receivedCommandsIndex] = bufferChar;
+          receivedCommandsIndex ++;
+          rcIndex = 0;
+          saving = false;// starting char
+        }
+        else if(rc == '@'){ // SYMBOL TO END BOARDS TRANSMISSION
+          receivingDataFromBoard = false; // buffer vuoto, vado avanti
+          //enableReading = false
+        }
+        else{
+          if(saving){
+            bufferChar[rcIndex] = rc;
+            rcIndex ++;
+          }
         }
       }
     }
