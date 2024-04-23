@@ -2,6 +2,7 @@
 #include "temperatureController.h"
 
 #define DEVICE_DISCONNECTED_C -127
+#define DEFAULT_TEMPERATURE_C 0
 
 temperatureController::temperatureController(){
   _referenceTemperature = DEFAULT_REFERENCE_TEMPERATURE; // 37.5°C
@@ -19,44 +20,56 @@ temperatureController::temperatureController(){
 
 
 void temperatureController::periodicRun(float *temperatures, byte dimension){  
-  switch(_controlModality){
-    case 0:
-      _actualTemperature = 7;
+  switch(_controlModality){ // qui controlliamo l'output
+    case 0: 
       break;
 
-    case 1:
-      // qui non devo controllare il sensore disconnesso: tanto è -127, quindi sicuramente non lo considero.
-      float maxTemperature = temperatures[0];
-      for(byte i = 0; i < dimension; i++){
-        if(temperatures[i] > maxTemperature){
-          maxTemperature = temperatures[i];
+
+    case 1: // tratto sopra di heating
+      if (dimension > 0){
+        float maxTemperature = temperatures[0];
+        for (byte i = 1; i < dimension; i++){
+          if (temperatures[i] > maxTemperature){
+            maxTemperature = temperatures[i];
+          }
         }
+        _actualTemperature = maxTemperature;
       }
-      _actualTemperature = maxTemperature;
-
+      else{
+        // Handle the case when the array is empty
+        // Set _actualTemperature to a default value or handle it accordingly
+        _actualTemperature = DEFAULT_TEMPERATURE_C;
+      }
       break;
 
-    case 2:
+    case 2: // tratto sotto di not heating
       float sum = 0.0;
-      byte goodTemperaturesCounter = 0;
-      for(int i = 0; i < dimension; i++){
+		  byte goodTemperaturesCounter = 0;		
+      for (int i = 0; i < dimension; i++){
         float tempC = temperatures[i];
 
-        if(tempC != DEVICE_DISCONNECTED_C){ // calcoliamo nella media solo le temperature che sono corrette.
-          sum = sum + tempC;
-          goodTemperaturesCounter = goodTemperaturesCounter + 1;
-        }
+        if (tempC != DEVICE_DISCONNECTED_C){
+          sum += tempC;
+          goodTemperaturesCounter++;
+        } 
         else{
-          ;
-          // FAULT HANDLING. tira su un bit per dire che il sensore associato a questo posto nel vettore ha creato problema.
-        }        
+          // Handle the case when a temperature reading is invalid
+          // This could include fault handling or logging
+        }
       }
-      _actualTemperature = sum / goodTemperaturesCounter;
 
-      break;
+      // Check if there are valid temperatures before computing the mean
+      if (goodTemperaturesCounter > 0){
+        _actualTemperature = sum / goodTemperaturesCounter;
+      } 
+      else{
+        // Handle the case when no valid temperatures are available
+        // This could include setting _actualTemperature to a default value
+        _actualTemperature = DEFAULT_TEMPERATURE_C;
+      }
+		break;
 
     default:
-      _actualTemperature = 9;
       break;
   }
   // da qui ho la _actualTemperature
@@ -105,7 +118,7 @@ void temperatureController::setTemperatureHysteresis(float lowerTemperature, flo
   _lowerTemperature = lowerTemperature;
 }
 
-void temperatureController::setControlModality(byte controlModality){
+void temperatureController::setControlModality(int controlModality){
   _controlModality = controlModality;
 }
 
@@ -117,6 +130,6 @@ float temperatureController::debug_getActualTemperature(void){
   return _actualTemperature;
 }
 
-byte temperatureController::debug_getHysteresisState(void){
+int temperatureController::debug_getHysteresisState(void){
   return _hysteresisState;
 }
