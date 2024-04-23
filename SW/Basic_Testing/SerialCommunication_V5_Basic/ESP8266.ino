@@ -600,7 +600,8 @@ bool lowerFanOn_varOld = false;
 
 float sensor1_value, sensor2_value, sensor3_value, actualTemperature_value;
 float higherHysteresisLimit_arduino_html, lowerHysteresisLimit_arduino_html;
-int higherHysteresisLimit_user_html, lowerHysteresisLimit_user_html, temperatureControlModality_user_html;
+float higherHysteresisLimit_user_html, lowerHysteresisLimit_user_html; 
+int temperatureControlModality_user_html;
 int mainHeaterOn_fromArduino_toHTML, auxHeaterOn_fromArduino_toHTML, temperatureControlModality_fromArduino_toHTML;
 
 
@@ -733,12 +734,12 @@ void loop() {
       }
 
       if(request.indexOf("hHL") >= 0){ // higherHysteresisLimit il formato è del tipo: hHL,20;   , + numero + termino con ;
-        higherHysteresisLimit_user_html = getIntFromStringHtmlPage(request); 
+        higherHysteresisLimit_user_html = getFloatFromStringHtmlPage(request); 
         send_higherHysteresisLimit_user_html = true;
       }
 
       if(request.indexOf("lHL") >= 0){ // lowerHysteresisLimit il formato è del tipo: POST /lHL,25;
-        lowerHysteresisLimit_user_html = getIntFromStringHtmlPage(request); 
+        lowerHysteresisLimit_user_html = getFloatFromStringHtmlPage(request); 
         send_lowerHysteresisLimit_user_html = true;
       }
 
@@ -1052,7 +1053,7 @@ void loop() {
 
       if(send_higherHysteresisLimit_user_html){
         strcpy(bufferChar, "<TMP05, "); //higherHysteresisLimit from ESP8266 HMTL page
-        dtostrf(float(higherHysteresisLimit_user_html), 1, 1, fbuffChar); 
+        dtostrf(higherHysteresisLimit_user_html, 1, 1, fbuffChar); 
         listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(strcat(bufferChar, fbuffChar), ">"), "\0");
         listofDataToSend_numberOfData++;
         send_higherHysteresisLimit_user_html = false;
@@ -1060,7 +1061,7 @@ void loop() {
 
       if(send_lowerHysteresisLimit_user_html){
         strcpy(bufferChar, "<TMP06, "); //lowerysteresisLimit from ESP8266 HMTL page
-        dtostrf(float(lowerHysteresisLimit_user_html), 1, 1, fbuffChar); 
+        dtostrf(lowerHysteresisLimit_user_html, 1, 1, fbuffChar); 
         listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(strcat(bufferChar, fbuffChar), ">"), "\0");
         listofDataToSend_numberOfData++;
         send_lowerHysteresisLimit_user_html = false;
@@ -1188,6 +1189,38 @@ int getIntFromStringHtmlPage(String string){ //inputNumber, 23;
     }
   }
   return atoi(receivedChars);  
+}
+
+float getFloatFromStringHtmlPage(String string){ //inputNumber, 23;
+  int index;
+  byte firstIndex;
+  bool memorize = false;
+  const byte numChars = 5;
+  char receivedChars[numChars];   // an array to store the received data
+  byte index_receivedChars = 0;
+
+  for(byte i =0; i < string.length(); i++) {
+    char c = string[i];
+    
+    if(c == ','){
+      firstIndex = index;
+      memorize = true;
+    }
+    else if(c == ';'){
+      byte next = firstIndex + 1; // posto successivo alla ,
+      if(index == next){
+        return 0;
+      }
+      break;
+    }
+    else{
+      if(memorize){
+        receivedChars[index_receivedChars] = c;
+        index_receivedChars = index_receivedChars + 1;
+      }
+    }
+  }
+  return atof(receivedChars);  
 }
 
 void serialFlush(){
