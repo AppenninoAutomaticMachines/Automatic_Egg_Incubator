@@ -21,6 +21,7 @@ temperatureController::temperatureController(){
 void temperatureController::periodicRun(float *temperatures, byte dimension){  
   switch(_controlModality){
     case 0:
+      _actualTemperature = 7;
       break;
 
     case 1:
@@ -55,6 +56,7 @@ void temperatureController::periodicRun(float *temperatures, byte dimension){
       break;
 
     default:
+      _actualTemperature = 9;
       break;
   }
   // da qui ho la _actualTemperature
