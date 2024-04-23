@@ -60,7 +60,7 @@ bool lowerFan_var = false;
 #define LOWER_FAN_PIN 9
 
 float temperatures[3]; // declaring it here, once I know the dimension
-byte temperatureControlModality = 1; // default TEMPERATURE CONTROL MODALITY 1: actualTemperature = maxValue
+int temperatureControlModality = 1; // default TEMPERATURE CONTROL MODALITY 1: actualTemperature = maxValue
 /* END TEMPERATURES SECTION */
 
 
@@ -133,7 +133,6 @@ void setup() {
       //delay(750/ (1 << (12-TEMPERATURE_PRECISION)));
     }
   }
-  
   /* END TEMPERATURES SECTION */
 }
 
@@ -149,8 +148,9 @@ void loop() {
   }
 
   temperatureController.setTemperatureHysteresis(lowerHysteresisLimit, higherHysteresisLimit);
-  temperatureController.setControlModality(temperatureControlModality);
+  temperatureController.setControlModality(temperatureControlModality); 
   temperatureController.periodicRun(temperatures, Limit);
+
   /*
   Serial.print("T1: ");
   Serial.print(temperatures[0]);
@@ -209,7 +209,7 @@ void loop() {
   dtostrf(temperatureController.debug_getActualTemperature(), 1, 1, fbuffChar); 
   listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(strcat(bufferChar, fbuffChar), ">"), '\0');
   listofDataToSend_numberOfData++;
-
+ 
   strcpy(bufferChar, "<hHL, "); //higher Hysteresis Limit from Arduino
   dtostrf(higherHysteresisLimit, 1, 1, fbuffChar); 
   listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(strcat(bufferChar, fbuffChar), ">"), '\0');
@@ -234,6 +234,7 @@ void loop() {
   listofDataToSend[listofDataToSend_numberOfData] = bufferCharArray;
   listofDataToSend_numberOfData++;
 
+  
   if(listofDataToSend_numberOfData > 0){
     Serial.print("#"); // SYMBOL TO START BOARDS TRANSMISSION
     for(byte i = 0; i < listofDataToSend_numberOfData; i++){
@@ -241,6 +242,7 @@ void loop() {
     }
     Serial.print("@"); // SYMBOL TO END BOARDS TRANSMISSION
   }
+  
   
 
   // appena il buffer è pieno, mi blocco a leggerlo. Significa che ESP8266 ha pubblicato dei dati.
@@ -300,9 +302,9 @@ void loop() {
         if(tempReceivedCommand.indexOf("TMP06") >= 0){ //setting lowerHysteresisLimit from ESP8266 HMTL page
           lowerHysteresisLimit = getFloatFromString(tempReceivedCommand, ',');
         }
-		if(tempReceivedCommand.indexOf("TMP07") >= 0){ //setting TEMPERATURE CONTROL MODALITY from ESP8266 HMTL page
-		  // 1: actualTemperature = maxValue
-		  // 2: actualTemperature = meanValue
+		    if(tempReceivedCommand.indexOf("TMP07") >= 0){ //setting TEMPERATURE CONTROL MODALITY from ESP8266 HMTL page
+          // 1: actualTemperature = maxValue
+          // 2: actualTemperature = meanValue
           temperatureControlModality = getIntFromString(tempReceivedCommand, ',');
         }
       }
