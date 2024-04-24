@@ -199,6 +199,10 @@ void timer::setTimeToWait(int timeToWait){
   _timeToWait = timeToWait;
 }
 
+void timer::reArm(void){
+  _reArm = true;
+}
+
 bool timer::getOutputTriggerEdgeType(void){
   return _outputTrigger_edgeType;
 }
