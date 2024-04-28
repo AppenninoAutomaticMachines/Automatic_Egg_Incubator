@@ -14,7 +14,11 @@
 */
 
 #include <SoftwareSerial.h>
+#include <avr/wdt.h>
+
+
 #define SERIAL_SPEED 19200 
+#define WATCHDOG_ENABLE true
 
 /* TEMPERATURES SECTION */
 // ricorda di mettere una alimentazione forte e indipendente per i sensori. Ha migliorato molto la stabilità della lettura.
@@ -65,17 +69,19 @@ int temperatureControlModality = 1; // default TEMPERATURE CONTROL MODALITY 1: a
 
 
 /* MOTORS SECTION */
-byte directionPin = 7;
 byte stepPin = 8;
+byte directionPin = 7;
+byte MS1 = 6;
+byte MS2 = 5;
+byte MS3 = 4;
+
+stepperMotor eggTurnerStepperMotor(stepPin, directionPin, MS1, MS2, MS3, 0.5);
 
 bool move = false;
 bool direction = false; 
 /* END MOTORS SECTION */
 
 float temp_sensor1, temp_sensor2, temp_sensor3;
-
-#define TIME_PERIOD_SERIAL_COMMUNICATION_ARDUINO_TO_ESP8266 100 //ms
-timer timerSerialToESP8266;
 
 //RECEIVING FROM ESP8266
 #define MAX_NUMBER_OF_COMMANDS_FROM_BOARD 20
@@ -91,14 +97,30 @@ byte listofDataToSend_numberOfData = 0;
 char bufferChar[35];
 char fbuffChar[10];
 
+#define TIME_PERIOD_SERIAL_COMMUNICATION_ARDUINO_TO_ESP8266 100 //ms
+timer timerSerialToESP8266;
+
+
+/* GENERAL */
+
 
 
 void setup() {
-  pinMode(directionPin, OUTPUT);
-  digitalWrite(directionPin, LOW);
-
   pinMode(stepPin, OUTPUT);
   digitalWrite(stepPin, LOW);
+
+  pinMode(directionPin, OUTPUT);
+  digitalWrite(directionPin, LOW);  
+
+  pinMode(MS1, OUTPUT);
+  digitalWrite(MS1, LOW);
+
+  pinMode(MS2, OUTPUT);
+  digitalWrite(MS2, LOW);
+
+  pinMode(MS3, OUTPUT);
+  digitalWrite(MS3, LOW);
+
 
   pinMode(MAIN_HEATER_PIN, OUTPUT);
   pinMode(AUX_HEATER_PIN, OUTPUT);
@@ -107,6 +129,11 @@ void setup() {
   pinMode(AUTOMATIC_CONTROL_CHECK_PIN, OUTPUT);
 
   Serial.begin(SERIAL_SPEED);
+
+  if(WATCHDOG_ENABLE){
+    wdt_disable();
+    wdt_enable(WDTO_2S);
+  }
   
   serialFlush();
   delay(5);
@@ -183,14 +210,9 @@ void loop() {
   }
   /* END TEMPERATURES SECTION */
     
-  if(move){
-    digitalWrite(stepPin, HIGH);
-    delay(10);
-    digitalWrite(stepPin, LOW);
-  }
-  else{
-    digitalWrite(stepPin, LOW);
-  }
+  /* STEPPER MOTOR SECTION */
+  eggTurnerStepperMotor.periodicRun();
+  /* END STEPPER MOTOR SECTION */
 
   /* SERIAL COMMUNICATION FROM ARDUINO TO ESP8266 */
   timerSerialToESP8266.periodicRun();
@@ -264,18 +286,16 @@ void loop() {
         String tempReceivedCommand = receivedCommands[j];
         //Serial.println(tempReceivedCommand);
         if(tempReceivedCommand.indexOf("STP01") >= 0){ //stepperMotorForwardOn
-          move = true;
-          digitalWrite(directionPin, HIGH);
+          eggTurnerStepperMotor.moveForward(0.5);
         }
         if(tempReceivedCommand.indexOf("STP02") >= 0){ //stepperMotorForwardOff
-          move = false;
+          eggTurnerStepperMotor.stopMotor();
         }
         if(tempReceivedCommand.indexOf("STP03") >= 0){ //stepperMotorBackwardOn
-          move = true;
-          digitalWrite(directionPin, LOW);
+          eggTurnerStepperMotor.moveBackward(0.5);
         }
         if(tempReceivedCommand.indexOf("STP04") >= 0){ //stepperMotorBackwardOff
-          move = false;
+          eggTurnerStepperMotor.stopMotor();
         }
         if(tempReceivedCommand.indexOf("TMP01") >= 0){ //mainHeaterOn
           mainHeater_var = true;
@@ -321,6 +341,9 @@ void loop() {
       }
   } 
   
+  if(WATCHDOG_ENABLE){
+    wdt_reset();
+  }  
 }
 
 int readFromBoard(){ // returns the number of commands received
