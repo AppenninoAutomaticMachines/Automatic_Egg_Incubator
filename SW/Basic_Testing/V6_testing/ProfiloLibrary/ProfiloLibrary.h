@@ -49,6 +49,8 @@ class timer{
 
     void periodicRun(void);
     void reArm(void);
+    void enable(void);
+    void disable(void);
 
     void setTimeToWait(int timeToWait);
     
@@ -67,5 +69,45 @@ class timer{
 
     bool _resetTimer; // per ripartire a contare
     bool _reArm; // funziona a trigger
+};
+
+/* STEPPER MOTOR CLASS */
+class stepperMotor{
+  public:
+    stepperMotor(byte stepPin, byte dirPin, byte MS1, byte MS2, byte MS3, float degreePerStep);
+
+    void periodicRun(void);
+
+    void stopMotor(void);
+    void moveForward(float rpm_speed);
+    void moveBackward(float rpm_speed);
+    void switchPolarity(void);
+
+
+    //void setMicroSteppingConfiguration(bool MS1, bool MS2, bool MS3);
+    float get_actualRPMSpeed(void);
+
+  private:
+    byte _stepPin;
+    bool _stepCommand; // true = motore deve girare  false = motore fermo
+
+    byte _dirPin;
+    bool _dirCommand;
+    bool _switchPolarity;
+
+    byte _MS1, _MS2, _MS3; // microstepping configuration
+
+    float _rpm_speed;
+    float _degreePerStep;
+    float _actual_rpm_speed;
+
+    // stepping computation
+    timer _steppingTimer; // timer che intervalla i fronti positivi
+    timer _steppingTimer_stepOn; // timer che fa star su 1ms lo step
+    int _stepDelay;
+
+    bool _steppingInProgress;
+
+    byte _workingState;
 };
 #endif
