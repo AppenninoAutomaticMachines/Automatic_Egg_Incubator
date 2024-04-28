@@ -193,6 +193,11 @@ void timer::periodicRun(void){
       }
     }      
   }
+  else{
+    _lastTriggerTime = millis();
+    _outputTrigger_stableType = false;
+    _reArm = false;
+  }
 } 
 
 void timer::setTimeToWait(int timeToWait){
@@ -203,10 +208,151 @@ void timer::reArm(void){
   _reArm = true;
 }
 
+void timer::enable(void){
+  _enable = true;
+}
+
+void timer::disable(void){
+  _enable = false;
+}
+
 bool timer::getOutputTriggerEdgeType(void){
   return _outputTrigger_edgeType;
 }
 
 bool timer::getOutputTriggerStableType(void){
   return _outputTrigger_stableType;
+}
+
+/* STEPPER MOTOR CLASS */
+
+stepperMotor::stepperMotor(byte stepPin, byte dirPin, byte MS1, byte MS2, byte MS3, float degreePerStep){
+  _stepPin = stepPin;
+  _stepCommand = false;
+
+  _dirPin = dirPin;
+  _dirCommand = false;
+  _switchPolarity = false;
+
+  _MS1 = MS1;
+  _MS2 = MS2;
+  _MS3 = MS3;
+
+  _rpm_speed = 1; // default 1rpm
+  _degreePerStep = degreePerStep;
+
+  _steppingInProgress = false;
+
+  _steppingTimer_stepOn.setTimeToWait(1); // tempo minimo per sui sta su il segnale di step
+
+  _workingState = 0; // STOP
+}
+
+void stepperMotor::periodicRun(void){
+
+  /* macchina a stati di gestione dei comandi */
+  switch(_workingState){
+    case 0: // STOP
+      _stepCommand = false;
+      break;
+
+    case 1:// MOVE FORWARD
+      _stepCommand = true;
+      _dirCommand = true;
+      break;
+
+    case 2:// MOVE BACKWARD
+      _stepCommand = true;
+      _dirCommand = false;
+      break;
+
+    default:
+      break;
+  }
+
+
+  if(_stepCommand){
+    // scelgo direzione e abilito i timer
+    if(_switchPolarity){
+      if(_dirCommand){
+        digitalWrite(_dirPin, LOW);
+      }
+      else{
+        digitalWrite(_dirPin, HIGH);
+      }
+    }
+    else{
+      if(_dirCommand){
+        digitalWrite(_dirPin, HIGH);
+      }
+      else{
+        digitalWrite(_dirPin, LOW);
+      }
+    }      
+
+    _steppingTimer.enable();
+    _steppingTimer_stepOn.enable(); 
+    
+    _stepDelay = _degreePerStep / _rpm_speed / 360.0 * 60 * 1000; //ms, cast to int type
+    // from RPM to °/ms --> (rpm * 360) / (60 * 1000)   [°/ms]
+    // compute the ms you need to wait btw to degreePerStep steps: degreePerStep / stepDelay [ms]
+    
+    _actual_rpm_speed = _degreePerStep * 1000.0 / _stepDelay * 60 / 360;
+
+    // intervallo minimo fra due step è 2ms (due fronti positivi del segnale allo step).
+    // perché 1ms lo uso per tenere stabile il segnale alto.
+    if(_stepDelay < 2){ 
+      _stepDelay = 2;
+    }
+    _steppingTimer.setTimeToWait(_stepDelay);
+  }
+  else{
+    _steppingTimer.disable();
+    _steppingTimer_stepOn.disable();
+  }
+
+  // i timer girano
+  _steppingTimer.periodicRun();
+  _steppingTimer_stepOn.periodicRun();
+  
+  // genero lo step
+  if(_stepCommand){
+    if(_steppingInProgress){
+      if(_steppingTimer_stepOn.getOutputTriggerEdgeType()){
+        _steppingInProgress = false;
+        digitalWrite(_stepPin, LOW);
+      }
+    }
+    else{
+      if(_steppingTimer.getOutputTriggerEdgeType()){
+        _steppingTimer.reArm(); 
+        _steppingTimer_stepOn.reArm(); 
+        _steppingInProgress = true;
+        digitalWrite(_stepPin, HIGH);
+      }
+    }
+  } 
+}
+
+void stepperMotor::stopMotor(void){
+  _workingState = 0;
+}
+
+void stepperMotor::moveForward(float rpm_speed){
+  _rpm_speed = rpm_speed;
+  _workingState = 1;
+}
+
+void stepperMotor::moveBackward(float rpm_speed){
+  _rpm_speed = rpm_speed;
+  _workingState = 2;
+}
+
+void stepperMotor::switchPolarity(void){
+  // chiami questo metodo per cambiare il senso di rotazione del motore, per compensare il montaggio.
+  _switchPolarity = true;
+}
+
+float stepperMotor::get_actualRPMSpeed(void){
+  return _actual_rpm_speed;
 }
