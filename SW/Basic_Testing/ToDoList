@@ -1,7 +1,9 @@
 To Do List:
  
  
-
+ - Timer: ms, s min, hours, days
+ - encoder
+ - PWM riscaldatore
  - modifica ONEWIRE singolo + watchdog che evita il bloccaggio
  - PWM del riscaldatore
  - ridurre la comunicazione seriale
