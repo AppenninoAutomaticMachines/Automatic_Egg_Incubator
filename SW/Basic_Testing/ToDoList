@@ -4,6 +4,8 @@ To Do List:
  - Timer: ms, s min, hours, days
  - encoder
  - PWM riscaldatore
+ - controllo automatico motore: pulasnte AUTO, submit intervallo di girata uova, giro motore until limit
+ - pulsante velocità motore
  - modifica ONEWIRE singolo + watchdog che evita il bloccaggio
  - PWM del riscaldatore
  - ridurre la comunicazione seriale
