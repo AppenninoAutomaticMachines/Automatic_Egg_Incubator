@@ -19,6 +19,7 @@
 
 #define SERIAL_SPEED 19200 
 #define WATCHDOG_ENABLE true
+#define DEFAULT_DEBOUNCE_TIME 25 //ms
 
 /* TEMPERATURES SECTION */
 // ricorda di mettere una alimentazione forte e indipendente per i sensori. Ha migliorato molto la stabilità della lettura.
@@ -69,16 +70,38 @@ int temperatureControlModality = 1; // default TEMPERATURE CONTROL MODALITY 1: a
 
 
 /* MOTORS SECTION */
+#define STEPPER_MOTOR_SPEED_DEFAULT 2 //rpm
+
 byte stepPin = 8;
 byte directionPin = 7;
 byte MS1 = 6;
 byte MS2 = 5;
 byte MS3 = 4;
 
-stepperMotor eggTurnerStepperMotor(stepPin, directionPin, MS1, MS2, MS3, 0.5);
+float stepper_motor_speed = STEPPER_MOTOR_SPEED_DEFAULT;
+
+stepperMotor eggsTurnerStepperMotor(stepPin, directionPin, MS1, MS2, MS3, 0.5);
 
 bool move = false;
 bool direction = false; 
+
+bool stepperAutomaticControl_var = false;
+
+#define LEFT_INDUCTOR_PIN 6
+antiDebounceInput leftInductor_input(LEFT_INDUCTOR_PIN, DEFAULT_DEBOUNCE_TIME);
+
+#define RIGHT_INDUCTOR_PIN 5
+antiDebounceInput rightInductor_input(RIGHT_INDUCTOR_PIN, DEFAULT_DEBOUNCE_TIME);
+
+// variabile per manual control
+bool stepperMotor_moveForward_var = false;
+bool stepperMotor_moveBackward_var = false;
+bool stepperMotor_stop_var = false;
+
+byte eggsTurnerState = 0;
+bool turnEggs_cmd = false;
+
+timer dummyTimer;
 /* END MOTORS SECTION */
 
 float temp_sensor1, temp_sensor2, temp_sensor3;
@@ -128,6 +151,9 @@ void setup() {
   pinMode(LOWER_FAN_PIN, OUTPUT);
   pinMode(AUTOMATIC_CONTROL_CHECK_PIN, OUTPUT);
 
+  pinMode(LEFT_INDUCTOR_PIN, INPUT);
+  pinMode(RIGHT_INDUCTOR_PIN, INPUT);
+
   Serial.begin(SERIAL_SPEED);
 
   if(WATCHDOG_ENABLE){
@@ -166,6 +192,8 @@ void setup() {
 
   timerSerialToESP8266.setTimeToWait(TIME_PERIOD_SERIAL_COMMUNICATION_ARDUINO_TO_ESP8266);
   /* END TEMPERATURES SECTION */
+
+  dummyTimer.setTimeToWait(10000); //DUMMY FOR TESTS - giro ogni 10 secondi
 }
 
 void loop() {    
@@ -209,9 +237,84 @@ void loop() {
     digitalWrite(AUTOMATIC_CONTROL_CHECK_PIN, LOW);
   }
   /* END TEMPERATURES SECTION */
+
+  /* INDUCTOR INPUT SECTION */
+  leftInductor_input.periodicRun();
+  rightInductor_input.periodicRun();
+  /* END INDUCTOR INPUT SECTION */
     
   /* STEPPER MOTOR SECTION */
-  eggTurnerStepperMotor.periodicRun();
+  eggsTurnerStepperMotor.periodicRun();
+
+  dummyTimer.periodicRun();
+  if(stepperAutomaticControl_var){
+    /* macchina a stati per la gestione della rotazione */
+    dummyTimer.enable();
+    
+    turnEggs_cmd = dummyTimer.getOutputTriggerEdgeType();
+
+    switch(eggsTurnerState){
+      case 0: // ZEROING
+        // lascio stato aperto per eventuale abilitazione della procedura di azzeramento da parte dell'operatore.
+        eggsTurnerStepperMotor.moveForward(STEPPER_MOTOR_SPEED_DEFAULT);
+        eggsTurnerState = 1;
+        break;
+      case 1: // WAIT_TO_REACH_LEFT_SIDE_INDUCTOR
+        if(leftInductor_input.getInputState()){
+          // home position is reached - full left
+          eggsTurnerStepperMotor.stopMotor();
+          dummyTimer.reset();
+          eggsTurnerState = 2;
+        }
+        break;
+      case 2: // WAIT_FOR_TURN_EGGS_COMMAND_STATE --> will rotate from left to right (CW direction)
+          if(turnEggs_cmd){
+            eggsTurnerStepperMotor.moveBackward(STEPPER_MOTOR_SPEED_DEFAULT);
+            eggsTurnerState = 3;
+          }
+        break;
+      case 3: // WAIT_TO_REACH_RIGHT_SIDE_INDUCTOR
+          if(rightInductor_input.getInputState()){
+            dummyTimer.reArm();
+            eggsTurnerStepperMotor.stopMotor();
+            eggsTurnerState = 4;
+          }
+        break;
+      case 4: // WAIT_FOR_TURN_EGGS_COMMAND_STATE --> will rotate from right to left (CCW direction)
+          if(turnEggs_cmd){
+            eggsTurnerStepperMotor.moveForward(STEPPER_MOTOR_SPEED_DEFAULT);
+            eggsTurnerState = 5;
+          }
+        break;
+      case 5: // WAIT_TO_REACH_LEFT_SIDE_INDUCTOR
+          if(leftInductor_input.getInputState()){
+            dummyTimer.reArm();
+            eggsTurnerStepperMotor.stopMotor();
+            eggsTurnerState = 2;
+          }
+        break;
+      default:
+        break;
+    }
+  }
+  else{
+    dummyTimer.disable();
+    if(stepperMotor_moveForward_var){
+      eggsTurnerStepperMotor.moveForward(STEPPER_MOTOR_SPEED_DEFAULT);
+    }
+    if(stepperMotor_moveBackward_var){
+      eggsTurnerStepperMotor.moveBackward(STEPPER_MOTOR_SPEED_DEFAULT);
+    }
+    if(stepperMotor_stop_var){
+      eggsTurnerStepperMotor.stopMotor();
+    }
+
+    //clear variables
+    stepperMotor_moveForward_var = false;
+    stepperMotor_moveBackward_var = false;
+    stepperMotor_stop_var = false;
+  }
+  
   /* END STEPPER MOTOR SECTION */
 
   /* SERIAL COMMUNICATION FROM ARDUINO TO ESP8266 */
@@ -286,16 +389,22 @@ void loop() {
         String tempReceivedCommand = receivedCommands[j];
         //Serial.println(tempReceivedCommand);
         if(tempReceivedCommand.indexOf("STP01") >= 0){ //stepperMotorForwardOn
-          eggTurnerStepperMotor.moveForward(0.5);
+          stepperMotor_moveForward_var = true;
         }
         if(tempReceivedCommand.indexOf("STP02") >= 0){ //stepperMotorForwardOff
-          eggTurnerStepperMotor.stopMotor();
+          stepperMotor_stop_var = true;
         }
         if(tempReceivedCommand.indexOf("STP03") >= 0){ //stepperMotorBackwardOn
-          eggTurnerStepperMotor.moveBackward(0.5);
+          stepperMotor_moveBackward_var = true;
         }
         if(tempReceivedCommand.indexOf("STP04") >= 0){ //stepperMotorBackwardOff
-          eggTurnerStepperMotor.stopMotor();
+          stepperMotor_stop_var = true;
+        }
+        if(tempReceivedCommand.indexOf("STP05") >= 0){ //stepperMotorAutomaticControlOn
+          stepperAutomaticControl_var = true;
+        }
+        if(tempReceivedCommand.indexOf("STP06") >= 0){ //stepperMotorAutomaticControlOff
+          stepperAutomaticControl_var = false;
         }
         if(tempReceivedCommand.indexOf("TMP01") >= 0){ //mainHeaterOn
           mainHeater_var = true;
