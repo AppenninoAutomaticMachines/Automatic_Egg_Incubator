@@ -176,6 +176,9 @@ String automaticControl_html_1 = R"=====(
     #commands_section {display: table; margin: auto;  padding: 10px 10px 10px 10px; } 
     #content_commands_section { border: 5px solid green; border-radius: 15px; padding: 10px 0px 10px 0px;}
 
+    #stepperMotorSection {display: table; margin: auto;  padding: 10px 10px 10px 10px; } 
+    #content_stepperMotorSection { border: 5px solid blue; border-radius: 15px; padding: 10px 0px 10px 0px;}
+
     h2 {text-align:center; margin: 10px 0px 10px 0px;} 
     p { text-align:center; margin: 5px 0px 10px 0px; font-size: 120%;}
     #time_P { margin: 10px 0px 15px 0px;}
@@ -577,8 +580,11 @@ bool stepperMotorControlPage_var = false;
 bool automaticControlPage_var = false;
 bool manualControlPage_var = false;
 
-bool automaticControl_var = false; // variabile che attiva o no il controllo automatico
+bool automaticControl_var = false; // variabile attivazione del controllo automatico di temperatura
 bool automaticControl_varOld = false;
+
+bool stepperMotorAutomaticControl_var = false; // variabile di attivazione del controllo automatico dello stepper
+bool stepperMotorAutomaticControl_varOld = false;
 
 bool stepperMotorForward_var = false;
 bool stepperMotorForward_varOld = false;
@@ -780,6 +786,14 @@ void loop() {
         automaticControl_var = false; 
       }
 
+      if(request.indexOf("GET /automaticControlPage/stepperMotorAutomaticControl/on") >= 0){
+        stepperMotorAutomaticControl_var = true; 
+      }
+
+      if(request.indexOf("GET /automaticControlPage/stepperMotorAutomaticControl/off") >= 0){
+        stepperMotorAutomaticControl_var = false; 
+      }
+
 
       /* STEPPER MOTOR CONTROL */
       if(request.indexOf("GET /stepperMotorControlPage/stepperMotorForward/on") >= 0){
@@ -883,7 +897,7 @@ void loop() {
 
         case AUTOMATIC_CONTROL_PAGE:
           client.print(automaticControl_html_1);
-            /* AUTOMATIC CONTROL ACTIVATION/DEACTIVATION button */ 
+          /* AUTOMATIC CONTROL ACTIVATION/DEACTIVATION button */ 
           if(automaticControl_var){
             client.print("<p>Controllo automatico: <b style='color:green'>ON</b></p>");
             client.print("<p><a href=\"/automaticControlPage/automaticControl/off\"><button class=\"button buttonOff\">OFF</button></a></p>"); 
@@ -891,9 +905,17 @@ void loop() {
           else{
             client.print("<p>Controllo automatico: <b style='color:red'>OFF</b></p>");
             client.print("<p><a href=\"/automaticControlPage/automaticControl/on\"><button class=\"button buttonOn\">ON</button></a></p>"); 
-          }          
+          }  
 
-          /* ACTUAL TEMPERATURE DISPLAY - per dire qual è la temperatura che sta utilizzando come variabile di controllo */
+          /* STEPPER MOTOR AUTOMATIC CONTROL ACTIVATION/DEACTIVATION button */ 
+          if(stepperMotorAutomaticControl_var){
+            client.print("<p>Automatico Motore Girauova: <b style='color:green'>ON</b></p>");
+            client.print("<p><a href=\"/automaticControlPage/stepperMotorAutomaticControl/off\"><button class=\"button buttonOff\">OFF</button></a></p>"); 
+          }
+          else{
+            client.print("<p>Automatico Motore Girauova: <b style='color:red'>OFF</b></p>");
+            client.print("<p><a href=\"/automaticControlPage/stepperMotorAutomaticControl/on\"><button class=\"button buttonOn\">ON</button></a></p>"); 
+          }         
 
           /* ACTUATOR STATE DISPLAY */
           client.print(automaticControl_html_2);
@@ -953,6 +975,8 @@ void loop() {
       STP02 = stepperMotorForwardOff
       STP03 = stepperMotorBackwardOn
       STP04 = stepperMotorBackwardOff
+      STP05 = stepperMotorAutomaticControlOn
+      STP06 = stepperMotorAutomaticControlOff
 
       TMP01 = mainHeaterOn
       TMP02 = mainHeaterOff
@@ -1049,6 +1073,17 @@ void loop() {
         listofDataToSend[listofDataToSend_numberOfData] = "<GNR02>"; //automaticControlOff
         listofDataToSend_numberOfData ++;
         automaticControl_varOld = false;
+      }
+
+      if(stepperMotorAutomaticControl_var && !stepperMotorAutomaticControl_varOld){
+        listofDataToSend[listofDataToSend_numberOfData] = "<STP05>"; //stepperMotorAutomaticControlOn
+        listofDataToSend_numberOfData ++;
+        stepperMotorAutomaticControl_varOld = true;
+      }
+      if(!stepperMotorAutomaticControl_var && stepperMotorAutomaticControl_varOld){
+        listofDataToSend[listofDataToSend_numberOfData] = "<STP06>"; //stepperMotorAutomaticControlOff
+        listofDataToSend_numberOfData ++;
+        stepperMotorAutomaticControl_varOld = false;
       }
 
       if(send_higherHysteresisLimit_user_html){
