@@ -51,6 +51,7 @@ class timer{
     void reArm(void);
     void enable(void);
     void disable(void);
+	void reset(void);
 
     void setTimeToWait(int timeToWait);
     
@@ -69,6 +70,10 @@ class timer{
 
     bool _resetTimer; // per ripartire a contare
     bool _reArm; // funziona a trigger
+	
+	bool _first_periodicRun;
+	/* tiene traccia della prima chiamata a periodicRun. se passa molto tempo dall'inizializzazione al primo periodicRun rischio di triggerare un edge che non è 
+	propriamente voluto. Gli edge si triggerano appena siamo in periodic run. */
 };
 
 /* STEPPER MOTOR CLASS */
@@ -109,5 +114,29 @@ class stepperMotor{
     bool _steppingInProgress;
 
     byte _workingState;
+};
+
+/* FILTERED INPUT - anti debounce */
+class antiDebounceInput{
+  public:
+    antiDebounceInput(byte pin, int debounceTime);
+
+    void periodicRun(void);
+    void changePolarity(void);
+
+    void setDebounceDelay(int debounceDelay);
+    bool getInputState(void); // ritorna dicendo se il pulsante è premuto o no
+
+  private:
+    byte _inputPin;
+    bool _changePolarity;
+
+    bool _currentInputState;
+    bool _previousInputState;
+
+    unsigned long _lastDebounceTime; 
+    unsigned long _debounceDelay; 
+
+    bool _inputState_output; // variabile di output di questo oggetto che mi dice lo stato dell'input    
 };
 #endif
