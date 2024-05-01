@@ -150,11 +150,26 @@ timer::timer(){
 
   _resetTimer = false;
   _reArm = false;
+  
+  _first_periodicRun = true;
 }
 
 void timer::periodicRun(void){
+  if(_first_periodicRun){
+    // aggiorniamo il _lastTriggerTime per la prima volta
+    _lastTriggerTime = millis();
+    _first_periodicRun = false;
+  }
+  
   if(_enable){
     _outputTrigger_edgeType = false;
+	
+	if(_resetTimer){
+        _lastTriggerTime = _currentTime;
+		_outputTrigger_stableType = false;
+		_outputTrigger_edgeType = false;
+        _resetTimer = false;
+      }
 
 
     if(!_outputTrigger_stableType){
@@ -168,11 +183,6 @@ void timer::periodicRun(void){
 
       
       _outputTrigger_stableType = false;
-
-      if(_resetTimer){
-        _lastTriggerTime = _currentTime;
-        _resetTimer = false;
-      }
 
       if((_currentTime - _lastTriggerTime) >= _timeToWait){
         _lastTriggerTime = _currentTime; // let's remember the last time the time has triggered its output
@@ -214,6 +224,10 @@ void timer::enable(void){
 
 void timer::disable(void){
   _enable = false;
+}
+
+void timer::reset(void){
+  _resetTimer = true;
 }
 
 bool timer::getOutputTriggerEdgeType(void){
@@ -355,4 +369,50 @@ void stepperMotor::switchPolarity(void){
 
 float stepperMotor::get_actualRPMSpeed(void){
   return _actual_rpm_speed;
+}
+
+
+/* FILTERED INPUT - anti debounce */
+antiDebounceInput::antiDebounceInput(byte pin, int debounceDelay){
+  _inputPin = pin;  
+  _changePolarity = false;
+  _previousInputState = false;
+
+  _lastDebounceTime = 0;
+  _debounceDelay = debounceDelay;
+
+  _inputState_output = false;
+  }
+
+void antiDebounceInput::periodicRun(void){
+  _currentInputState = digitalRead(_inputPin);
+
+  if(_currentInputState != _previousInputState){
+    _lastDebounceTime = millis();
+  }
+
+  if((millis() - _lastDebounceTime) > _debounceDelay){
+    if (_currentInputState != _inputState_output) {
+      if(_changePolarity){
+        _inputState_output = !(_currentInputState);
+      }
+      else{
+        _inputState_output = _currentInputState;
+      }
+    }
+  }
+  
+  _previousInputState = _currentInputState;
+}
+
+void antiDebounceInput::changePolarity(void){
+  _changePolarity = true;
+}
+
+void antiDebounceInput::setDebounceDelay(int debounceDelay){
+  _debounceDelay = debounceDelay;
+}
+
+bool antiDebounceInput::getInputState(void){
+  return _inputState_output;
 }
