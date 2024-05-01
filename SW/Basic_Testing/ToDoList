@@ -1,6 +1,7 @@
 To Do List:
- 
- 
+ - pensare alla procedura di azzeramento. Mettere il motore all'interno dell'intervallo e premere il tasto. Ma così ho bisogno dell'operatore..se si spegne??
+ - introdurre un 'first period' nella periodicRun del timer...se passa molto tempo dall'init alla prima periodicRun, rischio di triggerare un edge.
+ preferisco perdere il primo timer. Gli edge si generano a partire dal primo
  - Timer: ms, s min, hours, days
  - encoder
  - PWM riscaldatore
