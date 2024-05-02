@@ -345,7 +345,10 @@ void stepperMotor::periodicRun(void){
         digitalWrite(_stepPin, HIGH);
       }
     }
-  } 
+  }
+  else{
+	digitalWrite(_stepPin, LOW);
+  }
 }
 
 void stepperMotor::stopMotor(void){
