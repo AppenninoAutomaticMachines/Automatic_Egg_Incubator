@@ -253,10 +253,11 @@ void loop() {
     
     turnEggs_cmd = dummyTimer.getOutputTriggerEdgeType();
 
+    // direzione oraria = forward = verso l'induttore di destra (vedendo da dietro l'incubatrice)
     switch(eggsTurnerState){
       case 0: // ZEROING
         // lascio stato aperto per eventuale abilitazione della procedura di azzeramento da parte dell'operatore.
-        eggsTurnerStepperMotor.moveForward(STEPPER_MOTOR_SPEED_DEFAULT);
+        eggsTurnerStepperMotor.moveBackward(STEPPER_MOTOR_SPEED_DEFAULT);
         eggsTurnerState = 1;
         break;
       case 1: // WAIT_TO_REACH_LEFT_SIDE_INDUCTOR
@@ -269,7 +270,7 @@ void loop() {
         break;
       case 2: // WAIT_FOR_TURN_EGGS_COMMAND_STATE --> will rotate from left to right (CW direction)
           if(turnEggs_cmd){
-            eggsTurnerStepperMotor.moveBackward(STEPPER_MOTOR_SPEED_DEFAULT);
+            eggsTurnerStepperMotor.moveForward(STEPPER_MOTOR_SPEED_DEFAULT);
             eggsTurnerState = 3;
           }
         break;
@@ -282,7 +283,7 @@ void loop() {
         break;
       case 4: // WAIT_FOR_TURN_EGGS_COMMAND_STATE --> will rotate from right to left (CCW direction)
           if(turnEggs_cmd){
-            eggsTurnerStepperMotor.moveForward(STEPPER_MOTOR_SPEED_DEFAULT);
+            eggsTurnerStepperMotor.moveBackward(STEPPER_MOTOR_SPEED_DEFAULT);
             eggsTurnerState = 5;
           }
         break;
