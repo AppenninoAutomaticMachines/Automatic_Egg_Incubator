@@ -20,6 +20,8 @@
 #define SERIAL_SPEED 19200 
 #define WATCHDOG_ENABLE true
 #define DEFAULT_DEBOUNCE_TIME 25 //ms
+#define ENABLE_SERIAL_PRINT_TO_ESP8266 true
+#define ENABLE_SERIAL_PRINT_DEBUG false
 
 /* TEMPERATURES SECTION */
 // ricorda di mettere una alimentazione forte e indipendente per i sensori. Ha migliorato molto la stabilità della lettura.
@@ -70,7 +72,7 @@ int temperatureControlModality = 1; // default TEMPERATURE CONTROL MODALITY 1: a
 
 
 /* MOTORS SECTION */
-#define STEPPER_MOTOR_SPEED_DEFAULT 2 //rpm
+#define STEPPER_MOTOR_SPEED_DEFAULT 10 //rpm
 
 byte stepPin = 8;
 byte directionPin = 7;
@@ -193,7 +195,8 @@ void setup() {
   timerSerialToESP8266.setTimeToWait(TIME_PERIOD_SERIAL_COMMUNICATION_ARDUINO_TO_ESP8266);
   /* END TEMPERATURES SECTION */
 
-  dummyTimer.setTimeToWait(10000); //DUMMY FOR TESTS - giro ogni 10 secondi
+  dummyTimer.setTimeToWait(10000); //DUMMY FOR TESTS - giro ogni 10 secondi.
+  rightInductor_input.changePolarity(); // DUMMY con sensore NON balluff
 }
 
 void loop() {    
@@ -297,6 +300,14 @@ void loop() {
       default:
         break;
     }
+    if(ENABLE_SERIAL_PRINT_DEBUG){
+      Serial.print(eggsTurnerState);
+      Serial.print("  ");
+      Serial.print(leftInductor_input.getInputState());
+      Serial.print("  ");
+      Serial.print(rightInductor_input.getInputState());
+      Serial.println("");
+    }
   }
   else{
     dummyTimer.disable();
@@ -369,13 +380,14 @@ void loop() {
     listofDataToSend[listofDataToSend_numberOfData] = bufferCharArray;
     listofDataToSend_numberOfData++;
 
-    
-    if(listofDataToSend_numberOfData > 0){
-      Serial.print("#"); // SYMBOL TO START BOARDS TRANSMISSION
-      for(byte i = 0; i < listofDataToSend_numberOfData; i++){
-        Serial.print(listofDataToSend[i]); 
+    if(ENABLE_SERIAL_PRINT_TO_ESP8266){
+      if(listofDataToSend_numberOfData > 0){
+        Serial.print("#"); // SYMBOL TO START BOARDS TRANSMISSION
+        for(byte i = 0; i < listofDataToSend_numberOfData; i++){
+          Serial.print(listofDataToSend[i]); 
+        }
+        Serial.print("@"); // SYMBOL TO END BOARDS TRANSMISSION
       }
-      Serial.print("@"); // SYMBOL TO END BOARDS TRANSMISSION
     }
   }
     
