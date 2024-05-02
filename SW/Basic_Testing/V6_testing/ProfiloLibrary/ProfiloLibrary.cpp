@@ -310,9 +310,6 @@ void stepperMotor::periodicRun(void){
     _stepDelay = _degreePerStep / _rpm_speed / 360.0 * 60 * 1000; //ms, cast to int type
     // from RPM to °/ms --> (rpm * 360) / (60 * 1000)   [°/ms]
     // compute the ms you need to wait btw to degreePerStep steps: degreePerStep / stepDelay [ms]
-	Serial.print(_stepDelay);
-	Serial.print(" ");
-    
     _actual_rpm_speed = _degreePerStep * 1000.0 / _stepDelay * 60 / 360;
 
     // intervallo minimo fra due step è 2ms (due fronti positivi del segnale allo step).
