@@ -310,6 +310,8 @@ void stepperMotor::periodicRun(void){
     _stepDelay = _degreePerStep / _rpm_speed / 360.0 * 60 * 1000; //ms, cast to int type
     // from RPM to °/ms --> (rpm * 360) / (60 * 1000)   [°/ms]
     // compute the ms you need to wait btw to degreePerStep steps: degreePerStep / stepDelay [ms]
+	Serial.print(_stepDelay);
+	Serial.print(" ");
     
     _actual_rpm_speed = _degreePerStep * 1000.0 / _stepDelay * 60 / 360;
 
@@ -340,6 +342,7 @@ void stepperMotor::periodicRun(void){
     else{
       if(_steppingTimer.getOutputTriggerEdgeType()){
         _steppingTimer.reArm(); 
+		_steppingTimer_stepOn.reset();
         _steppingTimer_stepOn.reArm(); 
         _steppingInProgress = true;
         digitalWrite(_stepPin, HIGH);
@@ -388,7 +391,12 @@ antiDebounceInput::antiDebounceInput(byte pin, int debounceDelay){
   }
 
 void antiDebounceInput::periodicRun(void){
-  _currentInputState = digitalRead(_inputPin);
+  if(_changePolarity){
+    _currentInputState = !digitalRead(_inputPin);
+  }
+  else{
+    _currentInputState = digitalRead(_inputPin);
+  }
 
   if(_currentInputState != _previousInputState){
     _lastDebounceTime = millis();
@@ -396,12 +404,7 @@ void antiDebounceInput::periodicRun(void){
 
   if((millis() - _lastDebounceTime) > _debounceDelay){
     if (_currentInputState != _inputState_output) {
-      if(_changePolarity){
-        _inputState_output = !(_currentInputState);
-      }
-      else{
-        _inputState_output = _currentInputState;
-      }
+      _inputState_output = _currentInputState;
     }
   }
   
@@ -417,5 +420,5 @@ void antiDebounceInput::setDebounceDelay(int debounceDelay){
 }
 
 bool antiDebounceInput::getInputState(void){
-  return _inputState_output;
+  return _inputState_output;  
 }
