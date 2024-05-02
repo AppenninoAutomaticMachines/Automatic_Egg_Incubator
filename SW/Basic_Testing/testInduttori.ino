@@ -56,55 +56,6 @@ void loop() {
   eggsTurnerStepperMotor.periodicRun();
   leftInductor_input.periodicRun();
   rightInductor_input.periodicRun();
-  dummyTimer.periodicRun();
-
-
-  turnEggs_cmd = dummyTimer.getOutputTriggerEdgeType();
-  /*
-  switch(eggsTurnerState){
-      case 0: // ZEROING
-        // lascio stato aperto per eventuale abilitazione della procedura di azzeramento da parte dell'operatore.
-        eggsTurnerStepperMotor.moveForward(STEPPER_MOTOR_SPEED_DEFAULT);
-        eggsTurnerState = 1;
-        break;
-      case 1: // WAIT_TO_REACH_LEFT_SIDE_INDUCTOR
-        if(leftInductor_input.getInputState()){
-          // home position is reached - full left
-          eggsTurnerStepperMotor.stopMotor();
-          dummyTimer.reset();
-          eggsTurnerState = 2;
-        }
-        break;
-      case 2: // WAIT_FOR_TURN_EGGS_COMMAND_STATE --> will rotate from left to right (CW direction)
-          if(turnEggs_cmd){
-            eggsTurnerStepperMotor.moveBackward(STEPPER_MOTOR_SPEED_DEFAULT);
-            eggsTurnerState = 3;
-          }
-        break;
-      case 3: // WAIT_TO_REACH_RIGHT_SIDE_INDUCTOR
-          if(rightInductor_input.getInputState()){
-            dummyTimer.reArm();
-            eggsTurnerStepperMotor.stopMotor();
-            eggsTurnerState = 4;
-          }
-        break;
-      case 4: // WAIT_FOR_TURN_EGGS_COMMAND_STATE --> will rotate from right to left (CCW direction)
-          if(turnEggs_cmd){
-            eggsTurnerStepperMotor.moveForward(STEPPER_MOTOR_SPEED_DEFAULT);
-            eggsTurnerState = 5;
-          }
-        break;
-      case 5: // WAIT_TO_REACH_LEFT_SIDE_INDUCTOR
-          if(leftInductor_input.getInputState()){
-            dummyTimer.reArm();
-            eggsTurnerStepperMotor.stopMotor();
-            eggsTurnerState = 2;
-          }
-        break;
-      default:
-        break;
-    }
-    */
 
   // put your main code here, to run repeatedly:
   rightInductor_input.periodicRun();
