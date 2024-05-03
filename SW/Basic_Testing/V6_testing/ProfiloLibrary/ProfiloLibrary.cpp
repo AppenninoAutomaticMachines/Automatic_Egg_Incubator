@@ -20,54 +20,68 @@ temperatureController::temperatureController(){
 // in tal caso metto anche due metodini per fare la forzatura ON OFF dell'attuatore, per fare override del comando automatico in caso di necessità.
 
 
-void temperatureController::periodicRun(float *temperatures, byte dimension){  
+void temperatureController::periodicRun(float *temperatures, byte dimension){ 
+  /* calcoliamo il valore massimo e calcoliamo il valore medio. Ci pensiamo poi dopo a quale valore dare fuori, dipendentemente dalla modalità di funzionamento.
+    Li calcolo sempre perché comuqnue possono far sempre comodo. Vedi, infatti, il calcolo dell'umidità, che usa il valore medio. 
+  */ 
+  if(dimension > 0){
+    // MEAN VALUE
+    float sum = 0.0;
+    byte goodTemperaturesCounter = 0;		
+
+    // MAX VALUE
+    float maxTemperature = temperatures[0];
+
+    for (int i = 0; i < dimension; i++){
+      float tempC = temperatures[i];
+
+      if (tempC != DEVICE_DISCONNECTED_C){        
+        // MEAN VALUE COMPUTATION
+        sum += tempC;
+        goodTemperaturesCounter++;
+
+        // MAX VALUE COMPUTATION
+        if(tempC > maxTemperature){
+          maxTemperature = tempC;
+        }
+      } 
+      else{
+        // Handle the case when a temperature reading is invalid
+        // This could include fault handling or logging
+      }
+    }
+
+    // Check if there are valid temperatures before computing the mean
+    if (goodTemperaturesCounter > 0){
+      _meanValueTemperature = sum / goodTemperaturesCounter;
+    } 
+    else{
+      // Handle the case when no valid temperatures are available
+      // This could include setting _actualTemperature to a default value
+      _meanValueTemperature = DEFAULT_TEMPERATURE_C;
+    }
+
+    _maxValueTemperature = maxTemperature;
+  }
+  else{
+    // Handle the case when the array is empty
+    // Set _actualTemperature to a default value or handle it accordingly
+    _maxValueTemperature = DEFAULT_TEMPERATURE_C;
+    _meanValueTemperature = DEFAULT_TEMPERATURE_C;
+  }
+
+    
+
   switch(_controlModality){ // qui controlliamo l'output
     case 0: 
       break;
 
-
-    case 1: // tratto sopra di heating
-      if (dimension > 0){
-        float maxTemperature = temperatures[0];
-        for (byte i = 1; i < dimension; i++){
-          if (temperatures[i] > maxTemperature){
-            maxTemperature = temperatures[i];
-          }
-        }
-        _actualTemperature = maxTemperature;
-      }
-      else{
-        // Handle the case when the array is empty
-        // Set _actualTemperature to a default value or handle it accordingly
-        _actualTemperature = DEFAULT_TEMPERATURE_C;
-      }
+    case 1:
+      _actualTemperature = _maxValueTemperature;
       break;
 
-    case 2: // tratto sotto di not heating
-      float sum = 0.0;
-		  byte goodTemperaturesCounter = 0;		
-      for (int i = 0; i < dimension; i++){
-        float tempC = temperatures[i];
-
-        if (tempC != DEVICE_DISCONNECTED_C){
-          sum += tempC;
-          goodTemperaturesCounter++;
-        } 
-        else{
-          // Handle the case when a temperature reading is invalid
-          // This could include fault handling or logging
-        }
-      }
-
-      // Check if there are valid temperatures before computing the mean
-      if (goodTemperaturesCounter > 0){
-        _actualTemperature = sum / goodTemperaturesCounter;
-      } 
-      else{
-        // Handle the case when no valid temperatures are available
-        // This could include setting _actualTemperature to a default value
-        _actualTemperature = DEFAULT_TEMPERATURE_C;
-      }
+    case 2: 
+      _actualTemperature = _meanValueTemperature;
 		break;
 
     default:
@@ -127,8 +141,16 @@ bool temperatureController::getOutputState(void){
   return _outputState;
 }
 
-float temperatureController::debug_getActualTemperature(void){
+float temperatureController::getActualTemperature(void){
   return _actualTemperature;
+}
+
+float temperatureController::getMaxTemperature(void){
+  return _maxValueTemperature;
+}
+
+float temperatureController::getMeanTemperature(void){
+  return _meanValueTemperature;
 }
 
 int temperatureController::debug_getHysteresisState(void){
