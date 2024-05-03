@@ -37,8 +37,8 @@
 #define SERIAL_SPEED 19200 
 #define WATCHDOG_ENABLE true
 #define DEFAULT_DEBOUNCE_TIME 25 //ms
-#define ENABLE_SERIAL_PRINT_TO_ESP8266 false
-#define ENABLE_SERIAL_PRINT_DEBUG true
+#define ENABLE_SERIAL_PRINT_TO_ESP8266 true
+#define ENABLE_SERIAL_PRINT_DEBUG false
 
 /* TEMPERATURES SECTION */
 // ricorda di mettere una alimentazione forte e indipendente per i sensori. Ha migliorato molto la stabilità della lettura.
@@ -108,7 +108,7 @@ float wetTermometer_fromDS18B20; // temperatura = humiditySensor_temperature che
 
 
 /* MOTORS SECTION */
-#define STEPPER_MOTOR_SPEED_DEFAULT 7 //rpm
+#define STEPPER_MOTOR_SPEED_DEFAULT 5 //rpm  opportuno stare sotto i 30rpm, perché il tempo ciclo di arduino prende un po' troppo.
 
 float stepper_motor_speed = STEPPER_MOTOR_SPEED_DEFAULT;
 
@@ -155,10 +155,12 @@ timer timerSerialToESP8266;
 
 
 /* GENERAL */
-
 bool cycle_toggle_pin_var = false;
 
-
+/* variabile che viene messa a true quando viene richiesto al motore di andare.
+  La usi ogni qualvolta devi interrompere qualcosa per dare spazio al motore.
+*/
+bool inhibit_stepperMotorRunning = false; 
 
 void setup() {
   pinMode(STEPPPER_MOTOR_STEP_PIN, OUTPUT);
@@ -236,47 +238,59 @@ void setup() {
 
 void loop() {    
   /* TEMPERATURES SECTION */
-  if(millis() - lastTempRequest >= (2*conversionTime_DS18B20_sensors)){
-    controlTemperatureIndex = 0;
-    for(byte index = 0; index < Limit; index++){
-      if(sensors.getAddress(tempDeviceAddress, index)){
-        // Call the function to convert the device address to a char array
-        addressToCharArray(tempDeviceAddress, addressCharArray);
-        if(strcmp(addressCharArray, comparisonAddress) == 0){
-          // calcolo dell'umidità
-          humiditySensor_temperature = sensors.getTempC(Thermometer[index]);
+  if(!inhibit_stepperMotorRunning){
+    if(millis() - lastTempRequest >= (2*conversionTime_DS18B20_sensors)){
+      controlTemperatureIndex = 0;
+      for(byte index = 0; index < Limit; index++){
+        if(sensors.getAddress(tempDeviceAddress, index)){
+          // Call the function to convert the device address to a char array
+          addressToCharArray(tempDeviceAddress, addressCharArray);
+          if(strcmp(addressCharArray, comparisonAddress) == 0){
+            // calcolo dell'umidità
+            humiditySensor_temperature = sensors.getTempC(Thermometer[index]);
+          }
+          else{
+            // gli altri li possiamo streammare verso html
+            temperatures[controlTemperatureIndex] = sensors.getTempC(Thermometer[index]); // memorizza tutte le temperature che ci pensa l'oggetto temperatureController a gestirle
+            controlTemperatureIndex += 1;
+          }      
         }
-        else{
-          // gli altri li possiamo streammare verso html
-          temperatures[controlTemperatureIndex] = sensors.getTempC(Thermometer[index]); // memorizza tutte le temperature che ci pensa l'oggetto temperatureController a gestirle
-          controlTemperatureIndex += 1;
-        }      
       }
+    
+      sensors.requestTemperatures();
+      lastTempRequest = millis();
+    } 
+
+    temperatureController.setTemperatureHysteresis(lowerHysteresisLimit, higherHysteresisLimit);
+    temperatureController.setControlModality(temperatureControlModality); 
+    temperatureController.periodicRun(temperatures, 3); // 3 sono i sensori che usiamo per fare il controllo della temperatura
+
+    if(automaticControl_var){
+      mainHeater_var = temperatureController.getOutputState();
+      auxHeater_var = false;
+      digitalWrite(MAIN_HEATER_PIN, mainHeater_var);
+      digitalWrite(UPPER_FAN_PIN, HIGH); 
+      digitalWrite(LOWER_FAN_PIN, HIGH); 
     }
-	
-    sensors.requestTemperatures();
-    lastTempRequest = millis();
-  }
-  
-
-  temperatureController.setTemperatureHysteresis(lowerHysteresisLimit, higherHysteresisLimit);
-  temperatureController.setControlModality(temperatureControlModality); 
-  temperatureController.periodicRun(temperatures, 3); // 3 sono i sensori che usiamo per fare il controllo della temperatura
-
-  if(automaticControl_var){
-    mainHeater_var = temperatureController.getOutputState();
-    auxHeater_var = false;
-    digitalWrite(MAIN_HEATER_PIN, mainHeater_var);
-    digitalWrite(UPPER_FAN_PIN, HIGH); 
-    digitalWrite(LOWER_FAN_PIN, HIGH); 
-  }
-  else{
-    digitalWrite(MAIN_HEATER_PIN, mainHeater_var);
-    digitalWrite(AUX_HEATER_PIN, auxHeater_var);
-    digitalWrite(UPPER_FAN_PIN, upperFan_var); 
-    digitalWrite(LOWER_FAN_PIN, lowerFan_var);
+    else{
+      digitalWrite(MAIN_HEATER_PIN, mainHeater_var);
+      digitalWrite(AUX_HEATER_PIN, auxHeater_var);
+      digitalWrite(UPPER_FAN_PIN, upperFan_var); 
+      digitalWrite(LOWER_FAN_PIN, lowerFan_var);
+    }
   }
   /* END TEMPERATURES SECTION */
+
+  /* HUMIDITY COMPUTATION SECTION */
+  /* DHT22 sensor */  
+  if(!inhibit_stepperMotorRunning){
+    humidity_fromDHT22 = dht.readHumidity();
+    temp_fromDHT22 = dht.readTemperature();  
+    /* DS18B20 misura temperatura bulbo umido */
+    wetTermometer_fromDS18B20 = humiditySensor_temperature; // temperatura misurata dal bulbo umido
+    temperatureMeanValue = temperatureController.getMeanTemperature(); // temperatura ambiente incubatrice
+  }
+  /* END HUMIDITY COMPUTATION SECTION */
 
   /* INDUCTOR INPUT SECTION */
   leftInductor_input.periodicRun();
@@ -368,92 +382,84 @@ void loop() {
   
   /* END STEPPER MOTOR CONTROL SECTION */
 
-  /* HUMIDITY COMPUTATION SECTION */
-  /* DHT22 sensor */  
-  humidity_fromDHT22 = dht.readHumidity();
-  temp_fromDHT22 = dht.readTemperature();  
-  /* DS18B20 misura temperatura bulbo umido */
-  wetTermometer_fromDS18B20 = humiditySensor_temperature; // temperatura misurata dal bulbo umido
-  temperatureMeanValue = temperatureController.getMeanTemperature(); // temperatura ambiente incubatrice
-  /* END HUMIDITY COMPUTATION SECTION */
-
-
   /* SERIAL COMMUNICATION FROM ARDUINO TO ESP8266 */
-  timerSerialToESP8266.periodicRun();
-  if(timerSerialToESP8266.getOutputTriggerEdgeType()){
-    timerSerialToESP8266.reArm();
-    // riempo i dati per la trasmissione
-    listofDataToSend_numberOfData = 0; // ad ogni giro lo azzero    
+  if(!inhibit_stepperMotorRunning){
+    timerSerialToESP8266.periodicRun();
+    if(timerSerialToESP8266.getOutputTriggerEdgeType()){
+      timerSerialToESP8266.reArm();
+      // riempo i dati per la trasmissione
+      listofDataToSend_numberOfData = 0; // ad ogni giro lo azzero    
 
-    strcpy(bufferChar, "<t1, ");
-    dtostrf( temperatures[0], 1, 1, fbuffChar); 
-    listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(strcat(bufferChar, fbuffChar), ">"), '\0');
-    listofDataToSend_numberOfData++;
+      strcpy(bufferChar, "<t1, ");
+      dtostrf( temperatures[0], 1, 1, fbuffChar); 
+      listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(strcat(bufferChar, fbuffChar), ">"), '\0');
+      listofDataToSend_numberOfData++;
 
-    strcpy(bufferChar, "<t2, ");
-    dtostrf( temperatures[1], 1, 1, fbuffChar); 
-    listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(strcat(bufferChar, fbuffChar), ">"), '\0');
-    listofDataToSend_numberOfData++; 
+      strcpy(bufferChar, "<t2, ");
+      dtostrf( temperatures[1], 1, 1, fbuffChar); 
+      listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(strcat(bufferChar, fbuffChar), ">"), '\0');
+      listofDataToSend_numberOfData++; 
 
-    strcpy(bufferChar, "<t3, ");
-    dtostrf( temperatures[2], 1, 1, fbuffChar); 
-    listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(strcat(bufferChar, fbuffChar), ">"), '\0');
-    listofDataToSend_numberOfData++;
+      strcpy(bufferChar, "<t3, ");
+      dtostrf( temperatures[2], 1, 1, fbuffChar); 
+      listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(strcat(bufferChar, fbuffChar), ">"), '\0');
+      listofDataToSend_numberOfData++;
 
-    strcpy(bufferChar, "<aT, "); // actualTemperature
-    dtostrf(temperatureController.getActualTemperature(), 1, 1, fbuffChar); 
-    listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(strcat(bufferChar, fbuffChar), ">"), '\0');
-    listofDataToSend_numberOfData++;
-  
-    strcpy(bufferChar, "<hHL, "); //higher Hysteresis Limit from Arduino
-    dtostrf(higherHysteresisLimit, 1, 1, fbuffChar); 
-    listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(strcat(bufferChar, fbuffChar), ">"), '\0');
-    listofDataToSend_numberOfData++;
-
-    strcpy(bufferChar, "<lHL, "); //lower Hysteresis Limit from Arduino
-    dtostrf(lowerHysteresisLimit, 1, 1, fbuffChar); 
-    listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(strcat(bufferChar, fbuffChar), ">"), '\0');
-    listofDataToSend_numberOfData++;
-
-    // feedback about mainHeater state
-    listofDataToSend[listofDataToSend_numberOfData] = mainHeater_var ? "<mHO, 1>":"<mHO, 0>"; // converting bool to string
-    listofDataToSend_numberOfData++;
-
-    // feedback about auxHeater state
-    listofDataToSend[listofDataToSend_numberOfData] = auxHeater_var ? "<aHO, 1>":"<aHO, 0>"; // converting bool to string
-    listofDataToSend_numberOfData++;
+      strcpy(bufferChar, "<aT, "); // actualTemperature
+      dtostrf(temperatureController.getActualTemperature(), 1, 1, fbuffChar); 
+      listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(strcat(bufferChar, fbuffChar), ">"), '\0');
+      listofDataToSend_numberOfData++;
     
-    // feedback about TEMPERATURE CONTROL MODALITY value
-    char bufferCharArray[25];	
-    byte charCount = sprintf(bufferCharArray, "<TMP07, %d>", temperatureControlModality); //sprintf function returns the number of characters written to the array
-    listofDataToSend[listofDataToSend_numberOfData] = bufferCharArray;
-    listofDataToSend_numberOfData++;
+      strcpy(bufferChar, "<hHL, "); //higher Hysteresis Limit from Arduino
+      dtostrf(higherHysteresisLimit, 1, 1, fbuffChar); 
+      listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(strcat(bufferChar, fbuffChar), ">"), '\0');
+      listofDataToSend_numberOfData++;
 
-    // humidity misurata dal DHT22
-    strcpy(bufferChar, "<hDHT, ");
-    dtostrf(humidity_fromDHT22, 1, 1, fbuffChar); 
-    listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(strcat(bufferChar, fbuffChar), ">"), '\0');
-    listofDataToSend_numberOfData++;
+      strcpy(bufferChar, "<lHL, "); //lower Hysteresis Limit from Arduino
+      dtostrf(lowerHysteresisLimit, 1, 1, fbuffChar); 
+      listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(strcat(bufferChar, fbuffChar), ">"), '\0');
+      listofDataToSend_numberOfData++;
 
-    // temperatura del bulbo bagnato misurata da DS18B20 temperatureWet_fromDS18B20
-    strcpy(bufferChar, "<tWDS, ");
-    dtostrf(wetTermometer_fromDS18B20, 1, 1, fbuffChar); 
-    listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(strcat(bufferChar, fbuffChar), ">"), '\0');
-    listofDataToSend_numberOfData++;
+      // feedback about mainHeater state
+      listofDataToSend[listofDataToSend_numberOfData] = mainHeater_var ? "<mHO, 1>":"<mHO, 0>"; // converting bool to string
+      listofDataToSend_numberOfData++;
 
-    // valore medio della temperatura nella incubatrice  temperatureMeanValue
-    strcpy(bufferChar, "<tMV, ");
-    dtostrf(temperatureMeanValue, 1, 1, fbuffChar); 
-    listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(strcat(bufferChar, fbuffChar), ">"), '\0');
-    listofDataToSend_numberOfData++;
+      // feedback about auxHeater state
+      listofDataToSend[listofDataToSend_numberOfData] = auxHeater_var ? "<aHO, 1>":"<aHO, 0>"; // converting bool to string
+      listofDataToSend_numberOfData++;
+      
+      // feedback about TEMPERATURE CONTROL MODALITY value
+      char bufferCharArray[25];	
+      byte charCount = sprintf(bufferCharArray, "<TMP07, %d>", temperatureControlModality); //sprintf function returns the number of characters written to the array
+      listofDataToSend[listofDataToSend_numberOfData] = bufferCharArray;
+      listofDataToSend_numberOfData++;
 
-    if(ENABLE_SERIAL_PRINT_TO_ESP8266){
-      if(listofDataToSend_numberOfData > 0){
-        Serial.print("#"); // SYMBOL TO START BOARDS TRANSMISSION
-        for(byte i = 0; i < listofDataToSend_numberOfData; i++){
-          Serial.print(listofDataToSend[i]); 
+      // humidity misurata dal DHT22
+      strcpy(bufferChar, "<hDHT, ");
+      dtostrf(humidity_fromDHT22, 1, 1, fbuffChar); 
+      listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(strcat(bufferChar, fbuffChar), ">"), '\0');
+      listofDataToSend_numberOfData++;
+
+      // temperatura del bulbo bagnato misurata da DS18B20 temperatureWet_fromDS18B20
+      strcpy(bufferChar, "<tWDS, ");
+      dtostrf(wetTermometer_fromDS18B20, 1, 1, fbuffChar); 
+      listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(strcat(bufferChar, fbuffChar), ">"), '\0');
+      listofDataToSend_numberOfData++;
+
+      // valore medio della temperatura nella incubatrice  temperatureMeanValue
+      strcpy(bufferChar, "<tMV, ");
+      dtostrf(temperatureMeanValue, 1, 1, fbuffChar); 
+      listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(strcat(bufferChar, fbuffChar), ">"), '\0');
+      listofDataToSend_numberOfData++;
+
+      if(ENABLE_SERIAL_PRINT_TO_ESP8266){
+        if(listofDataToSend_numberOfData > 0){
+          Serial.print("#"); // SYMBOL TO START BOARDS TRANSMISSION
+          for(byte i = 0; i < listofDataToSend_numberOfData; i++){
+            Serial.print(listofDataToSend[i]); 
+          }
+          Serial.print("@"); // SYMBOL TO END BOARDS TRANSMISSION
         }
-        Serial.print("@"); // SYMBOL TO END BOARDS TRANSMISSION
       }
     }
   }
@@ -522,13 +528,16 @@ void loop() {
         if(tempReceivedCommand.indexOf("TMP06") >= 0){ //setting lowerHysteresisLimit from ESP8266 HMTL page
           lowerHysteresisLimit = getFloatFromString(tempReceivedCommand, ',');
         }
-		    if(tempReceivedCommand.indexOf("TMP07") >= 0){ //setting TEMPERATURE CONTROL MODALITY from ESP8266 HMTL page
+        if(tempReceivedCommand.indexOf("TMP07") >= 0){ //setting TEMPERATURE CONTROL MODALITY from ESP8266 HMTL page
           // 1: actualTemperature = maxValue
           // 2: actualTemperature = meanValue
           temperatureControlModality = getIntFromString(tempReceivedCommand, ',');
         }
       }
-  } 
+  }
+  
+
+  inhibit_stepperMotorRunning = eggsTurnerStepperMotor.get_stepCommand(); 
   
   if(WATCHDOG_ENABLE){
     wdt_reset();
