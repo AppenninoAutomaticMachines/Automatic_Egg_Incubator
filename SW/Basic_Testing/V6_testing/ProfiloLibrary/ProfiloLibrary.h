@@ -15,9 +15,13 @@ class temperatureController{
     void setControlModality(int controlModality);
 
     bool getOutputState(void);
+	float getActualTemperature(void);
+	float getMaxTemperature(void);
+	float getMeanTemperature(void);
+	
     
     // debug
-    float debug_getActualTemperature(void);
+    
     int debug_getHysteresisState(void);
 
   private:
@@ -25,6 +29,9 @@ class temperatureController{
     float _referenceTemperature;
     float _higherTemperature;
     float _lowerTemperature;
+	
+	float _maxValueTemperature;
+	float _meanValueTemperature;
 
     float _actualTemperature;
 
