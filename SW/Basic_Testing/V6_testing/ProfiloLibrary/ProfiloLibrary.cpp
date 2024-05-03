@@ -277,11 +277,13 @@ stepperMotor::stepperMotor(byte stepPin, byte dirPin, byte MS1, byte MS2, byte M
   _rpm_speed = 1; // default 1rpm
   _degreePerStep = degreePerStep;
 
-  _steppingInProgress = false;
-
-  _steppingTimer_stepOn.setTimeToWait(1); // tempo minimo per sui sta su il segnale di step
-
+  _steppingState = 0;
   _workingState = 0; // STOP
+  
+  _stepOnDuration = 1; //1ms by default, durata minima dello step on
+  
+  _conversionVariable_fromRPM_to_msDelay_formula = _degreePerStep / 360.0 * 60 * 1000;
+  _conversionVariable_from_msDelay_to_RPM_formula = _degreePerStep * 1000 * 60 / 360;
 }
 
 void stepperMotor::periodicRun(void){
@@ -325,51 +327,48 @@ void stepperMotor::periodicRun(void){
         digitalWrite(_dirPin, LOW);
       }
     }      
-
-    _steppingTimer.enable();
-    _steppingTimer_stepOn.enable(); 
     
-    _stepDelay = _degreePerStep / _rpm_speed / 360.0 * 60 * 1000; //ms, cast to int type
+    _stepDelay = _conversionVariable_fromRPM_to_msDelay_formula / _rpm_speed; //ms, cast to int type
     // from RPM to °/ms --> (rpm * 360) / (60 * 1000)   [°/ms]
     // compute the ms you need to wait btw to degreePerStep steps: degreePerStep / stepDelay [ms]
-    _actual_rpm_speed = _degreePerStep * 1000.0 / _stepDelay * 60 / 360;
+    _actual_rpm_speed = _conversionVariable_from_msDelay_to_RPM_formula / _stepDelay;
 
     // intervallo minimo fra due step è 2ms (due fronti positivi del segnale allo step).
     // perché 1ms lo uso per tenere stabile il segnale alto.
     if(_stepDelay < 2){ 
       _stepDelay = 2;
     }
-    _steppingTimer.setTimeToWait(_stepDelay);
-  }
-  else{
-    _steppingTimer.disable();
-    _steppingTimer_stepOn.disable();
+  }  
+
+  // se non ho più richiesta di step, allora torno in stato di attesa.
+  if(!_stepCommand){
+    digitalWrite(_stepPin, LOW);
+    _steppingState = 0;
   }
 
-  // i timer girano
-  _steppingTimer.periodicRun();
-  _steppingTimer_stepOn.periodicRun();
-  
-  // genero lo step
-  if(_stepCommand){
-    if(_steppingInProgress){
-      if(_steppingTimer_stepOn.getOutputTriggerEdgeType()){
-        _steppingInProgress = false;
-        digitalWrite(_stepPin, LOW);
-      }
-    }
-    else{
-      if(_steppingTimer.getOutputTriggerEdgeType()){
-        _steppingTimer.reArm(); 
-		_steppingTimer_stepOn.reset();
-        _steppingTimer_stepOn.reArm(); 
-        _steppingInProgress = true;
+  switch(_steppingState){
+    case 0: // attendo il comando di step
+      if(_stepCommand){
+        _stepOnBeginTime = millis(); // mi ricordo dell'istante di tempo in cui dò lo step
         digitalWrite(_stepPin, HIGH);
+        _steppingState = 1;
       }
-    }
-  }
-  else{
-	digitalWrite(_stepPin, LOW);
+      break;
+    case 1: // attendo 1ms step ON
+      if(millis() - _stepOnBeginTime > _stepOnDuration){
+        digitalWrite(_stepPin, LOW); // spengo pin, ho generato lo step
+        _steppingState = 2;
+      }
+      break;
+    case 2: // ora attendo il passaggio del tempo necessario per dare il prossimo step
+      if(millis() - _stepOnBeginTime > _stepDelay){
+         _stepOnBeginTime = millis();
+         digitalWrite(_stepPin, HIGH); // spengo pin, ho generato lo step
+        _steppingState = 1;
+      }
+      break;
+    default:
+      break;
   }
 }
 
@@ -394,6 +393,10 @@ void stepperMotor::switchPolarity(void){
 
 float stepperMotor::get_actualRPMSpeed(void){
   return _actual_rpm_speed;
+}
+
+bool stepperMotor::get_stepCommand(void){
+  return _stepCommand;
 }
 
 
