@@ -98,6 +98,7 @@ class stepperMotor{
 
     //void setMicroSteppingConfiguration(bool MS1, bool MS2, bool MS3);
     float get_actualRPMSpeed(void);
+	bool get_stepCommand(void); // funzione che mi dice se è attiva la richiesta di step per il motore o no.
 
   private:
     byte _stepPin;
@@ -112,14 +113,18 @@ class stepperMotor{
     float _rpm_speed;
     float _degreePerStep;
     float _actual_rpm_speed;
+	
+	float _conversionVariable_fromRPM_to_msDelay_formula;
+	float _conversionVariable_from_msDelay_to_RPM_formula;
 
     // stepping computation
-    timer _steppingTimer; // timer che intervalla i fronti positivi
-    timer _steppingTimer_stepOn; // timer che fa star su 1ms lo step
+	unsigned long _stepOnBeginTime;
+	
+	int _stepOnDuration; //1ms by default, minimo
+	
     int _stepDelay;
 
-    bool _steppingInProgress;
-
+	byte _steppingState;
     byte _workingState;
 };
 
