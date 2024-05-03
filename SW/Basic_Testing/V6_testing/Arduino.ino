@@ -13,6 +13,22 @@
  https://lastminuteengineers.com/multiple-ds18b20-arduino-tutorial/ reading temperature by address
 */
 
+/* PIN ARDUINO */
+#define MAIN_HEATER_PIN 12
+#define AUX_HEATER_PIN 11
+#define UPPER_FAN_PIN 10
+#define LOWER_FAN_PIN 9
+#define STEPPPER_MOTOR_STEP_PIN 8
+#define STEPPPER_MOTOR_DIRECTION_PIN 7
+#define STEPPPER_MOTOR_MS1_PIN 6 
+#define STEPPPER_MOTOR_MS2_PIN 5
+#define STEPPPER_MOTOR_MS3_PIN 4
+
+#define LEFT_INDUCTOR_PIN 6
+#define RIGHT_INDUCTOR_PIN 5
+#define DHTPIN 4   //Pin a cui è connesso il sensore
+#define ONE_WIRE_BUS 2
+
 #include <SoftwareSerial.h>
 #include <avr/wdt.h>
 
@@ -29,7 +45,7 @@
 #include <OneWire.h>
 #include <DallasTemperature.h>
 
-#define ONE_WIRE_BUS 2
+
 OneWire oneWire(ONE_WIRE_BUS);
 
 DallasTemperature sensors(&oneWire);
@@ -50,49 +66,60 @@ unsigned long lastTempRequest;
 temperatureController temperatureController;
 
 bool automaticControl_var = false;
-#define AUTOMATIC_CONTROL_CHECK_PIN 6
 
 float higherHysteresisLimit, lowerHysteresisLimit;
 
 bool mainHeater_var = false;
-#define MAIN_HEATER_PIN 12
-
 bool auxHeater_var = false;
-#define AUX_HEATER_PIN 11
-
 bool upperFan_var = false;
-#define UPPER_FAN_PIN 10
-
 bool lowerFan_var = false;
-#define LOWER_FAN_PIN 9
+
 
 float temperatures[3]; // declaring it here, once I know the dimension
 int temperatureControlModality = 1; // default TEMPERATURE CONTROL MODALITY 1: actualTemperature = maxValue
+
+DeviceAddress tempDeviceAddress; // We'll use this variable to store a found device address
+
+// Define a char array to store the hexadecimal representation of the address
+char addressCharArray[17]; // 16 characters for the address + 1 for null terminator
+
+char comparisonAddress[] = "28FF888230180179"; // indirizzo del sensore di temperatura che uso per fare HUMIDITY
+
+byte controlTemperatureIndex; // i sensori di temperatura sono 4, ma quelli effettivi per il controllo della T sono 3. Uno è per l'umidità. Serve un indice separato.
 /* END TEMPERATURES SECTION */
+
+/* DHT22 HUMIDITY SENSOR */
+#include <DHT.h>
+
+//Costanti
+#define DHTTYPE DHT22   //Tipo di sensore che stiamo utilizzando (DHT22)
+DHT dht(DHTPIN, DHTTYPE); //Inizializza oggetto chiamato "dht", parametri: pin a cui è connesso il sensore, tipo di dht 11/22
+
+//Variabili
+int chk;
+float humidity_fromDHT22;  //Variabile in cui verrà inserita la % di umidità
+float temp_fromDHT22; //Variabile in cui verrà inserita la temperatura
+
+float humiditySensor_temperature; // variabile buffer in cui, durante la lettura dei sensori DS18B20, metto quella del bulbo umido
+float temperatureMeanValue; // temperatura media dell'incubatrice calcolata dall'oggetto temperatureController
+float wetTermometer_fromDS18B20; // temperatura = humiditySensor_temperature che uso in sezione umidità del programma
+/* END DHT22 HUMIDITY SENSOR */
 
 
 /* MOTORS SECTION */
-#define STEPPER_MOTOR_SPEED_DEFAULT 10 //rpm
-
-byte stepPin = 8;
-byte directionPin = 7;
-byte MS1 = 6;
-byte MS2 = 5;
-byte MS3 = 4;
+#define STEPPER_MOTOR_SPEED_DEFAULT 7 //rpm
 
 float stepper_motor_speed = STEPPER_MOTOR_SPEED_DEFAULT;
 
-stepperMotor eggsTurnerStepperMotor(stepPin, directionPin, MS1, MS2, MS3, 0.5);
+stepperMotor eggsTurnerStepperMotor(STEPPPER_MOTOR_STEP_PIN, STEPPPER_MOTOR_DIRECTION_PIN, STEPPPER_MOTOR_MS1_PIN, STEPPPER_MOTOR_MS2_PIN, STEPPPER_MOTOR_MS3_PIN, 0.5);
 
 bool move = false;
 bool direction = false; 
 
 bool stepperAutomaticControl_var = false;
 
-#define LEFT_INDUCTOR_PIN 6
 antiDebounceInput leftInductor_input(LEFT_INDUCTOR_PIN, DEFAULT_DEBOUNCE_TIME);
 
-#define RIGHT_INDUCTOR_PIN 5
 antiDebounceInput rightInductor_input(RIGHT_INDUCTOR_PIN, DEFAULT_DEBOUNCE_TIME);
 
 // variabile per manual control
@@ -131,27 +158,26 @@ timer timerSerialToESP8266;
 
 
 void setup() {
-  pinMode(stepPin, OUTPUT);
-  digitalWrite(stepPin, LOW);
+  pinMode(STEPPPER_MOTOR_STEP_PIN, OUTPUT);
+  digitalWrite(STEPPPER_MOTOR_STEP_PIN, LOW);
 
-  pinMode(directionPin, OUTPUT);
-  digitalWrite(directionPin, LOW);  
+  pinMode(STEPPPER_MOTOR_DIRECTION_PIN, OUTPUT);
+  digitalWrite(STEPPPER_MOTOR_DIRECTION_PIN, LOW);  
 
-  pinMode(MS1, OUTPUT);
-  digitalWrite(MS1, LOW);
+  pinMode(STEPPPER_MOTOR_MS1_PIN, OUTPUT);
+  digitalWrite(STEPPPER_MOTOR_MS1_PIN, LOW);
 
-  pinMode(MS2, OUTPUT);
-  digitalWrite(MS2, LOW);
+  pinMode(STEPPPER_MOTOR_MS2_PIN, OUTPUT);
+  digitalWrite(STEPPPER_MOTOR_MS2_PIN, LOW);
 
-  pinMode(MS3, OUTPUT);
-  digitalWrite(MS3, LOW);
+  pinMode(STEPPPER_MOTOR_MS3_PIN, OUTPUT);
+  digitalWrite(STEPPPER_MOTOR_MS3_PIN, LOW);
 
 
   pinMode(MAIN_HEATER_PIN, OUTPUT);
   pinMode(AUX_HEATER_PIN, OUTPUT);
   pinMode(UPPER_FAN_PIN, OUTPUT);
   pinMode(LOWER_FAN_PIN, OUTPUT);
-  pinMode(AUTOMATIC_CONTROL_CHECK_PIN, OUTPUT);
 
   pinMode(LEFT_INDUCTOR_PIN, INPUT);
   pinMode(RIGHT_INDUCTOR_PIN, INPUT);
@@ -197,13 +223,28 @@ void setup() {
 
   dummyTimer.setTimeToWait(10000); //DUMMY FOR TESTS - giro ogni 10 secondi.
   rightInductor_input.changePolarity(); // DUMMY con sensore NON balluff
+
+  dht.begin();
 }
 
 void loop() {    
   /* TEMPERATURES SECTION */
   if(millis() - lastTempRequest >= (2*conversionTime_DS18B20_sensors)){
+    controlTemperatureIndex = 0;
     for(byte index = 0; index < Limit; index++){
-      temperatures[index] = sensors.getTempC(Thermometer[index]); // memorizza tutte le temperature che ci pensa l'oggetto temperatureController a gestirle
+      if(sensors.getAddress(tempDeviceAddress, index)){
+        // Call the function to convert the device address to a char array
+        addressToCharArray(tempDeviceAddress, addressCharArray);
+        if(strcmp(addressCharArray, comparisonAddress) == 0){
+          // calcolo dell'umidità
+          humiditySensor_temperature = sensors.getTempC(Thermometer[index]);
+        }
+        else{
+          // gli altri li possiamo streammare verso html
+          temperatures[controlTemperatureIndex] = sensors.getTempC(Thermometer[index]); // memorizza tutte le temperature che ci pensa l'oggetto temperatureController a gestirle
+          controlTemperatureIndex += 1;
+        }      
+      }
     }
 	
     sensors.requestTemperatures();
@@ -212,7 +253,7 @@ void loop() {
 
   temperatureController.setTemperatureHysteresis(lowerHysteresisLimit, higherHysteresisLimit);
   temperatureController.setControlModality(temperatureControlModality); 
-  temperatureController.periodicRun(temperatures, Limit);
+  temperatureController.periodicRun(temperatures, 3); // 3 sono i sensori che usiamo per fare il controllo della temperatura
 
   /*
   Serial.print("T1: ");
@@ -230,14 +271,12 @@ void loop() {
     digitalWrite(MAIN_HEATER_PIN, mainHeater_var);
     digitalWrite(UPPER_FAN_PIN, HIGH); 
     digitalWrite(LOWER_FAN_PIN, HIGH); 
-    digitalWrite(AUTOMATIC_CONTROL_CHECK_PIN, HIGH);
   }
   else{
     digitalWrite(MAIN_HEATER_PIN, mainHeater_var);
     digitalWrite(AUX_HEATER_PIN, auxHeater_var);
     digitalWrite(UPPER_FAN_PIN, upperFan_var); 
     digitalWrite(LOWER_FAN_PIN, lowerFan_var);
-    digitalWrite(AUTOMATIC_CONTROL_CHECK_PIN, LOW);
   }
   /* END TEMPERATURES SECTION */
 
@@ -246,7 +285,7 @@ void loop() {
   rightInductor_input.periodicRun();
   /* END INDUCTOR INPUT SECTION */
     
-  /* STEPPER MOTOR SECTION */
+  /* STEPPER MOTOR CONTROL SECTION */
   eggsTurnerStepperMotor.periodicRun();
 
   dummyTimer.periodicRun();
@@ -327,7 +366,18 @@ void loop() {
     stepperMotor_stop_var = false;
   }
   
-  /* END STEPPER MOTOR SECTION */
+  /* END STEPPER MOTOR CONTROL SECTION */
+
+  /* HUMIDITY COMPUTATION SECTION */
+  /* DHT22 sensor */
+  humidity_fromDHT22 = dht.readHumidity();
+  temp_fromDHT22 = dht.readTemperature();
+
+  /* DS18B20 misura temperatura bulbo umido */
+  wetTermometer_fromDS18B20 = humiditySensor_temperature; // temperatura misurata dal bulbo umido
+  temperatureMeanValue = temperatureController.getMeanTemperature(); // temperatura ambiente incubatrice
+  /* END HUMIDITY COMPUTATION SECTION */
+
 
   /* SERIAL COMMUNICATION FROM ARDUINO TO ESP8266 */
   timerSerialToESP8266.periodicRun();
@@ -352,7 +402,7 @@ void loop() {
     listofDataToSend_numberOfData++;
 
     strcpy(bufferChar, "<aT, "); // actualTemperature
-    dtostrf(temperatureController.debug_getActualTemperature(), 1, 1, fbuffChar); 
+    dtostrf(temperatureController.getActualTemperature(), 1, 1, fbuffChar); 
     listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(strcat(bufferChar, fbuffChar), ">"), '\0');
     listofDataToSend_numberOfData++;
   
@@ -378,6 +428,24 @@ void loop() {
     char bufferCharArray[25];	
     byte charCount = sprintf(bufferCharArray, "<TMP07, %d>", temperatureControlModality); //sprintf function returns the number of characters written to the array
     listofDataToSend[listofDataToSend_numberOfData] = bufferCharArray;
+    listofDataToSend_numberOfData++;
+
+    // humidity misurata dal DHT22
+    strcpy(bufferChar, "<hDHT, ");
+    dtostrf(humidity_fromDHT22, 1, 1, fbuffChar); 
+    listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(strcat(bufferChar, fbuffChar), ">"), '\0');
+    listofDataToSend_numberOfData++;
+
+    // temperatura del bulbo bagnato misurata da DS18B20 temperatureWet_fromDS18B20
+    strcpy(bufferChar, "<tWDS, ");
+    dtostrf(wetTermometer_fromDS18B20, 1, 1, fbuffChar); 
+    listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(strcat(bufferChar, fbuffChar), ">"), '\0');
+    listofDataToSend_numberOfData++;
+
+    // valore medio della temperatura nella incubatrice  temperatureMeanValue
+    strcpy(bufferChar, "<tMV, ");
+    dtostrf(temperatureMeanValue, 1, 1, fbuffChar); 
+    listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(strcat(bufferChar, fbuffChar), ">"), '\0');
     listofDataToSend_numberOfData++;
 
     if(ENABLE_SERIAL_PRINT_TO_ESP8266){
@@ -541,7 +609,24 @@ int getIntFromString(String string, char divider){
 }
 
 void serialFlush(){
-  while(Serial.available() > 0) {
+  while(Serial.available() > 0){
     char t = Serial.read();
   }
+}
+
+// Function to convert a byte to its hexadecimal representation
+void byteToHex(uint8_t byteValue, char *hexValue) {
+  uint8_t highNibble = byteValue >> 4;
+  uint8_t lowNibble = byteValue & 0x0F;
+  hexValue[0] = highNibble < 10 ? '0' + highNibble : 'A' + (highNibble - 10);
+  hexValue[1] = lowNibble < 10 ? '0' + lowNibble : 'A' + (lowNibble - 10);
+}
+
+// Function to print a device address
+void addressToCharArray(DeviceAddress deviceAddress, char *charArray) {
+  for (uint8_t i = 0; i < 8; i++) {
+    byteToHex(deviceAddress[i], &charArray[i * 2]);
+  }
+  // Add null terminator at the end of the char array
+  charArray[16] = '\0';
 }
