@@ -23,6 +23,7 @@
 #define STEPPPER_MOTOR_MS1_PIN 6 
 #define STEPPPER_MOTOR_MS2_PIN 5
 #define STEPPPER_MOTOR_MS3_PIN 4
+#define CYCLE_TOGGLE_PIN 3
 
 #define LEFT_INDUCTOR_PIN 6
 #define RIGHT_INDUCTOR_PIN 5
@@ -36,8 +37,8 @@
 #define SERIAL_SPEED 19200 
 #define WATCHDOG_ENABLE true
 #define DEFAULT_DEBOUNCE_TIME 25 //ms
-#define ENABLE_SERIAL_PRINT_TO_ESP8266 true
-#define ENABLE_SERIAL_PRINT_DEBUG false
+#define ENABLE_SERIAL_PRINT_TO_ESP8266 false
+#define ENABLE_SERIAL_PRINT_DEBUG true
 
 /* TEMPERATURES SECTION */
 // ricorda di mettere una alimentazione forte e indipendente per i sensori. Ha migliorato molto la stabilità della lettura.
@@ -111,7 +112,7 @@ float wetTermometer_fromDS18B20; // temperatura = humiditySensor_temperature che
 
 float stepper_motor_speed = STEPPER_MOTOR_SPEED_DEFAULT;
 
-stepperMotor eggsTurnerStepperMotor(STEPPPER_MOTOR_STEP_PIN, STEPPPER_MOTOR_DIRECTION_PIN, STEPPPER_MOTOR_MS1_PIN, STEPPPER_MOTOR_MS2_PIN, STEPPPER_MOTOR_MS3_PIN, 0.5);
+stepperMotor eggsTurnerStepperMotor(STEPPPER_MOTOR_STEP_PIN, STEPPPER_MOTOR_DIRECTION_PIN, STEPPPER_MOTOR_MS1_PIN, STEPPPER_MOTOR_MS2_PIN, STEPPPER_MOTOR_MS3_PIN, 1.8);
 
 bool move = false;
 bool direction = false; 
@@ -155,6 +156,8 @@ timer timerSerialToESP8266;
 
 /* GENERAL */
 
+bool cycle_toggle_pin_var = false;
+
 
 
 void setup() {
@@ -172,6 +175,10 @@ void setup() {
 
   pinMode(STEPPPER_MOTOR_MS3_PIN, OUTPUT);
   digitalWrite(STEPPPER_MOTOR_MS3_PIN, LOW);
+
+  if(ENABLE_SERIAL_PRINT_DEBUG){
+    pinMode(CYCLE_TOGGLE_PIN, OUTPUT);
+  }
 
 
   pinMode(MAIN_HEATER_PIN, OUTPUT);
@@ -250,21 +257,12 @@ void loop() {
     sensors.requestTemperatures();
     lastTempRequest = millis();
   }
+  
 
   temperatureController.setTemperatureHysteresis(lowerHysteresisLimit, higherHysteresisLimit);
   temperatureController.setControlModality(temperatureControlModality); 
   temperatureController.periodicRun(temperatures, 3); // 3 sono i sensori che usiamo per fare il controllo della temperatura
 
-  /*
-  Serial.print("T1: ");
-  Serial.print(temperatures[0]);
-  Serial.print(" T2: ");
-  Serial.print(temperatures[1]);
-  Serial.print(" T3: ");
-  Serial.print(temperatures[2]);
-  Serial.print(" aT: ");
-  Serial.println(temperatureController.debug_getActualTemperature());
-  */
   if(automaticControl_var){
     mainHeater_var = temperatureController.getOutputState();
     auxHeater_var = false;
@@ -340,12 +338,14 @@ void loop() {
         break;
     }
     if(ENABLE_SERIAL_PRINT_DEBUG){
+      /*
       Serial.print(eggsTurnerState);
       Serial.print("  ");
       Serial.print(leftInductor_input.getInputState());
       Serial.print("  ");
       Serial.print(rightInductor_input.getInputState());
       Serial.println("");
+      */
     }
   }
   else{
@@ -369,10 +369,9 @@ void loop() {
   /* END STEPPER MOTOR CONTROL SECTION */
 
   /* HUMIDITY COMPUTATION SECTION */
-  /* DHT22 sensor */
+  /* DHT22 sensor */  
   humidity_fromDHT22 = dht.readHumidity();
-  temp_fromDHT22 = dht.readTemperature();
-
+  temp_fromDHT22 = dht.readTemperature();  
   /* DS18B20 misura temperatura bulbo umido */
   wetTermometer_fromDS18B20 = humiditySensor_temperature; // temperatura misurata dal bulbo umido
   temperatureMeanValue = temperatureController.getMeanTemperature(); // temperatura ambiente incubatrice
@@ -534,6 +533,13 @@ void loop() {
   if(WATCHDOG_ENABLE){
     wdt_reset();
   }  
+
+  if(ENABLE_SERIAL_PRINT_DEBUG){
+    digitalWrite(CYCLE_TOGGLE_PIN, cycle_toggle_pin_var);
+    cycle_toggle_pin_var = !cycle_toggle_pin_var;
+    Serial.println();
+  }
+  
 }
 
 int readFromBoard(){ // returns the number of commands received
