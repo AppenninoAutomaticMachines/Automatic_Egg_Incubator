@@ -170,6 +170,9 @@ String automaticControl_html_1 = R"=====(
     #temperatures_section {display: table; margin: auto;  padding: 10px 10px 10px 10px; } 
     #content_temperatures_section { border: 5px solid blue; border-radius: 15px; padding: 10px 0px 10px 0px;}
 
+    #humidity_section {display: table; margin: auto;  padding: 10px 10px 10px 10px; } 
+    #content_humidity_section { border: 5px solid blue; border-radius: 15px; padding: 10px 0px 10px 0px;}
+
     #control_variables_section {display: table; margin: auto;  padding: 10px 10px 10px 10px; } 
     #content_control_variables_section { border: 5px solid DarkMagenta; border-radius: 15px; padding: 10px 0px 10px 0px;}
 
@@ -271,6 +274,9 @@ String automaticControl_html_1 = R"=====(
           }
 
           document.getElementById('tCM_INO').innerHTML = tmpArray[8];
+          document.getElementById('humidity_HTML').innerHTML = tmpArray[9];
+          document.getElementById('temp_humidBulb_HTML').innerHTML = tmpArray[10];
+          document.getElementById('temp_media_HTML').innerHTML = tmpArray[11];          
         }
       }
       ajaxRequest.send();
@@ -349,6 +355,16 @@ String automaticControl_html_1 = R"=====(
        <p> <span id='temp_sensor2'>--.-</span> &deg;C </p>
        <h2>Temperatura: sensore basso</h2>
        <p> <span id='temp_sensor3'>--.-</span> &deg;C </p>
+     </div>
+    </div>
+    <div id='humidity_section'>     
+     <div id='content_humidity_section'> 
+       <h2>T media incubatrice:</h2>
+       <p> <span id='temp_media_HTML'>--.-</span> &deg;C </p>
+       <h2>T bulbo umido:</h2>
+       <p> <span id='temp_humidBulb_HTML'>--.-</span> &deg;C </p>
+       <h2>Umidità DHT22:</h2>
+       <p> <span id='humidity_HTML'>--.-</span> % </p>
      </div>
     </div>
     <div id='control_variables_section'>     
@@ -610,6 +626,8 @@ float higherHysteresisLimit_user_html, lowerHysteresisLimit_user_html;
 int temperatureControlModality_user_html;
 int mainHeaterOn_fromArduino_toHTML, auxHeaterOn_fromArduino_toHTML, temperatureControlModality_fromArduino_toHTML;
 
+float humidity_fromArduino_toHTML, wetTermometer_fromArduino_toHTML, temperatureMeanValue_fromArduino_toHTML;
+
 
 bool send_higherHysteresisLimit_user_html = false;
 bool send_lowerHysteresisLimit_user_html = false;
@@ -720,6 +738,9 @@ void loop() {
         mainHeaterOn_fromArduino_toHTML = getIntFromString(receivedCommands[6], ','); // <mHO, 0> receivedCommands[6].substring(6, 11); //<mHO, false> [6:10]
         auxHeaterOn_fromArduino_toHTML = getIntFromString(receivedCommands[7], ',');//<aHO, true>
         temperatureControlModality_fromArduino_toHTML = getIntFromString(receivedCommands[8], ',');//<tCM, 1>
+        humidity_fromArduino_toHTML = getFloatFromString(receivedCommands[9], ','); //<hDHT, 0.00>
+        wetTermometer_fromArduino_toHTML = getFloatFromString(receivedCommands[10], ','); //<tWDS, 0.00>
+        temperatureMeanValue_fromArduino_toHTML = getFloatFromString(receivedCommands[11], ','); //<tMV, 0.00>
 
         if (!isnan(sensor1_value) && !isnan(sensor2_value) && !isnan(sensor3_value) && !isnan(actualTemperature_value)){
             client.print(header);
@@ -732,6 +753,9 @@ void loop() {
             client.print( "|" );  client.print(mainHeaterOn_fromArduino_toHTML);
             client.print( "|" );  client.print(auxHeaterOn_fromArduino_toHTML);
             client.print( "|" );  client.print(temperatureControlModality_fromArduino_toHTML);
+            client.print( "|" );  client.print(humidity_fromArduino_toHTML);
+            client.print( "|" );  client.print(wetTermometer_fromArduino_toHTML);
+            client.print( "|" );  client.print(temperatureMeanValue_fromArduino_toHTML);
             
         }
         
