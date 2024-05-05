@@ -444,3 +444,98 @@ void antiDebounceInput::setDebounceDelay(int debounceDelay){
 bool antiDebounceInput::getInputState(void){
   return _inputState_output;  
 }
+
+bool antiDebounceInput::getCurrentInputState(void){
+	return _currentInputState;
+}
+
+/* TRIGGER (per segnali PLC) */
+trigger::trigger(void){
+  _signalState = false;
+  _previousSignalState = false;
+
+  _risingEdge = false;
+  _fallingEdge = false;
+}
+
+void trigger::periodicRun(bool signal){
+  _risingEdge = false; // ad ogni ciclo vanno azzerati.
+  _fallingEdge = false;
+
+  _signalState = signal;
+
+  if(_signalState != _previousSignalState){
+    if(_signalState){ // RISING EDGE
+      /* se ora vale true ed è diverso da prima, significa che siamo in rising edge */
+      _risingEdge = true;
+    }
+    else{
+      /* se ora vale false ed è diverso da prima, significa che siamo in falling edge */
+      _fallingEdge = true;
+    }
+  }
+}
+
+bool trigger::catchRisingEdge(void){
+  return _risingEdge;
+}
+
+bool trigger::catchFallingEdge(void){
+  return _fallingEdge;
+}
+
+/* TIMER */
+TON::TON(int msDelay){
+  _signalState = false;
+
+  _startCountTimer = 0;
+  _elapsedTime = 0;
+
+  _msDelay = msDelay;
+
+  _countingActive = false;
+
+  _TON_Output_EdgeType = false;
+  _TON_Output_StableType = false;
+}
+
+void TON::periodicRun(bool signal){
+  _signalState = signal;
+  _TON_Output_EdgeType = false;
+
+  _localTrigger.periodicRun(_signalState);
+
+  if(_localTrigger.catchRisingEdge()){ // appena vedo RISING EDGE, allora inizio a contare il tempo.
+    _startCountTimer = millis();
+    _countingActive = true;
+  }
+
+  if(_countingActive){
+    _elapsedTime = millis() - _startCountTimer;
+
+    if(_elapsedTime >= _msDelay){
+      _TON_Output_EdgeType = true;
+      _TON_Output_StableType = true;
+
+      _countingActive = false;
+    }
+  }
+
+  if(_localTrigger.catchFallingEdge()){ // appena vedo FALLING EDGE, allora reset di tutto.
+    _elapsedTime = 0;
+    _countingActive = false;
+    _TON_Output_StableType = false;
+  }
+}
+
+bool TON::getTON_OutputEdgeType(void){
+  return _TON_Output_EdgeType;
+}
+
+bool TON::getTON_OutputStableType(void){
+  return _TON_Output_StableType;
+}
+
+unsigned long TON::getTON_ElapsedTime(void){
+  return _elapsedTime;
+}
