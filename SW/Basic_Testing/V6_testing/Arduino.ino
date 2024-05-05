@@ -120,8 +120,11 @@ bool direction = false;
 bool stepperAutomaticControl_var = false;
 
 antiDebounceInput leftInductor_input(LEFT_INDUCTOR_PIN, DEFAULT_DEBOUNCE_TIME);
-
 antiDebounceInput rightInductor_input(RIGHT_INDUCTOR_PIN, DEFAULT_DEBOUNCE_TIME);
+
+// gestione emergenza: se il segnale sta su per 800ms e sono in controllo automatico, allora ferma tutto.
+TON leftInductor_TON(800); 
+TON rightInductor_TON(800);
 
 // variabile per manual control
 bool stepperMotor_moveForward_var = false;
@@ -132,6 +135,8 @@ byte eggsTurnerState = 0;
 bool turnEggs_cmd = false;
 
 timer dummyTimer;
+
+trigger stepperAutomaticControl_trigger;
 /* END MOTORS SECTION */
 
 float temp_sensor1, temp_sensor2, temp_sensor3;
@@ -301,6 +306,19 @@ void loop() {
   eggsTurnerStepperMotor.periodicRun();
 
   dummyTimer.periodicRun();
+
+  
+  /* CHIAMATA STOP DI EMERGENZA, se dovessi leggere un induttore limitatore. */
+  /*
+  leftInductor_TON.periodicRun(leftInductor_input.getCurrentInputState());
+  rightInductor_TON.periodicRun(rightInductor_input.getCurrentInputState());
+
+  if(leftInductor_TON.getTON_OutputEdgeType() || rightInductor_TON.getTON_OutputEdgeType()){
+    eggsTurnerStepperMotor.stopMotor();
+  }
+  */
+  
+ 
   if(stepperAutomaticControl_var){
     /* macchina a stati per la gestione della rotazione */
     dummyTimer.enable();
@@ -363,15 +381,22 @@ void loop() {
     }
   }
   else{
+    if(stepperAutomaticControl_trigger.catchFallingEdge()){ // catch della rimozione del controllo automatico: chiamo lo stop del motore.
+      eggsTurnerStepperMotor.stopMotor(); 
+    }
+
     dummyTimer.disable();
     if(stepperMotor_moveForward_var){
       eggsTurnerStepperMotor.moveForward(STEPPER_MOTOR_SPEED_DEFAULT);
     }
-    if(stepperMotor_moveBackward_var){
+    else if(stepperMotor_moveBackward_var){
       eggsTurnerStepperMotor.moveBackward(STEPPER_MOTOR_SPEED_DEFAULT);
     }
-    if(stepperMotor_stop_var){
+    else if(stepperMotor_stop_var){
       eggsTurnerStepperMotor.stopMotor();
+    }
+    else{
+      eggsTurnerStepperMotor.stopMotor(); 
     }
 
     //clear variables
@@ -535,6 +560,9 @@ void loop() {
         }
       }
   }
+
+  /* analisi sui comandi ricevuti */
+  stepperAutomaticControl_trigger.periodicRun(stepperAutomaticControl_var);
   
 
   inhibit_stepperMotorRunning = eggsTurnerStepperMotor.get_stepCommand(); 
