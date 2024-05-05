@@ -138,6 +138,7 @@ class antiDebounceInput{
 
     void setDebounceDelay(int debounceDelay);
     bool getInputState(void); // ritorna dicendo se il pulsante è premuto o no
+	bool getCurrentInputState(void); // ritorna lo stato attuale del segnale
 
   private:
     byte _inputPin;
@@ -150,5 +151,64 @@ class antiDebounceInput{
     unsigned long _debounceDelay; 
 
     bool _inputState_output; // variabile di output di questo oggetto che mi dice lo stato dell'input    
+};
+
+/* TRIGGER (per segnali PLC) */
+/*
+  Oggetto che guarda solo i segnali PLC e si accorge di un falling/rising edge. Va fatto girare periodicamente nell'esecuzione PLC per monitorare 
+  il segnale. Ha memoria interna dello stato passato.
+  Restituisce sei segnali di tipo EDGE: su un ciclo nel momento in cui accade il falling/rising edge.
+  Le uscite edgeType sono azzerate ad ogni chiamata di periodicRun dell'oggetto. 
+*/
+class trigger{
+  public:
+    trigger(void);
+
+    void periodicRun(bool signal);
+
+    bool catchRisingEdge(void); // uscita esgeType
+    bool catchFallingEdge(void); // uscita esgeType
+
+  private:
+    bool _signalState;
+    bool _previousSignalState;
+
+    bool _risingEdge;
+    bool _fallingEdge;
+};
+
+/* TON */
+/*
+  Per segnali PLC
+  Ha in ingresso un segnale. Appena il segnale va a true, inizio a contare il TON. Se va false, il TON si azzera.
+  Il TON continua a contare. Appena passo il tempo richeisto di filtraggio msDelay, allora attivo l'uscita _TONOutput, che sta
+  su fintantoche l'input sta su. Appena l'input va a false, allora TON si resetta e anche l'uscita si resetta.
+  Provvedo anche un'uscita edgeType, che con un edge mi dice appena il TON ha contato.
+*/
+class TON{
+  public:
+    TON(int msDelay);
+
+    void periodicRun(bool signal);
+
+    bool getTON_OutputEdgeType(void);
+    bool getTON_OutputStableType(void);
+
+    unsigned long getTON_ElapsedTime(void);
+
+  private:
+    trigger _localTrigger; // mi dice quando ho il rising edge del segnale
+
+    bool _signalState;
+
+    unsigned long _startCountTimer; // istante di tempo in cui inizio a contare
+    unsigned long _elapsedTime;
+    int _msDelay; // tempo di filtraggio
+
+    bool _countingActive;
+
+    bool _TON_Output_EdgeType;
+    bool _TON_Output_StableType;
+
 };
 #endif
