@@ -1,6 +1,5 @@
 To Do List:
- - megaBUG: se sto andando col motore indietro (ora ho inibizione attiva), poi tolgo il comando di automatico, appena arrivo all'induttore basso il motore va comunque.
-SOL: 1) scrivere codice trigger che appena vede ceh va giu il comando di stepperAutomaticControl chiama uno stop del motre.
+ 
 2) da aggiuingere, che anche se non c'è controllo automatico, appena incontro uno dei due induttori chiamo lo stop.
  - pensare alla procedura di azzeramento. Mettere il motore all'interno dell'intervallo e premere il tasto. Ma così ho bisogno dell'operatore..se si spegne??
  - introdurre un 'first period' nella periodicRun del timer...se passa molto tempo dall'init alla prima periodicRun, rischio di triggerare un edge.
@@ -22,6 +21,8 @@ SOL: 1) scrivere codice trigger che appena vede ceh va giu il comando di stepper
 
 
 DONE:
+ - megaBUG: se sto andando col motore indietro (ora ho inibizione attiva), poi tolgo il comando di automatico, appena arrivo all'induttore basso il motore va comunque.
+   SOL: 1) scrivere codice trigger che appena vede ceh va giu il comando di stepperAutomaticControl chiama uno stop del motre.
  - mettere luci attuatori attivi  o no nella pagina di controllo automatico
  - controllo su sensore staccato
  - mettere selezione modalità di funzionamento
