@@ -12,6 +12,16 @@
 
  https://lastminuteengineers.com/multiple-ds18b20-arduino-tutorial/ reading temperature by address
 */
+/* LIBRARIES */
+#include <SoftwareSerial.h>
+#include <avr/wdt.h>
+#include <ProfiloLibrary.h>
+#include <OneWire.h>
+#include <DallasTemperature.h>
+#include <DHT.h>
+#include <Wire.h>
+#include <RTClib.h>
+
 
 /* PIN ARDUINO */
 #define MAIN_HEATER_PIN 12
@@ -30,9 +40,7 @@
 #define DHTPIN 4   //Pin a cui è connesso il sensore
 #define ONE_WIRE_BUS 2
 
-#include <SoftwareSerial.h>
-#include <avr/wdt.h>
-
+// A4 and A5 used for RTC module
 
 #define SERIAL_SPEED 19200 
 #define WATCHDOG_ENABLE true
@@ -42,11 +50,6 @@
 
 /* TEMPERATURES SECTION */
 // ricorda di mettere una alimentazione forte e indipendente per i sensori. Ha migliorato molto la stabilità della lettura.
-#include <ProfiloLibrary.h>
-#include <OneWire.h>
-#include <DallasTemperature.h>
-
-
 OneWire oneWire(ONE_WIRE_BUS);
 
 DallasTemperature sensors(&oneWire);
@@ -90,13 +93,10 @@ byte controlTemperatureIndex; // i sensori di temperatura sono 4, ma quelli effe
 /* END TEMPERATURES SECTION */
 
 /* DHT22 HUMIDITY SENSOR */
-#include <DHT.h>
-
-//Costanti
 #define DHTTYPE DHT22   //Tipo di sensore che stiamo utilizzando (DHT22)
 DHT dht(DHTPIN, DHTTYPE); //Inizializza oggetto chiamato "dht", parametri: pin a cui è connesso il sensore, tipo di dht 11/22
 
-//Variabili
+
 int chk;
 float humidity_fromDHT22;  //Variabile in cui verrà inserita la % di umidità
 float temp_fromDHT22; //Variabile in cui verrà inserita la temperatura
@@ -134,10 +134,23 @@ bool stepperMotor_stop_var = false;
 byte eggsTurnerState = 0;
 bool turnEggs_cmd = false;
 
-timer dummyTimer;
-
 trigger stepperAutomaticControl_trigger;
 /* END MOTORS SECTION */
+
+
+
+/* RTC SECTION */
+RTC_DS3231 rtc;
+DateTime lastTriggerTime; // Store the last trigger time
+const unsigned long DEBUG_TRIGGER_INTERVAL = 10*1000; // 10seconds in milliseconds - DIVENTERA' VALORE DA HTML
+bool turnEggs_cmd_fromRTC = false; // variabile che si ricorda appena è passato il tempo richiesto. Messa a false dalla action che aziona rotazione delle uova.
+
+DateTime now;
+
+int minutes_trigger_interval = 60 * 1.5; // valore impostato da interfaccia per rotazione uova. Default 1.5h = 90min
+int minutesToGO; // minuti mancanti alla prossima girata
+int minutesGone; // minuti passati dalla precedente girata
+/* END RTC SECTION */
 
 float temp_sensor1, temp_sensor2, temp_sensor3;
 
@@ -235,10 +248,24 @@ void setup() {
   timerSerialToESP8266.setTimeToWait(TIME_PERIOD_SERIAL_COMMUNICATION_ARDUINO_TO_ESP8266);
   /* END TEMPERATURES SECTION */
 
-  dummyTimer.setTimeToWait(10000); //DUMMY FOR TESTS - giro ogni 10 secondi.
   rightInductor_input.changePolarity(); // DUMMY con sensore NON balluff
 
   dht.begin();
+
+  /* RTC SECTION */
+  if (!rtc.begin()) {
+    //Serial.println("Couldn't find RTC");
+    while (1);
+  }
+
+  if (rtc.lostPower()) {
+    //Serial.println("RTC lost power, let's set the time!");
+    rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
+  }
+
+  // Initialize last trigger time to current time
+  lastTriggerTime = rtc.now();
+  /* END RTC SECTION */
 }
 
 void loop() {    
@@ -286,6 +313,9 @@ void loop() {
   }
   /* END TEMPERATURES SECTION */
 
+
+
+
   /* HUMIDITY COMPUTATION SECTION */
   /* DHT22 sensor */  
   if(!inhibit_stepperMotorRunning){
@@ -297,17 +327,21 @@ void loop() {
   }
   /* END HUMIDITY COMPUTATION SECTION */
 
+
+
+
   /* INDUCTOR INPUT SECTION */
   leftInductor_input.periodicRun();
   rightInductor_input.periodicRun();
   /* END INDUCTOR INPUT SECTION */
-    
+
+
+
   /* STEPPER MOTOR CONTROL SECTION */
   eggsTurnerStepperMotor.periodicRun();
 
-  dummyTimer.periodicRun();
+  turnEggs_cmd = turnEggs_cmd_fromRTC; // lascio la possibilità di avere degli OR di condizioni
 
-  
   /* CHIAMATA STOP DI EMERGENZA, se dovessi leggere un induttore limitatore. */
   /*
   leftInductor_TON.periodicRun(leftInductor_input.getCurrentInputState());
@@ -320,35 +354,60 @@ void loop() {
   
  
   if(stepperAutomaticControl_var){
-    /* macchina a stati per la gestione della rotazione */
-    dummyTimer.enable();
-    
-    turnEggs_cmd = dummyTimer.getOutputTriggerEdgeType();
+    /* RTC SECTION */
+    now = rtc.now();
+    if(eggsTurnerState >= 2){
+      turnEggs_cmd_fromRTC = false;
+
+      // Check if the trigger interval has passed: MINUTI
+      minutesGone = computeTimeDifference_inMinutes(now, lastTriggerTime);
+      minutesToGO = minutes_trigger_interval - minutesGone;
+
+      if(minutesGone >= minutes_trigger_interval) {
+        turnEggs_cmd_fromRTC = true;
+      }
+    }
+
+    // Check for overflow ??
+    if (now.unixtime() < 0) {
+      //Serial.println("RTC overflow detected. Resetting...");
+      resetRTC();
+      return; // Exit loop to reset
+    }
+    /* END RTC SECTION */
 
     // direzione oraria = forward = verso l'induttore di destra (vedendo da dietro l'incubatrice)
     switch(eggsTurnerState){
       case 0: // ZEROING
         // lascio stato aperto per eventuale abilitazione della procedura di azzeramento da parte dell'operatore.
-        eggsTurnerStepperMotor.moveBackward(STEPPER_MOTOR_SPEED_DEFAULT);
-        eggsTurnerState = 1;
+        if(leftInductor_input.getInputState()){ // se leggo già induttore, inutile comandare un bw. Sono già azzerato.
+          // home position is reached - full left
+          eggsTurnerStepperMotor.stopMotor();
+          lastTriggerTime = now; // Update last trigger time
+          eggsTurnerState = 2;
+        }
+        else{
+          eggsTurnerStepperMotor.moveBackward(STEPPER_MOTOR_SPEED_DEFAULT);
+          eggsTurnerState = 1;
+        }        
         break;
       case 1: // WAIT_TO_REACH_LEFT_SIDE_INDUCTOR
         if(leftInductor_input.getInputState()){
           // home position is reached - full left
           eggsTurnerStepperMotor.stopMotor();
-          dummyTimer.reset();
+          lastTriggerTime = now; // Update last trigger time
           eggsTurnerState = 2;
         }
         break;
       case 2: // WAIT_FOR_TURN_EGGS_COMMAND_STATE --> will rotate from left to right (CW direction)
           if(turnEggs_cmd){
             eggsTurnerStepperMotor.moveForward(STEPPER_MOTOR_SPEED_DEFAULT);
+            lastTriggerTime = now; // Update last trigger time
             eggsTurnerState = 3;
           }
         break;
       case 3: // WAIT_TO_REACH_RIGHT_SIDE_INDUCTOR
           if(rightInductor_input.getInputState()){
-            dummyTimer.reArm();
             eggsTurnerStepperMotor.stopMotor();
             eggsTurnerState = 4;
           }
@@ -356,12 +415,12 @@ void loop() {
       case 4: // WAIT_FOR_TURN_EGGS_COMMAND_STATE --> will rotate from right to left (CCW direction)
           if(turnEggs_cmd){
             eggsTurnerStepperMotor.moveBackward(STEPPER_MOTOR_SPEED_DEFAULT);
+            lastTriggerTime = now; // Update last trigger time
             eggsTurnerState = 5;
           }
         break;
       case 5: // WAIT_TO_REACH_LEFT_SIDE_INDUCTOR
           if(leftInductor_input.getInputState()){
-            dummyTimer.reArm();
             eggsTurnerStepperMotor.stopMotor();
             eggsTurnerState = 2;
           }
@@ -382,10 +441,10 @@ void loop() {
   }
   else{
     if(stepperAutomaticControl_trigger.catchFallingEdge()){ // catch della rimozione del controllo automatico: chiamo lo stop del motore.
-      eggsTurnerStepperMotor.stopMotor(); 
+      eggsTurnerStepperMotor.stopMotor();
+      eggsTurnerState = 0; 
     }
 
-    dummyTimer.disable();
     if(stepperMotor_moveForward_var){
       eggsTurnerStepperMotor.moveForward(STEPPER_MOTOR_SPEED_DEFAULT);
     }
@@ -400,9 +459,10 @@ void loop() {
     stepperMotor_moveForward_var = false;
     stepperMotor_moveBackward_var = false;
     stepperMotor_stop_var = false;
-  }
-  
+  }  
   /* END STEPPER MOTOR CONTROL SECTION */
+
+
 
   /* SERIAL COMMUNICATION FROM ARDUINO TO ESP8266 */
   if(!inhibit_stepperMotorRunning){
@@ -669,4 +729,17 @@ void addressToCharArray(DeviceAddress deviceAddress, char *charArray) {
   }
   // Add null terminator at the end of the char array
   charArray[16] = '\0';
+}
+
+int computeTimeDifference_inMinutes(DateTime currentTime, DateTime lastTrigger){
+  // unixtime --> is a standard way of representing time as a single numeric value
+  unsigned long diffSeconds = currentTime.unixtime() - lastTrigger.unixtime();
+  int differenceInMinutes = (diffSeconds % 3600) / 60;
+
+  return differenceInMinutes;
+}
+
+// Function to reset the RTC module
+void resetRTC() {
+  rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
 }
