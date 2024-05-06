@@ -147,7 +147,7 @@ bool turnEggs_cmd_fromRTC = false; // variabile che si ricorda appena è passato
 
 DateTime now;
 
-int minutes_trigger_interval = 60 * 1.5; // valore impostato da interfaccia per rotazione uova. Default 1.5h = 90min
+int minutes_trigger_interval = 1; //  TESTING: 1min valore impostato da interfaccia per rotazione uova. Default 60*1.5h = 90min
 int minutesToGO; // minuti mancanti alla prossima girata
 int minutesGone; // minuti passati dalla precedente girata
 /* END RTC SECTION */
