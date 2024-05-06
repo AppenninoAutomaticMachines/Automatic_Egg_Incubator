@@ -1,6 +1,13 @@
 #include <Wire.h>
 #include <RTClib.h>
 
+/*
+   VCC   -->   5V
+   GND   -->   GND
+   SDA   -->   A4 (SDA)
+   SCL   -->   A5 (SCL)
+*/
+
 RTC_DS3231 rtc;
 
 DateTime lastTriggerTime; // Store the last trigger time
