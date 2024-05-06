@@ -395,9 +395,6 @@ void loop() {
     else if(stepperMotor_stop_var){
       eggsTurnerStepperMotor.stopMotor();
     }
-    else{
-      eggsTurnerStepperMotor.stopMotor(); 
-    }
 
     //clear variables
     stepperMotor_moveForward_var = false;
