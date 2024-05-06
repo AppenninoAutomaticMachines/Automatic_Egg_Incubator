@@ -474,6 +474,7 @@ void trigger::periodicRun(bool signal){
       _fallingEdge = true;
     }
   }
+  _previousSignalState = _signalState;
 }
 
 bool trigger::catchRisingEdge(void){
