@@ -45,8 +45,8 @@
 #define SERIAL_SPEED 19200 
 #define WATCHDOG_ENABLE true
 #define DEFAULT_DEBOUNCE_TIME 25 //ms
-#define ENABLE_SERIAL_PRINT_TO_ESP8266 true
-#define ENABLE_SERIAL_PRINT_DEBUG false
+#define ENABLE_SERIAL_PRINT_TO_ESP8266 false
+#define ENABLE_SERIAL_PRINT_DEBUG true
 
 /* TEMPERATURES SECTION */
 // ricorda di mettere una alimentazione forte e indipendente per i sensori. Ha migliorato molto la stabilità della lettura.
@@ -140,6 +140,12 @@ trigger stepperAutomaticControl_trigger;
 
 
 /* RTC SECTION */
+/*
+   VCC   -->   5V
+   GND   -->   GND
+   SDA   -->   A4 (SDA)
+   SCL   -->   A5 (SCL)
+*/
 RTC_DS3231 rtc;
 DateTime lastTriggerTime; // Store the last trigger time
 const unsigned long DEBUG_TRIGGER_INTERVAL = 10*1000; // 10seconds in milliseconds - DIVENTERA' VALORE DA HTML
@@ -147,9 +153,15 @@ bool turnEggs_cmd_fromRTC = false; // variabile che si ricorda appena è passato
 
 DateTime now;
 
+#define MINUTES_CONFIGURATION false
 int minutes_trigger_interval = 1; //  TESTING: 1min valore impostato da interfaccia per rotazione uova. Default 60*1.5h = 90min
 int minutesToGO; // minuti mancanti alla prossima girata
 int minutesGone; // minuti passati dalla precedente girata
+
+#define SECONDS_CONFIGURATION true
+int seconds_trigger_interval = 10; //  TESTING: giriamo ogni 10secondi
+int secondsToGO; // minuti mancanti alla prossima girata
+int secondsGone; // minuti passati dalla precedente girata
 /* END RTC SECTION */
 
 float temp_sensor1, temp_sensor2, temp_sensor3;
@@ -340,8 +352,6 @@ void loop() {
   /* STEPPER MOTOR CONTROL SECTION */
   eggsTurnerStepperMotor.periodicRun();
 
-  turnEggs_cmd = turnEggs_cmd_fromRTC; // lascio la possibilità di avere degli OR di condizioni
-
   /* CHIAMATA STOP DI EMERGENZA, se dovessi leggere un induttore limitatore. */
   /*
   leftInductor_TON.periodicRun(leftInductor_input.getCurrentInputState());
@@ -356,17 +366,47 @@ void loop() {
   if(stepperAutomaticControl_var){
     /* RTC SECTION */
     now = rtc.now();
+
     if(eggsTurnerState >= 2){
       turnEggs_cmd_fromRTC = false;
 
-      // Check if the trigger interval has passed: MINUTI
-      minutesGone = computeTimeDifference_inMinutes(now, lastTriggerTime);
-      minutesToGO = minutes_trigger_interval - minutesGone;
+      if(eggsTurnerState == 2 || eggsTurnerState == 4){
+        if(MINUTES_CONFIGURATION){
+          // Check if the trigger interval has passed: MINUTI
+          minutesGone = computeTimeDifference_inMinutes(now, lastTriggerTime);
+          minutesToGO = minutes_trigger_interval - minutesGone;
 
-      if(minutesGone >= minutes_trigger_interval) {
-        turnEggs_cmd_fromRTC = true;
+          if(minutesGone >= minutes_trigger_interval) {
+            turnEggs_cmd_fromRTC = true;
+          }
+        }
+
+        if(SECONDS_CONFIGURATION){
+          // Check if the trigger interval has passed: MINUTI
+          secondsGone = computeTimeDifference_inSeconds(now, lastTriggerTime);
+          secondsToGO = seconds_trigger_interval - secondsGone;
+
+          if(secondsGone >= seconds_trigger_interval) {
+            turnEggs_cmd_fromRTC = true;
+          }
+        }
+      }
+      else{
+        if(MINUTES_CONFIGURATION){
+          // Check if the trigger interval has passed: MINUTI
+          minutesGone = minutes_trigger_interval;
+          minutesToGO = 0;
+        }
+
+        if(SECONDS_CONFIGURATION){
+          // Check if the trigger interval has passed: MINUTI
+          secondsGone = seconds_trigger_interval;
+          secondsToGO = 0;
+        }
       }
     }
+
+    turnEggs_cmd = turnEggs_cmd_fromRTC; // lascio la possibilità di avere degli OR di condizioni
 
     // Check for overflow ??
     if (now.unixtime() < 0) {
@@ -402,41 +442,45 @@ void loop() {
       case 2: // WAIT_FOR_TURN_EGGS_COMMAND_STATE --> will rotate from left to right (CW direction)
           if(turnEggs_cmd){
             eggsTurnerStepperMotor.moveForward(STEPPER_MOTOR_SPEED_DEFAULT);
-            lastTriggerTime = now; // Update last trigger time
             eggsTurnerState = 3;
           }
         break;
       case 3: // WAIT_TO_REACH_RIGHT_SIDE_INDUCTOR
           if(rightInductor_input.getInputState()){
             eggsTurnerStepperMotor.stopMotor();
+            lastTriggerTime = now; // Update last trigger time
             eggsTurnerState = 4;
           }
         break;
       case 4: // WAIT_FOR_TURN_EGGS_COMMAND_STATE --> will rotate from right to left (CCW direction)
           if(turnEggs_cmd){
             eggsTurnerStepperMotor.moveBackward(STEPPER_MOTOR_SPEED_DEFAULT);
-            lastTriggerTime = now; // Update last trigger time
             eggsTurnerState = 5;
           }
         break;
       case 5: // WAIT_TO_REACH_LEFT_SIDE_INDUCTOR
           if(leftInductor_input.getInputState()){
             eggsTurnerStepperMotor.stopMotor();
+            lastTriggerTime = now; // Update last trigger time
             eggsTurnerState = 2;
           }
         break;
       default:
         break;
     }
-    if(ENABLE_SERIAL_PRINT_DEBUG){
-      /*
+
+    if(ENABLE_SERIAL_PRINT_DEBUG){      
       Serial.print(eggsTurnerState);
       Serial.print("  ");
       Serial.print(leftInductor_input.getInputState());
       Serial.print("  ");
       Serial.print(rightInductor_input.getInputState());
-      Serial.println("");
-      */
+      Serial.print(" ");
+      Serial.print(secondsToGO);
+      Serial.print(" ");
+      Serial.print(secondsGone);
+      Serial.print(" ");
+      Serial.println();
     }
   }
   else{
@@ -628,11 +672,13 @@ void loop() {
     wdt_reset();
   }  
 
+  /*
   if(ENABLE_SERIAL_PRINT_DEBUG){
     digitalWrite(CYCLE_TOGGLE_PIN, cycle_toggle_pin_var);
     cycle_toggle_pin_var = !cycle_toggle_pin_var;
     Serial.println();
   }
+  */
   
 }
 
@@ -737,6 +783,13 @@ int computeTimeDifference_inMinutes(DateTime currentTime, DateTime lastTrigger){
   int differenceInMinutes = (diffSeconds % 3600) / 60;
 
   return differenceInMinutes;
+}
+
+int computeTimeDifference_inSeconds(DateTime currentTime, DateTime lastTrigger){
+  // unixtime --> is a standard way of representing time as a single numeric value
+  unsigned long diffSeconds = currentTime.unixtime() - lastTrigger.unixtime();
+
+  return diffSeconds;
 }
 
 // Function to reset the RTC module
