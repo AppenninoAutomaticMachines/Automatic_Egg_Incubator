@@ -45,8 +45,8 @@
 #define SERIAL_SPEED 19200 
 #define WATCHDOG_ENABLE true
 #define DEFAULT_DEBOUNCE_TIME 25 //ms
-#define ENABLE_SERIAL_PRINT_TO_ESP8266 false
-#define ENABLE_SERIAL_PRINT_DEBUG true
+#define ENABLE_SERIAL_PRINT_TO_ESP8266 true
+#define ENABLE_SERIAL_PRINT_DEBUG false
 
 /* TEMPERATURES SECTION */
 // ricorda di mettere una alimentazione forte e indipendente per i sensori. Ha migliorato molto la stabilità della lettura.
