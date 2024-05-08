@@ -323,6 +323,11 @@ void loop() {
       digitalWrite(LOWER_FAN_PIN, lowerFan_var);
     }
   }
+  else{
+    // mentre inibisco il controllo di temperatura perché il motore gira, è opportuno 
+    mainHeater_var = false;
+    auxHeater_var = false;
+  }
   /* END TEMPERATURES SECTION */
 
 
