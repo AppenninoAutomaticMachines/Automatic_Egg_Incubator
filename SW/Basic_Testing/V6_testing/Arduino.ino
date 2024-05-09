@@ -192,6 +192,8 @@ bool cycle_toggle_pin_var = false;
 */
 bool inhibit_stepperMotorRunning = false; 
 
+bool ledCheck = false; // variabile che fa il check del led PIN 13. rimane falsa, quindi tiene accesa il led. Appena faccio un accesso da HTML, allora resetto il led.
+
 void setup() {
   pinMode(LED_BUILTIN, OUTPUT);
   pinMode(STEPPPER_MOTOR_STEP_PIN, OUTPUT);
@@ -604,6 +606,11 @@ void loop() {
   // appena il buffer è pieno, mi blocco a leggerlo. Significa che ESP8266 ha pubblicato dei dati.
   if(Serial.available() > 0){ 
       numberOfCommandsFromBoard = readFromBoard(); // from ESP8266. It has @ as terminator character
+      if(numberOfCommandsFromBoard > 0 && !ledCheck){
+        // La prima volta in cui ricevo un comando spegno il leg. Significa che mi sono collegato con hmiHTML, quindi ho avuto il tempo di fare il ledCheck
+        digitalWrite(LED_BUILTIN, LOW);
+        ledCheck = true;
+      }
       // Guardiamo che comandi ci sono arrivati
       for(byte j = 0; j < numberOfCommandsFromBoard; j++){
         String tempReceivedCommand = receivedCommands[j];
