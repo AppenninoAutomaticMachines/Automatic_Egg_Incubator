@@ -192,6 +192,7 @@ timer timerSerialToESP8266;
 
 /* GENERAL */
 bool cycle_toggle_pin_var = false;
+bool gotTemperatures = false;
 
 /* variabile che viene messa a true quando viene richiesto al motore di andare.
   La usi ogni qualvolta devi interrompere qualcosa per dare spazio al motore.
@@ -316,6 +317,8 @@ void loop() {
           }      
         }
       }
+
+      gotTemperatures = true;
     
       sensors.requestTemperatures();
       lastTempRequest = millis();
@@ -324,7 +327,11 @@ void loop() {
 
     temperatureController.setTemperatureHysteresis(lowerHysteresisLimit, higherHysteresisLimit);
     temperatureController.setControlModality(temperatureControlModality); 
-    temperatureController.periodicRun(temperatures, 3); // 3 sono i sensori che usiamo per fare il controllo della temperatura
+    
+    if(gotTemperatures){
+      temperatureController.periodicRun(temperatures, 3); // 3 sono i sensori che usiamo per fare il controllo della temperatura
+    }
+    
 
     if(automaticControl_var){
       mainHeater_var = temperatureController.getOutputState();
@@ -581,9 +588,8 @@ void loop() {
 
   /* SERIAL COMMUNICATION FROM ARDUINO TO ESP8266 */
   if(!inhibit_stepperMotorRunning){
-    timerSerialToESP8266.periodicRun();
-    if(timerSerialToESP8266.getOutputTriggerEdgeType()){
-      timerSerialToESP8266.reArm();
+    if(gotTemperatures){
+      gotTemperatures = false;
       // riempo i dati per la trasmissione
       listofDataToSend_numberOfData = 0; // ad ogni giro lo azzero    
 
