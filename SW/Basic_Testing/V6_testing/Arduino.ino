@@ -193,6 +193,7 @@ bool cycle_toggle_pin_var = false;
 bool inhibit_stepperMotorRunning = false; 
 
 void setup() {
+  pinMode(LED_BUILTIN, OUTPUT);
   pinMode(STEPPPER_MOTOR_STEP_PIN, OUTPUT);
   digitalWrite(STEPPPER_MOTOR_STEP_PIN, LOW);
 
@@ -278,6 +279,8 @@ void setup() {
   // Initialize last trigger time to current time
   lastTriggerTime = rtc.now();
   /* END RTC SECTION */
+
+  digitalWrite(LED_BUILTIN, HIGH); // all'avvio accendo il LED_BUILTIN. Durante il funzionamento lo resetto. Se ritorno e lo vedo acceso, significa che ha agito il watchdog.
 }
 
 void loop() {    
