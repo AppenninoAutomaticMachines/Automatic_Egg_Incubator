@@ -34,6 +34,7 @@
 #define STEPPPER_MOTOR_MS2_PIN 5
 #define STEPPPER_MOTOR_MS3_PIN 4
 #define CYCLE_TOGGLE_PIN 3
+#define CYCLE_TOGGLE_ANALOG0_PIN 14
 
 #define LEFT_INDUCTOR_PIN 6
 #define RIGHT_INDUCTOR_PIN 5
@@ -146,12 +147,17 @@ trigger stepperAutomaticControl_trigger;
    SDA   -->   A4 (SDA)
    SCL   -->   A5 (SCL)
 */
+#define RTC_IS_CONNECTED false
+
 RTC_DS3231 rtc;
-DateTime lastTriggerTime; // Store the last trigger time
+
 const unsigned long DEBUG_TRIGGER_INTERVAL = 10*1000; // 10seconds in milliseconds - DIVENTERA' VALORE DA HTML
 bool turnEggs_cmd_fromRTC = false; // variabile che si ricorda appena è passato il tempo richiesto. Messa a false dalla action che aziona rotazione delle uova.
 
 DateTime now;
+DateTime lastTriggerTime; // Store the last trigger time
+
+unsigned long now_millis, lastTriggerTime_millis;
 
 #define MINUTES_CONFIGURATION false
 int minutes_trigger_interval = 1; //  TESTING: 1min valore impostato da interfaccia per rotazione uova. Default 60*1.5h = 90min
@@ -159,7 +165,7 @@ int minutesToGO; // minuti mancanti alla prossima girata
 int minutesGone; // minuti passati dalla precedente girata
 
 #define SECONDS_CONFIGURATION true
-int seconds_trigger_interval = 10; //  TESTING: giriamo ogni 10secondi
+int seconds_trigger_interval = 30; //  TESTING: giriamo ogni x secondi
 int secondsToGO; // minuti mancanti alla prossima girata
 int secondsGone; // minuti passati dalla precedente girata
 /* END RTC SECTION */
@@ -211,9 +217,8 @@ void setup() {
   pinMode(STEPPPER_MOTOR_MS3_PIN, OUTPUT);
   digitalWrite(STEPPPER_MOTOR_MS3_PIN, LOW);
 
-  if(ENABLE_SERIAL_PRINT_DEBUG){
-    pinMode(CYCLE_TOGGLE_PIN, OUTPUT);
-  }
+  pinMode(CYCLE_TOGGLE_PIN, OUTPUT);
+  pinMode(CYCLE_TOGGLE_ANALOG0_PIN, OUTPUT);
 
 
   pinMode(MAIN_HEATER_PIN, OUTPUT);
@@ -267,20 +272,25 @@ void setup() {
 
   dht.begin();
 
-  /* RTC SECTION */
-  if (!rtc.begin()) {
-    //Serial.println("Couldn't find RTC");
-    while (1);
-  }
+  if(RTC_IS_CONNECTED){
+    /* RTC SECTION */
+    if (!rtc.begin()) {
+      //Serial.println("Couldn't find RTC");
+      while (1);
+    }
 
-  if (rtc.lostPower()) {
-    //Serial.println("RTC lost power, let's set the time!");
-    rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
-  }
+    if (rtc.lostPower()) {
+      //Serial.println("RTC lost power, let's set the time!");
+      rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
+    }
 
-  // Initialize last trigger time to current time
-  lastTriggerTime = rtc.now();
-  /* END RTC SECTION */
+    // Initialize last trigger time to current time
+    lastTriggerTime = rtc.now();
+    /* END RTC SECTION */
+  }
+  else{
+    lastTriggerTime_millis = millis();
+  }
 
   digitalWrite(LED_BUILTIN, HIGH); // all'avvio accendo il LED_BUILTIN. Durante il funzionamento lo resetto. Se ritorno e lo vedo acceso, significa che ha agito il watchdog.
 }
@@ -288,6 +298,7 @@ void setup() {
 void loop() {    
   /* TEMPERATURES SECTION */
   if(!inhibit_stepperMotorRunning){
+    digitalWrite(CYCLE_TOGGLE_ANALOG0_PIN, HIGH);
     if(millis() - lastTempRequest >= (2*conversionTime_DS18B20_sensors)){
       controlTemperatureIndex = 0;
       for(byte index = 0; index < Limit; index++){
@@ -309,6 +320,7 @@ void loop() {
       sensors.requestTemperatures();
       lastTempRequest = millis();
     } 
+    digitalWrite(CYCLE_TOGGLE_ANALOG0_PIN, LOW);
 
     temperatureController.setTemperatureHysteresis(lowerHysteresisLimit, higherHysteresisLimit);
     temperatureController.setControlModality(temperatureControlModality); 
@@ -332,6 +344,8 @@ void loop() {
     // mentre inibisco il controllo di temperatura perché il motore gira, è opportuno 
     mainHeater_var = false;
     auxHeater_var = false;
+    digitalWrite(MAIN_HEATER_PIN, mainHeater_var);
+    digitalWrite(AUX_HEATER_PIN, auxHeater_var);
   }
   /* END TEMPERATURES SECTION */
 
@@ -374,41 +388,74 @@ void loop() {
   
  
   if(stepperAutomaticControl_var){
-    /* RTC SECTION */
-    now = rtc.now();
+    if(RTC_IS_CONNECTED){
+      /* RTC SECTION */
+      now = rtc.now();
 
-    if(eggsTurnerState >= 2){
-      turnEggs_cmd_fromRTC = false;
+      if(eggsTurnerState >= 2){
+        turnEggs_cmd_fromRTC = false;
 
-      if(eggsTurnerState == 2 || eggsTurnerState == 4){
-        if(MINUTES_CONFIGURATION){
-          // Check if the trigger interval has passed: MINUTI
-          minutesGone = computeTimeDifference_inMinutes(now, lastTriggerTime);
-          minutesToGO = minutes_trigger_interval - minutesGone;
+        if(eggsTurnerState == 2 || eggsTurnerState == 4){
+          if(MINUTES_CONFIGURATION){
+            // Check if the trigger interval has passed: MINUTI
+            minutesGone = computeTimeDifference_inMinutes(now, lastTriggerTime);
+            minutesToGO = minutes_trigger_interval - minutesGone;
 
-          if(minutesGone >= minutes_trigger_interval) {
-            turnEggs_cmd_fromRTC = true;
+            if(minutesGone >= minutes_trigger_interval) {
+              turnEggs_cmd_fromRTC = true;
+            }
+          }
+
+          if(SECONDS_CONFIGURATION){
+            // Check if the trigger interval has passed: MINUTI
+            secondsGone = computeTimeDifference_inSeconds(now, lastTriggerTime);
+            secondsToGO = seconds_trigger_interval - secondsGone;
+
+            if(secondsGone >= seconds_trigger_interval) {
+              turnEggs_cmd_fromRTC = true;
+            }
           }
         }
+        else{
+          if(MINUTES_CONFIGURATION){
+            // Check if the trigger interval has passed: MINUTI
+            minutesGone = minutes_trigger_interval;
+            minutesToGO = 0;
+          }
 
-        if(SECONDS_CONFIGURATION){
-          // Check if the trigger interval has passed: MINUTI
-          secondsGone = computeTimeDifference_inSeconds(now, lastTriggerTime);
-          secondsToGO = seconds_trigger_interval - secondsGone;
-
-          if(secondsGone >= seconds_trigger_interval) {
-            turnEggs_cmd_fromRTC = true;
+          if(SECONDS_CONFIGURATION){
+            // Check if the trigger interval has passed: MINUTI
+            secondsGone = seconds_trigger_interval;
+            secondsToGO = 0;
           }
         }
       }
-      else{
-        if(MINUTES_CONFIGURATION){
-          // Check if the trigger interval has passed: MINUTI
-          minutesGone = minutes_trigger_interval;
-          minutesToGO = 0;
-        }
+      // Check for overflow ??
+      if (now.unixtime() < 0) {
+        //Serial.println("RTC overflow detected. Resetting...");
+        resetRTC();
+        return; // Exit loop to reset
+      }
 
-        if(SECONDS_CONFIGURATION){
+      turnEggs_cmd = turnEggs_cmd_fromRTC; // lascio la possibilità di avere degli OR di condizioni
+      /* END RTC SECTION */
+    }
+    else{
+      now_millis = millis();
+
+      if(eggsTurnerState >= 2){
+        turnEggs_cmd = false;
+
+        if(eggsTurnerState == 2 || eggsTurnerState == 4){
+          // Check if the trigger interval has passed: MINUTI
+          secondsGone = now_millis - lastTriggerTime_millis;
+          secondsToGO = seconds_trigger_interval - secondsGone;
+
+          if(secondsGone >= seconds_trigger_interval) {
+            turnEggs_cmd = true;
+          }
+        }
+        else{
           // Check if the trigger interval has passed: MINUTI
           secondsGone = seconds_trigger_interval;
           secondsToGO = 0;
@@ -416,15 +463,9 @@ void loop() {
       }
     }
 
-    turnEggs_cmd = turnEggs_cmd_fromRTC; // lascio la possibilità di avere degli OR di condizioni
+    
 
-    // Check for overflow ??
-    if (now.unixtime() < 0) {
-      //Serial.println("RTC overflow detected. Resetting...");
-      resetRTC();
-      return; // Exit loop to reset
-    }
-    /* END RTC SECTION */
+      
 
     // direzione oraria = forward = verso l'induttore di destra (vedendo da dietro l'incubatrice)
     switch(eggsTurnerState){
@@ -433,7 +474,12 @@ void loop() {
         if(leftInductor_input.getInputState()){ // se leggo già induttore, inutile comandare un bw. Sono già azzerato.
           // home position is reached - full left
           eggsTurnerStepperMotor.stopMotor();
-          lastTriggerTime = now; // Update last trigger time
+          if(RTC_IS_CONNECTED){
+            lastTriggerTime = now; // Update last trigger time
+          }
+          else{
+            lastTriggerTime_millis = now_millis;
+          }          
           eggsTurnerState = 2;
         }
         else{
@@ -445,7 +491,12 @@ void loop() {
         if(leftInductor_input.getInputState()){
           // home position is reached - full left
           eggsTurnerStepperMotor.stopMotor();
-          lastTriggerTime = now; // Update last trigger time
+          if(RTC_IS_CONNECTED){
+            lastTriggerTime = now; // Update last trigger time
+          }
+          else{
+            lastTriggerTime_millis = now_millis;
+          } 
           eggsTurnerState = 2;
         }
         break;
@@ -458,7 +509,12 @@ void loop() {
       case 3: // WAIT_TO_REACH_RIGHT_SIDE_INDUCTOR
           if(rightInductor_input.getInputState()){
             eggsTurnerStepperMotor.stopMotor();
-            lastTriggerTime = now; // Update last trigger time
+            if(RTC_IS_CONNECTED){
+              lastTriggerTime = now; // Update last trigger time
+            }
+            else{
+              lastTriggerTime_millis = now_millis;
+            } 
             eggsTurnerState = 4;
           }
         break;
@@ -471,7 +527,12 @@ void loop() {
       case 5: // WAIT_TO_REACH_LEFT_SIDE_INDUCTOR
           if(leftInductor_input.getInputState()){
             eggsTurnerStepperMotor.stopMotor();
-            lastTriggerTime = now; // Update last trigger time
+            if(RTC_IS_CONNECTED){
+              lastTriggerTime = now; // Update last trigger time
+            }
+            else{
+              lastTriggerTime_millis = now_millis;
+            } 
             eggsTurnerState = 2;
           }
         break;
@@ -687,13 +748,8 @@ void loop() {
     wdt_reset();
   }  
 
-  /*
-  if(ENABLE_SERIAL_PRINT_DEBUG){
-    digitalWrite(CYCLE_TOGGLE_PIN, cycle_toggle_pin_var);
+  digitalWrite(CYCLE_TOGGLE_PIN, cycle_toggle_pin_var);
     cycle_toggle_pin_var = !cycle_toggle_pin_var;
-    Serial.println();
-  }
-  */
   
 }
 
