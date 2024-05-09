@@ -147,7 +147,7 @@ trigger stepperAutomaticControl_trigger;
    SDA   -->   A4 (SDA)
    SCL   -->   A5 (SCL)
 */
-#define RTC_IS_CONNECTED false
+#define RTC_IS_CONNECTED true
 
 RTC_DS3231 rtc;
 
@@ -360,14 +360,14 @@ void loop() {
 
 
   /* HUMIDITY COMPUTATION SECTION */
-  /* DHT22 sensor */  
+  /* DHT22 sensor */    
   if(!inhibit_stepperMotorRunning){
     humidity_fromDHT22 = dht.readHumidity();
     temp_fromDHT22 = dht.readTemperature();  
-    /* DS18B20 misura temperatura bulbo umido */
+    // DS18B20 misura temperatura bulbo umido 
     wetTermometer_fromDS18B20 = humiditySensor_temperature; // temperatura misurata dal bulbo umido
     temperatureMeanValue = temperatureController.getMeanTemperature(); // temperatura ambiente incubatrice
-  }
+  }  
   /* END HUMIDITY COMPUTATION SECTION */
 
 
