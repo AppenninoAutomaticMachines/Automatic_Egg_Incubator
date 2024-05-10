@@ -1,5 +1,5 @@
 To Do List:
- 
+  contatore dei giri uova
 2) da aggiuingere, che anche se non c'è controllo automatico, appena incontro uno dei due induttori chiamo lo stop.
  - pensare alla procedura di azzeramento. Mettere il motore all'interno dell'intervallo e premere il tasto. Ma così ho bisogno dell'operatore..se si spegne??
  - introdurre un 'first period' nella periodicRun del timer...se passa molto tempo dall'init alla prima periodicRun, rischio di triggerare un edge.
