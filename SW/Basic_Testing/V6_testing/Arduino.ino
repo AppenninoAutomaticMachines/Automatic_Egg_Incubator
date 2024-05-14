@@ -136,6 +136,8 @@ byte eggsTurnerState = 0;
 bool turnEggs_cmd = false;
 
 trigger stepperAutomaticControl_trigger;
+
+unsigned int numberOfEggTurns_counter = 0;
 /* END MOTORS SECTION */
 
 
@@ -510,6 +512,7 @@ void loop() {
       case 2: // WAIT_FOR_TURN_EGGS_COMMAND_STATE --> will rotate from left to right (CW direction)
           if(turnEggs_cmd){
             eggsTurnerStepperMotor.moveForward(STEPPER_MOTOR_SPEED_DEFAULT);
+            numberOfEggTurns_counter += 1;
             eggsTurnerState = 3;
           }
         break;
@@ -528,6 +531,7 @@ void loop() {
       case 4: // WAIT_FOR_TURN_EGGS_COMMAND_STATE --> will rotate from right to left (CCW direction)
           if(turnEggs_cmd){
             eggsTurnerStepperMotor.moveBackward(STEPPER_MOTOR_SPEED_DEFAULT);
+            numberOfEggTurns_counter += 1;
             eggsTurnerState = 5;
           }
         break;
@@ -653,6 +657,12 @@ void loop() {
       strcpy(bufferChar, "<tMV, ");
       dtostrf(temperatureMeanValue, 1, 1, fbuffChar); 
       listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(strcat(bufferChar, fbuffChar), ">"), '\0');
+      listofDataToSend_numberOfData++;
+
+      //  numero di girate di uova numberOfEggTurns_counter = nET
+      char bufferCharArray[25];	
+      byte charCount = sprintf(bufferCharArray, "<nET, %d>", numberOfEggTurns_counter); //sprintf function returns the number of characters written to the array
+      listofDataToSend[listofDataToSend_numberOfData] = bufferCharArray;
       listofDataToSend_numberOfData++;
 
       if(ENABLE_SERIAL_PRINT_TO_ESP8266){
