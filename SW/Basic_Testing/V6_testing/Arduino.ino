@@ -184,6 +184,8 @@ byte numberOfCommandsFromBoard;
 #define MAX_NUMBER_OF_COMMANDS_TO_BOARD 20
 String listofDataToSend[MAX_NUMBER_OF_COMMANDS_TO_BOARD];
 byte listofDataToSend_numberOfData = 0;
+
+char bufferCharArray[25]; // buffer lo metto qui
 // handling float numbers
 char bufferChar[35];
 char fbuffChar[10];
@@ -636,7 +638,6 @@ void loop() {
       listofDataToSend_numberOfData++;
       
       // feedback about TEMPERATURE CONTROL MODALITY value
-      char bufferCharArray[25];	
       sprintf(bufferCharArray, "<TMP07, %d>", temperatureControlModality); //sprintf function returns the number of characters written to the array
       listofDataToSend[listofDataToSend_numberOfData] = bufferCharArray;
       listofDataToSend_numberOfData++;
@@ -659,8 +660,7 @@ void loop() {
       listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(strcat(bufferChar, fbuffChar), ">"), '\0');
       listofDataToSend_numberOfData++;
 
-      //  numero di girate di uova numberOfEggTurns_counter = nET
-      char bufferCharArray[25];	
+      //  numero di girate di uova numberOfEggTurns_counter = nET	
       sprintf(bufferCharArray, "<nET, %d>", numberOfEggTurns_counter); //sprintf function returns the number of characters written to the array
       listofDataToSend[listofDataToSend_numberOfData] = bufferCharArray;
       listofDataToSend_numberOfData++;
