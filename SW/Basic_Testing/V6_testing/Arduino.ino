@@ -637,7 +637,7 @@ void loop() {
       
       // feedback about TEMPERATURE CONTROL MODALITY value
       char bufferCharArray[25];	
-      byte charCount = sprintf(bufferCharArray, "<TMP07, %d>", temperatureControlModality); //sprintf function returns the number of characters written to the array
+      sprintf(bufferCharArray, "<TMP07, %d>", temperatureControlModality); //sprintf function returns the number of characters written to the array
       listofDataToSend[listofDataToSend_numberOfData] = bufferCharArray;
       listofDataToSend_numberOfData++;
 
@@ -661,7 +661,7 @@ void loop() {
 
       //  numero di girate di uova numberOfEggTurns_counter = nET
       char bufferCharArray[25];	
-      byte charCount = sprintf(bufferCharArray, "<nET, %d>", numberOfEggTurns_counter); //sprintf function returns the number of characters written to the array
+      sprintf(bufferCharArray, "<nET, %d>", numberOfEggTurns_counter); //sprintf function returns the number of characters written to the array
       listofDataToSend[listofDataToSend_numberOfData] = bufferCharArray;
       listofDataToSend_numberOfData++;
 
