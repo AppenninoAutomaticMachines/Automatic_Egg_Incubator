@@ -1,0 +1,5 @@
+https://github.com/open-rmf/rmf_demos/issues/177
+
+Raspberry access point per poter accedere al web server
+https://www.tomshardware.com/how-to/raspberry-pi-access-point
+
