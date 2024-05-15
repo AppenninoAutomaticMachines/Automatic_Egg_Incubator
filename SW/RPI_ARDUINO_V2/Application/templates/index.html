@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Raspberry Pi Control</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin-top: 50px;
+        }
+        .data {
+            margin: 20px;
+            font-size: 24px;
+        }
+        .light-off {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            background-color: lightgrey;
+            border-radius: 50%;
+            margin: 5px;
+        }
+        .light-on {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            background-color: red;
+            border-radius: 50%;
+            margin: 5px;
+        }
+        .button {
+            display: inline-block;
+            margin: 10px;
+            padding: 15px 25px;
+            font-size: 18px;
+            cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+        }
+        .input-box {
+            display: inline-block;
+            margin: 10px;
+            padding: 10px;
+            font-size: 18px;
+        }
+        .messages {
+            margin: 20px;
+            font-size: 18px;
+            border: 1px solid #ccc;
+            padding: 10px;
+            height: 150px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="data" id="dataDisplay">
+        <p>Temperature Sensor 1: <span id="temp1">0.0</span> °C</p>
+        <p>Temperature Sensor 2: <span id="temp2">0.0</span> °C</p>
+        <p>Temperature Sensor 3: <span id="temp3">0.0</span> °C</p>
+        <p>Main Heater: <span id="mainHeater" class="light-off"></span></p>
+        <p>Aux Heater: <span id="auxHeater" class="light-off"></span></p>
+        <p>Machine State: <span id="machineState">0</span></p>
+    </div>
+    <div class="messages" id="messageSection">
+        <!-- Messages will appear here -->
+    </div>
+    <button class="button" onclick="sendCommand('start')">Start</button>
+    <button class="button" onclick="sendCommand('stop')">Stop</button>
+    <button class="button" onclick="sendCommand('restart')">Restart</button>
+    <br>
+    <input class="input-box" type="number" id="inputNumber" placeholder="Enter number">
+    <button class="button" onclick="sendNumber()">Send Number</button>
+    <script src="https://cdn.socket.io/4.0.1/socket.io.min.js"></script>
+    <script>
+        var socket = io();
+
+        socket.on('connect', function() {
+            console.log('Connected to server');
+        });
+
+        socket.on('data_update', function(data) {
+            document.getElementById('temp1').innerText = data.temp1.toFixed(1);
+            document.getElementById('temp2').innerText = data.temp2.toFixed(1);
+            document.getElementById('temp3').innerText = data.temp3.toFixed(1);
+            document.getElementById('mainHeater').className = data.mainHeater ? 'light-on' : 'light-off';
+            document.getElementById('auxHeater').className = data.auxHeater ? 'light-on' : 'light-off';
+            document.getElementById('machineState').innerText = data.machineState;
+        });
+
+        socket.on('message', function(message) {
+            var messageSection = document.getElementById('messageSection');
+            var newMessage = document.createElement('p');
+            newMessage.innerText = message;
+            messageSection.appendChild(newMessage);
+            messageSection.scrollTop = messageSection.scrollHeight; // Scroll to bottom
+        });
+
+        function sendCommand(command) {
+            socket.emit('command', { cmd: command });
+        }
+
+        function sendNumber() {
+            var number = document.getElementById('inputNumber').value;
+            socket.emit('number', { number: number });
+        }
+
+        // Initial data fetch
+        fetch('/data')
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('temp1').innerText = data.temp1.toFixed(1);
+                document.getElementById('temp2').innerText = data.temp2.toFixed(1);
+                document.getElementById('temp3').innerText = data.temp3.toFixed(1);
+                document.getElementById('mainHeater').className = data.mainHeater ? 'light-on' : 'light-off';
+                document.getElementById('auxHeater').className = data.auxHeater ? 'light-on' : 'light-off';
+                document.getElementById('machineState').innerText = data.machineState;
+            });
+    </script>
+</body>
+</html>
