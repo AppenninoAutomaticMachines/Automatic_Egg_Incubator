@@ -3,3 +3,12 @@ https://github.com/open-rmf/rmf_demos/issues/177
 Raspberry access point per poter accedere al web server
 https://www.tomshardware.com/how-to/raspberry-pi-access-point
 
+Faccio leggere a raspberry le temperature: ogni 130ms lui fa cose, ok, così il motore può continuare a girare senza problemi.
+Arduino ha anche dei sensori: induttori. Quindi comunicazione bidirezionale Arduino <-> Raspberry
+
+Più possibilità:
+- controllo dei parametri
+- HTML più facilmente gestita
+- matplotlib + acquisizione dati
+
+
