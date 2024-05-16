@@ -11,4 +11,7 @@ Più possibilità:
 - HTML più facilmente gestita
 - matplotlib + acquisizione dati
 
+Capire come mi posso collegare con il telefono.
+
+
 
