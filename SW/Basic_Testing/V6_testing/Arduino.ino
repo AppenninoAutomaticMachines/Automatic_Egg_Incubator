@@ -241,8 +241,8 @@ void setup() {
   delay(5);
 
   /* TEMPERATURES SECTION */
-  higherHysteresisLimit = 26.0;
-  lowerHysteresisLimit = 24.0;
+  higherHysteresisLimit = 37.5;
+  lowerHysteresisLimit = 37.0;
 
   sensors.begin();
   numberOfDevices = sensors.getDeviceCount();
