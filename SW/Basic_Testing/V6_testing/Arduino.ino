@@ -56,7 +56,7 @@ OneWire oneWire(ONE_WIRE_BUS);
 DallasTemperature sensors(&oneWire);
 
 #define MAX_REACHABLE_TEMPERATURE_SATURATION 40.0
-#define TEMPERATURE_PRECISION TEMP_9_BIT // DS18B20 digital termometer provides 9-bit to 12-bit Celsius temperature measurements
+#define TEMPERATURE_PRECISION 0x1F // DS18B20 digital termometer provides 9-bit to 12-bit Celsius temperature measurements
 #define MAX_SENSORS 10
 DeviceAddress Thermometer[MAX_SENSORS];
 byte numberOfDevices;
