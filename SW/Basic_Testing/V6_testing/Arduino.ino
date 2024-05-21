@@ -190,10 +190,6 @@ char bufferCharArray[25]; // buffer lo metto qui
 char bufferChar[35];
 char fbuffChar[10];
 
-#define TIME_PERIOD_SERIAL_COMMUNICATION_ARDUINO_TO_ESP8266 100 //ms
-timer timerSerialToESP8266;
-
-
 /* GENERAL */
 bool cycle_toggle_pin_var = false;
 bool gotTemperatures = false;
@@ -269,8 +265,6 @@ void setup() {
       //delay(750/ (1 << (12-TEMPERATURE_PRECISION)));
     }
   }
-
-  timerSerialToESP8266.setTimeToWait(TIME_PERIOD_SERIAL_COMMUNICATION_ARDUINO_TO_ESP8266);
   /* END TEMPERATURES SECTION */
 
   rightInductor_input.changePolarity(); // DUMMY con sensore NON balluff
@@ -307,21 +301,19 @@ void loop() {
     if(millis() - lastTempRequest >= (2*conversionTime_DS18B20_sensors)){
       controlTemperatureIndex = 0;
       for(byte index = 0; index < Limit; index++){
-        if(sensors.getAddress(tempDeviceAddress, index)){
-          // Call the function to convert the device address to a char array
-          addressToCharArray(tempDeviceAddress, addressCharArray);
-          if(strcmp(addressCharArray, comparisonAddress) == 0){
-            // calcolo dell'umidità
-            humiditySensor_temperature = sensors.getTempC(Thermometer[index]);
-          }
-          else{
-            // gli altri li possiamo streammare verso html
-            temperatures[controlTemperatureIndex] = sensors.getTempC(Thermometer[index]); // memorizza tutte le temperature che ci pensa l'oggetto temperatureController a gestirle
-            controlTemperatureIndex += 1;
-          }      
+        // Call the function to convert the device address to a char array
+        addressToCharArray(Thermometer[index], addressCharArray);
+        if(strcmp(addressCharArray, comparisonAddress) == 0){
+          // calcolo dell'umidità
+          humiditySensor_temperature = sensors.getTempC(Thermometer[index]);
         }
+        else{
+          // gli altri li possiamo streammare verso html
+          temperatures[controlTemperatureIndex] = sensors.getTempC(Thermometer[index]); // memorizza tutte le temperature che ci pensa l'oggetto temperatureController a gestirle
+          controlTemperatureIndex += 1;
+        }     
+        
       }
-
       gotTemperatures = true;
     
       sensors.requestTemperatures();
@@ -333,6 +325,7 @@ void loop() {
     temperatureController.setControlModality(temperatureControlModality); 
     
     if(gotTemperatures){
+      // ha senso fare l'update solo quando arrivano le nuove temperature da valutare
       temperatureController.periodicRun(temperatures, 3); // 3 sono i sensori che usiamo per fare il controllo della temperatura
     }
     
