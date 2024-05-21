@@ -549,9 +549,11 @@ String stepperControl_html_2 = R"=====(
 #include <SoftwareSerial.h>
 #define SERIAL_SPEED 19200 
 
+/*
 const byte rxPin = 12;
 const byte txPin = 16;
 SoftwareSerial toArduinoSerial(rxPin, txPin);
+*/
 
 // Set up a new SoftwareSerial object
 SoftwareSerial mySerial (rxPin, txPin);
@@ -655,7 +657,7 @@ char fbuffChar[10];
 void setup() {
   Serial.begin(SERIAL_SPEED);
 
-  toArduinoSerial.begin(9600);
+  #toArduinoSerial.begin(9600);
 
   #ifdef ACCESS_POINT_CONFIGURATION
     WiFi.softAPConfig(local_IP, gateway, subnet);
