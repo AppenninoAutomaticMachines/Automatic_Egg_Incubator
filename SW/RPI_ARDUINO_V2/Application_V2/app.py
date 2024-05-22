@@ -56,7 +56,7 @@ def periodic_task():
             print(f"Error in periodic_task: {e}")
 
 def send_async_messages():
-    colors = ['red', 'orange', 'yellow', 'green']
+    colors = ['red', 'orange', 'yellow', 'green', 'blue']
     messages = [
         "Critical: System failure detected!",
         "Warning: High temperature recorded.",
@@ -67,13 +67,22 @@ def send_async_messages():
         'red': 0,
         'orange': 1,
         'yellow': 2,
-        'green': 3
+        'green': 3,
+        'blue': 4
     }
     while True:
         message = random.choice(messages)
         color = random.choice(colors)
         socketio.emit('async_message', {'text': message, 'color': color})
         time.sleep(random.randint(5, 15))
+        
+def send_async_messages_FILO():
+    while True:
+        message = "Messaggio da funzione Aync Di Filo"
+        color = 'red'
+        socketio.emit('async_message', {'text': message, 'color': color})
+        time.sleep(10)
+
 
 @socketio.on('command')
 def handle_command(data):
@@ -91,4 +100,5 @@ if __name__ == '__main__':
     threading.Thread(target=monitoring_temperatures_task).start()
     threading.Thread(target=periodic_task).start()
     threading.Thread(target=send_async_messages).start()
+    threading.Thread(target=send_async_messages_FILO).start()
     socketio.run(app, host='0.0.0.0', port=5000)
