@@ -70,6 +70,18 @@
         .message.green {
             color: green;
         }
+        .message.blue{
+            color: RoyalBlue;
+        }
+        .message-container {
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid #ccc;
+            padding: 10px;
+            border-radius: 5px;
+            margin-top: 20px;
+            width: 100%;
+        }
     </style>
     <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
     <script>
@@ -80,8 +92,14 @@
                 document.getElementById('temp1').innerText = data.temp1.toFixed(2) + ' °C';
                 document.getElementById('temp2').innerText = data.temp2.toFixed(2) + ' °C';
                 document.getElementById('temp3').innerText = data.temp3.toFixed(2) + ' °C';
-                document.getElementById('mainHeater').innerText = data.mainHeater ? "ON" : "OFF";
-                document.getElementById('auxHeater').innerText = data.auxHeater ? "ON" : "OFF";
+                
+                var mainHeaterElement = document.getElementById('mainHeater');
+                mainHeaterElement.innerText = data.mainHeater ? "ON" : "OFF";
+                mainHeaterElement.style.color = data.mainHeater ? "green" : "red";
+                
+                var auxHeaterElement = document.getElementById('auxHeater');
+                auxHeaterElement.innerText = data.auxHeater ? "ON" : "OFF";
+                auxHeaterElement.style.color = data.auxHeater ? "green" : "red";
                 document.getElementById('machineState').innerText = data.machineState;
             });
 
@@ -121,7 +139,8 @@
                 if (classList.contains('orange')) return 1;
                 if (classList.contains('yellow')) return 2;
                 if (classList.contains('green')) return 3;
-                return 4; // default low priority
+                if (classList.contains('blue')) return 4;
+                return 5; // default low priority
             }
 
             socket.on('message', function(message) {
@@ -194,7 +213,7 @@
             <label>
                 <input type="checkbox" id="sortPriority"> Sort by Priority
             </label>
-            <div id="messages" class="message"></div>
+            <div id="messages" class="message-container"></div>
         </div>
     </div>
     <footer>
