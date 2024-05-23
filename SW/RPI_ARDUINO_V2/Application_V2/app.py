@@ -38,13 +38,14 @@ def periodic_task():
     while True:
         try:
             # Perform other actions here
-            print("Periodic task is doing other things...")
+            #print("Periodic task is doing other things...")
             time.sleep(1)  # Simulate doing something else for 1 second
             
             # Check for new data in the queue
             if not temperature_queue.empty():
                 data = temperature_queue.get()
                 # Process the temperature data
+                '''
                 print(f"Processing temperature data: {data}")
                 if data['temp1'] > 24:
                     print("Alert: Temperature 1 exceeds threshold!")
@@ -52,6 +53,7 @@ def periodic_task():
                     print("Alert: Temperature 2 exceeds threshold!")
                 if data['temp3'] > 24:
                     print("Alert: Temperature 3 exceeds threshold!")
+                '''
         except Exception as e:
             print(f"Error in periodic_task: {e}")
 
@@ -87,14 +89,50 @@ def send_async_messages_FILO():
 @socketio.on('command')
 def handle_command(data):
     print(f"Received command: {data['cmd']} from button {data['button']}")
-    if data['cmd'] == 'reset':
+    if data['cmd'] == 'start':
+        # Handle start command
+        print("Handling start command")
+    elif data['cmd'] == 'stop':
+        # Handle stop command
+        print("Handling stop command")
+    elif data['cmd'] == 'reset':
+        # Handle reset command
+        print("Handling reset command")
         socketio.emit('clear_messages')
+
 
 @socketio.on('number')
 def handle_number(data):
-    print(f"Received number: {data['number']} from button {data['button']}")
-    message = {'text': f"Number received: {data['number']}", 'color': 'orange'}
-    socketio.emit('message', message)
+    number = data.get('number')
+    print(f"Received number: {number}")
+    # Handle the number as needed
+    emit('message', {'text': f'Received number: {number}', 'color': 'blue'})
+
+@socketio.on('higherHysteresisLimit')
+def handle_higher_hysteresis_limit(data):
+    higher_hysteresis_limit = data.get('higherHysteresisLimit')
+    print(f"Received higher hysteresis limit: {higher_hysteresis_limit}")
+    # Handle the higher hysteresis limit as needed
+    emit('message', {'text': f'Received higher hysteresis limit: {higher_hysteresis_limit}', 'color': 'green'})
+
+@socketio.on('lowerHysteresisLimit')
+def handle_lower_hysteresis_limit(data):
+    lower_hysteresis_limit = data.get('lowerHysteresisLimit')
+    print(f"Received lower hysteresis limit: {lower_hysteresis_limit}")
+    # Handle the lower hysteresis limit as needed
+    emit('message', {'text': f'Received lower hysteresis limit: {lower_hysteresis_limit}', 'color': 'orange'})
+
+def process_number(number):
+    # Implement your logic to process the number
+    print(f"Processing number: {number}")
+
+def process_higher_hysteresis_limit(limit):
+    # Implement your logic to process the higher hysteresis limit
+    print(f"Processing higher hysteresis limit: {limit}")
+
+def process_lower_hysteresis_limit(limit):
+    # Implement your logic to process the lower hysteresis limit
+    print(f"Processing lower hysteresis limit: {limit}")
 
 if __name__ == '__main__':
     threading.Thread(target=monitoring_temperatures_task).start()
