@@ -179,12 +179,12 @@
             });
 
             document.getElementById('sendHigherHysteresisLimitBtn').addEventListener('click', () => {
-                let higherHysteresisLimit = document.getElementById('higherHysteresisLimit').value;
+                let higherHysteresisLimit = document.getElementById('higherHysteresisLimitInput').value;
                 socket.emit('higherHysteresisLimit', { higherHysteresisLimit: higherHysteresisLimit });
             });
             
             document.getElementById('sendLowerHysteresisLimitBtn').addEventListener('click', () => {
-                let lowerHysteresisLimit = document.getElementById('lowerHysteresisLimit').value;
+                let lowerHysteresisLimit = document.getElementById('lowerHysteresisLimitInput').value;
                 socket.emit('lowerHysteresisLimit', { lowerHysteresisLimit: lowerHysteresisLimit });
             });
 
@@ -238,7 +238,7 @@
         </div>
     </div>
     <footer>
-        <p> Profilo Is Back - Made in Appennino</p>
+        <p>Profilo Is Back - Made in Appennino</p>
     </footer>
 </body>
 </html>
