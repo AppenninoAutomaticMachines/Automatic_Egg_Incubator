@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Raspberry Pi Control</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #e0f7e9;
+            color: #2e8b57;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 0;
+            padding: 0;
+        }
+        header, footer {
+            background-color: #2e8b57;
+            color: white;
+            width: 100%;
+            text-align: center;
+            padding: 1em 0;
+        }
+        header img, footer img {
+            width: 50px;
+            height: 50px;
+            vertical-align: middle;
+        }
+        .container {
+            margin: 20px;
+            padding: 20px;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            width: 80%;
+            max-width: 800px;
+        }
+        h1 {
+            color: #2e8b57;
+        }
+        .sensor-data {
+            margin-bottom: 20px;
+        }
+        .button {
+            background-color: #2e8b57;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+        .button:hover {
+            background-color: #3aa76d;
+        }
+        .message {
+            margin-top: 20px;
+            font-family: 'Courier New', Courier, monospace;
+        }
+        .message.red {
+            color: red;
+        }
+        .message.orange {
+            color: orange;
+        }
+        .message.yellow {
+            color: yellow;
+        }
+        .message.green {
+            color: green;
+        }
+        .message.blue{
+            color: RoyalBlue;
+        }
+        .message-container {
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid #ccc;
+            padding: 10px;
+            border-radius: 5px;
+            margin-top: 20px;
+            width: 100%;
+        }
+    </style>
+    <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', (event) => {
+            var socket = io();
+
+            socket.on('data_update', function(data) {
+                document.getElementById('temp1').innerText = data.temp1.toFixed(2) + ' °C';
+                document.getElementById('temp2').innerText = data.temp2.toFixed(2) + ' °C';
+                document.getElementById('temp3').innerText = data.temp3.toFixed(2) + ' °C';
+                
+                var mainHeaterElement = document.getElementById('mainHeater');
+                mainHeaterElement.innerText = data.mainHeater ? "ON" : "OFF";
+                mainHeaterElement.style.color = data.mainHeater ? "green" : "red";
+                
+                var auxHeaterElement = document.getElementById('auxHeater');
+                auxHeaterElement.innerText = data.auxHeater ? "ON" : "OFF";
+                auxHeaterElement.style.color = data.auxHeater ? "green" : "red";
+                
+                document.getElementById('machineState').innerText = data.machineState;
+            });
+
+            function displayMessage(message) {
+                var messagesElement = document.getElementById('messages');
+                var newMessage = document.createElement('div');
+                newMessage.classList.add('message', message.color);
+                var now = new Date();
+                message.time = now.getTime(); // Store timestamp in milliseconds
+                var timeString = now.toLocaleTimeString();
+                newMessage.innerHTML = `<strong>Message:</strong> ${message.text} <span style="float:right;">${timeString}</span>`;
+                newMessage.dataset.time = message.time;
+                messagesElement.appendChild(newMessage);
+                sortMessages();
+            }
+
+            function sortMessages() {
+                var messagesElement = document.getElementById('messages');
+                var messages = Array.from(messagesElement.getElementsByClassName('message'));
+                var sortByPriority = document.getElementById('sortPriority').checked;
+                messages.sort((a, b) => {
+                    if (sortByPriority) {
+                        var priorityA = getMessagePriority(a.classList);
+                        var priorityB = getMessagePriority(b.classList);
+                        return priorityA - priorityB;
+                    } else {
+                        var timeA = parseInt(a.dataset.time);
+                        var timeB = parseInt(b.dataset.time);
+                        return timeA - timeB;
+                    }
+                });
+                messages.forEach(message => messagesElement.appendChild(message));
+            }
+
+            function getMessagePriority(classList) {
+                if (classList.contains('red')) return 0;
+                if (classList.contains('orange')) return 1;
+                if (classList.contains('yellow')) return 2;
+                if (classList.contains('green')) return 3;
+                if (classList.contains('blue')) return 4;
+                return 5; // default low priority
+            }
+
+            socket.on('message', function(message) {
+                var newMessage = {
+                    text: message.text,
+                    color: message.color
+                };
+                displayMessage(newMessage);
+            });
+
+            socket.on('async_message', function(message) {
+                var newMessage = {
+                    text: message.text,
+                    color: message.color
+                };
+                displayMessage(newMessage);
+            });
+
+            document.getElementById('startBtn').addEventListener('click', () => {
+                socket.emit('command', { cmd: 'start', button: 'Start' });
+            });
+
+            document.getElementById('stopBtn').addEventListener('click', () => {
+                socket.emit('command', { cmd: 'stop', button: 'Stop' });
+            });
+
+            document.getElementById('resetBtn').addEventListener('click', () => {
+                clearMessages();
+                socket.emit('command', { cmd: 'reset', button: 'Reset' });
+            });
+
+            document.getElementById('sendNumberBtn').addEventListener('click', () => {
+                let number = document.getElementById('numberInput').value;
+                socket.emit('number', { number: number });
+            });
+
+            document.getElementById('sendHigherHysteresisLimitBtn').addEventListener('click', () => {
+                let higherHysteresisLimit = document.getElementById('higherHysteresisLimit').value;
+                socket.emit('higherHysteresisLimit', { higherHysteresisLimit: higherHysteresisLimit });
+            });
+            
+            document.getElementById('sendLowerHysteresisLimitBtn').addEventListener('click', () => {
+                let lowerHysteresisLimit = document.getElementById('lowerHysteresisLimit').value;
+                socket.emit('lowerHysteresisLimit', { lowerHysteresisLimit: lowerHysteresisLimit });
+            });
+
+            document.getElementById('sortPriority').addEventListener('change', sortMessages);
+
+            function clearMessages() {
+                document.getElementById('messages').innerHTML = '';
+            }
+        });
+    </script>
+</head>
+<body>
+    <header>
+        <p>Automatic Egg Incubator</p>
+    </header>
+    <div class="container">
+        <div class="sensor-data">
+            <h2>Sensor Data</h2>
+            <p>Temperature Sensor 1: <span id="temp1">-- °C</span></p>
+            <p>Temperature Sensor 2: <span id="temp2">-- °C</span></p>
+            <p>Temperature Sensor 3: <span id="temp3">-- °C</span></p>
+        </div>
+        <div class="system-info">
+            <h2>System Info</h2>
+            <p>Main Heater: <span id="mainHeater">--</span></p>
+            <p>Aux Heater: <span id="auxHeater">--</span></p>
+            <p>Machine State: <span id="machineState">--</span></p>
+            <p>Higher Hysteresis Limit: <span id="higherHysteresisLimit">--</span></p>
+            <p>Lower Hysteresis Limit: <span id="lowerHysteresisLimit">--</span></p>
+            <p>Number of egg turns: <span id="numberOfEggTurns">--</span></p>
+        </div>
+        <div class="controls">
+            <h2>Controls</h2>
+            <button id="startBtn" class="button">Start</button>
+            <button id="stopBtn" class="button">Stop</button>
+            <button id="resetBtn" class="button">Reset</button>
+            
+            <br><br>
+            <input type="text" id="numberInput" placeholder="Enter a number">
+            <button id="sendNumberBtn" class="button">Send Number</button>
+            <br><br>
+            <input type="text" id="higherHysteresisLimit" placeholder="Higher Hysteresis Limit">
+            <button id="sendHigherHysteresisLimitBtn" class="button">Send Higher Hysteresis Limit</button>
+            <br><br>
+            <input type="text" id="lowerHysteresisLimit" placeholder="Lower Hysteresis Limit">
+            <button id="sendLowerHysteresisLimitBtn" class="button">Send Lower Hysteresis Limit</button>
+        </div>
+        <div class="message-section">
+            <h2>Messages</h2>
+            <label>
+                <input type="checkbox" id="sortPriority"> Sort by Priority
+            </label>
+            <div id="messages" class="message-container"></div>
+        </div>
+    </div>
+    <footer>
+        <p> Profilo Is Back - Made in Appennino</p>
+    </footer>
+</body>
+</html>
+
+
