@@ -100,6 +100,7 @@
                 var auxHeaterElement = document.getElementById('auxHeater');
                 auxHeaterElement.innerText = data.auxHeater ? "ON" : "OFF";
                 auxHeaterElement.style.color = data.auxHeater ? "green" : "red";
+                
                 document.getElementById('machineState').innerText = data.machineState;
             });
 
@@ -174,7 +175,17 @@
 
             document.getElementById('sendNumberBtn').addEventListener('click', () => {
                 let number = document.getElementById('numberInput').value;
-                socket.emit('number', { number: number, button: 'Send Number' });
+                socket.emit('number', { number: number });
+            });
+
+            document.getElementById('sendHigherHysteresisLimitBtn').addEventListener('click', () => {
+                let higherHysteresisLimit = document.getElementById('higherHysteresisLimitInput').value;
+                socket.emit('higherHysteresisLimit', { higherHysteresisLimit: higherHysteresisLimit });
+            });
+            
+            document.getElementById('sendLowerHysteresisLimitBtn').addEventListener('click', () => {
+                let lowerHysteresisLimit = document.getElementById('lowerHysteresisLimitInput').value;
+                socket.emit('lowerHysteresisLimit', { lowerHysteresisLimit: lowerHysteresisLimit });
             });
 
             document.getElementById('sortPriority').addEventListener('change', sortMessages);
@@ -195,6 +206,9 @@
             <p>Temperature Sensor 1: <span id="temp1">-- °C</span></p>
             <p>Temperature Sensor 2: <span id="temp2">-- °C</span></p>
             <p>Temperature Sensor 3: <span id="temp3">-- °C</span></p>
+        </div>
+        <div class="system-info">
+            <h2>System Info</h2>
             <p>Main Heater: <span id="mainHeater">--</span></p>
             <p>Aux Heater: <span id="auxHeater">--</span></p>
             <p>Machine State: <span id="machineState">--</span></p>
@@ -204,9 +218,16 @@
             <button id="startBtn" class="button">Start</button>
             <button id="stopBtn" class="button">Stop</button>
             <button id="resetBtn" class="button">Reset</button>
+            
             <br><br>
             <input type="text" id="numberInput" placeholder="Enter a number">
             <button id="sendNumberBtn" class="button">Send Number</button>
+            <br><br>
+            <input type="text" id="higherHysteresisLimitInput" placeholder="Higher Hysteresis Limit">
+            <button id="sendHigherHysteresisLimitBtn" class="button">Send Higher Hysteresis Limit</button>
+            <br><br>
+            <input type="text" id="lowerHysteresisLimitInput" placeholder="Lower Hysteresis Limit">
+            <button id="sendLowerHysteresisLimitBtn" class="button">Send Lower Hysteresis Limit</button>
         </div>
         <div class="message-section">
             <h2>Messages</h2>
@@ -217,7 +238,7 @@
         </div>
     </div>
     <footer>
-        <p> Profilo Is Back - Made in Appennino</p>
+        <p>Profilo Is Back - Made in Appennino</p>
     </footer>
 </body>
 </html>
