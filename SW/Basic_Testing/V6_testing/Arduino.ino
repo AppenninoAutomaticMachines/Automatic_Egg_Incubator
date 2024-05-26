@@ -150,7 +150,7 @@ unsigned int numberOfEggTurns_counter = 0;
    SDA   -->   A4 (SDA)
    SCL   -->   A5 (SCL)
 */
-#define RTC_IS_CONNECTED false
+#define RTC_IS_CONNECTED true
 
 RTC_DS3231 rtc;
 
