@@ -1,17 +1,3 @@
-/*
-  Set the DIP switch to Mode 1 (SW3 and SW4 are On )with power removed. Restore power and upload the Arduino Sketch “ArduinoESPCommunication
-  Remove power and set the DIP switch to Mode 2 (SW5, SW6, SW7 are On)
-  Change Arduino IDE to ESP8266 programming mode and upload the sketch “ESPRecieveCommunication”
-  Remove power and set the dip switch to Mode 4 (SW1 and SW2 are On)
-  Restore power
-  Pressing the push button will cause the ATMega328 built in LED to flash and the LED connected to the ESP8266 will come on.
-  Pressing the push button again will flash the built in LED and turn off the LED connected to the ESP8266
-
- Arduino UNO modalità programmazione: Arduino Uno normale Mode 1 (SW3 and SW4 are On )
- Arduino UNO modalità funzionamento + comunicazione seriale con ESP8266: Arduino Uno normale Mode 4 (SW1 and SW2 are On)
-
- https://lastminuteengineers.com/multiple-ds18b20-arduino-tutorial/ reading temperature by address
-*/
 /* LIBRARIES */
 #include <SoftwareSerial.h>
 #include <avr/wdt.h>
@@ -185,6 +171,17 @@ void loop() {
     lastTempRequest = millis();
   } 
   digitalWrite(CYCLE_TOGGLE_ANALOG0_PIN, LOW);
+
+  if(gotTemperatures){
+    Serial.print("Temp1: ");
+    Serial.print(temperatures[0]);
+    Serial.print("  Temp2: ");
+    Serial.print(temperatures[1]);
+    Serial.print("  Temp3: ");
+    Serial.print(temperatures[2]);
+    Serial.println();
+    gotTemperatures = false;
+  }
   
   
 
@@ -306,4 +303,3 @@ int computeTimeDifference_inSeconds(DateTime currentTime, DateTime lastTrigger){
 
   return diffSeconds;
 }
-
