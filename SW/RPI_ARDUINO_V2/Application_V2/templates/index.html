@@ -189,6 +189,20 @@
             });
 
             document.getElementById('sortPriority').addEventListener('change', sortMessages);
+            
+            document.getElementById('flag1').addEventListener('change', (event) => {
+		socket.emit('flag1', { flag1: event.target.checked });
+	    });
+
+	    document.getElementById('flag2').addEventListener('change', (event) => {
+		socket.emit('flag2', { flag2: event.target.checked });
+	    });
+
+	    document.querySelectorAll('input[name="option"]').forEach((radio) => {
+		radio.addEventListener('change', (event) => {
+		    socket.emit('option', { option: event.target.value });
+		});
+	    });
 
             function clearMessages() {
                 document.getElementById('messages').innerHTML = '';
@@ -228,6 +242,27 @@
             <br><br>
             <input type="text" id="lowerHysteresisLimitInput" placeholder="Lower Hysteresis Limit">
             <button id="sendLowerHysteresisLimitBtn" class="button">Send Lower Hysteresis Limit</button>
+            <br><br>
+    
+	    <!-- Add checkboxes for Flag1 and Flag2 -->
+	    <label>
+		<input type="checkbox" id="flag1"> Flag 1
+	    </label>
+	    <label>
+		<input type="checkbox" id="flag2"> Flag 2
+	    </label>
+	    <br><br>
+	    
+	    <!-- Add radio buttons -->
+	    <label>
+		<input type="radio" name="option" value="option1" id="option1" checked> Option 1
+	    </label>
+	    <label>
+		<input type="radio" name="option" value="option2" id="option2"> Option 2
+	    </label>
+	    <label>
+		<input type="radio" name="option" value="option3" id="option3"> Option 3
+	    </label>
         </div>
         <div class="message-section">
             <h2>Messages</h2>
