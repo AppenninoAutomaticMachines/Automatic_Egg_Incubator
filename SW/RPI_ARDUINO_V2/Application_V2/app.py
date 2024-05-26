@@ -121,6 +121,24 @@ def handle_lower_hysteresis_limit(data):
     print(f"Received lower hysteresis limit: {lower_hysteresis_limit}")
     # Handle the lower hysteresis limit as needed
     emit('message', {'text': f'Received lower hysteresis limit: {lower_hysteresis_limit}', 'color': 'orange'})
+    
+@socketio.on('flag1')
+def handle_flag(data):
+    flag1 = data.get('flag1', False)
+    # Handle the flag logic here
+    print(f'Flag1: {flag1}')
+    
+@socketio.on('flag2')
+def handle_flag(data):
+    flag2 = data.get('flag2', False)
+    # Handle the flag logic here
+    print(f'Flag2: {flag2}')
+
+@socketio.on('option')
+def handle_option(data):
+    option = data.get('option', '')
+    # Handle the option logic here
+    print(f'Option selected: {option}')
 
 def process_number(number):
     # Implement your logic to process the number
