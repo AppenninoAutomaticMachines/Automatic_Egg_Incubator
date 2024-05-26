@@ -556,7 +556,7 @@ SoftwareSerial toArduinoSerial(rxPin, txPin);
 */
 
 // Set up a new SoftwareSerial object
-SoftwareSerial mySerial (rxPin, txPin);
+//SoftwareSerial mySerial (rxPin, txPin);
 /* END ADDITIONAL SERIAL BUS */
 
 /* NETWORK CONFIGURATION */
@@ -652,12 +652,10 @@ String listofDataToSend[MAX_NUMBER_OF_COMMANDS_TO_BOARD];
 byte listofDataToSend_numberOfData = 0;
 
 char bufferChar[35];
-char fbuffChar[10];
+char fbuffChar[15];
 
 void setup() {
   Serial.begin(SERIAL_SPEED);
-
-  #toArduinoSerial.begin(9600);
 
   #ifdef ACCESS_POINT_CONFIGURATION
     WiFi.softAPConfig(local_IP, gateway, subnet);
@@ -670,12 +668,8 @@ void setup() {
     while(WiFi.status() != WL_CONNECTED) {
       delay(500);
     }
-    //Serial.println(WiFi.localIP()); 
-    //Serial.println();
   #endif 
   server.begin();  
-  serialFlush();
-  delay(5);
 }
 /*
 Il client si connette periodicamente per ricevere i dati di temperatura e aggiornarsi.
@@ -690,14 +684,7 @@ si premono i pulsanti.
 void loop() {
   if(Serial.available() > 0){
     numberOfCommandsFromBoard = readFromBoard(); // ending communication character from Arduino
-
-    // smistamento dei comandi/dati da Arduino
-    for(byte j = 0; j < numberOfCommandsFromBoard; j++){
-      String tempReceivedCommand = receivedCommands[j];
-      /* do something here*/
-    }
   }
-
 
   WiFiClient client = server.available();     // Check if a client has connected
 
@@ -705,7 +692,6 @@ void loop() {
     ; 
   }
   else{
-    //Serial.println('$'); // if code is following this branch, I want to notify Arduino I'm gonna be SLOW
     if(oneTimeVar_1){
       /* printing first page */
       client.flush();
@@ -716,10 +702,8 @@ void loop() {
     request = client.readStringUntil('\r');     // Read the first line of the request
 
     if(request.isEmpty()){
-      //Serial.println('@'); 
     }
     else{
-      //Serial.println(request);
       /* HANDLING WEB PAGES REQUESTS */
       if(request.indexOf("getTemp3") >= 0){
         sensor1_value = getFloatFromString(receivedCommands[0], ','); 
@@ -727,11 +711,11 @@ void loop() {
         sensor3_value = getFloatFromString(receivedCommands[2], ','); 
 
         if (!isnan(sensor1_value) && !isnan(sensor2_value) && !isnan(sensor3_value)){
-            client.print(header);
-            client.print(sensor1_value);   client.print( "|" );  client.print(sensor2_value);   client.print( "|" );  client.print(sensor3_value);
+          client.flush();
+          client.print(header);
+          client.print(sensor1_value);   client.print( "|" );  client.print(sensor2_value);   client.print( "|" );  client.print(sensor3_value);
             
         }
-        //Serial.println('@'); 
         return; // perché se procedessi giù rigenero la pagina HTML da capo
       }
 
@@ -751,24 +735,23 @@ void loop() {
         numberOfEggTurns_fromArduino_toHTML = getFloatFromString(receivedCommands[12], ','); //<tMV, 0.00> 
 
         if (!isnan(sensor1_value) && !isnan(sensor2_value) && !isnan(sensor3_value) && !isnan(actualTemperature_value)){
-            client.print(header);
-            client.print(sensor1_value);   
-            client.print( "|" );  client.print(sensor2_value);   
-            client.print( "|" );  client.print(sensor3_value);  
-            client.print( "|" );  client.print(actualTemperature_value);
-            client.print( "|" );  client.print(higherHysteresisLimit_arduino_html); 
-            client.print( "|" );  client.print(lowerHysteresisLimit_arduino_html);
-            client.print( "|" );  client.print(mainHeaterOn_fromArduino_toHTML);
-            client.print( "|" );  client.print(auxHeaterOn_fromArduino_toHTML);
-            client.print( "|" );  client.print(temperatureControlModality_fromArduino_toHTML);
-            client.print( "|" );  client.print(humidity_fromArduino_toHTML);
-            client.print( "|" );  client.print(wetTermometer_fromArduino_toHTML);
-            client.print( "|" );  client.print(temperatureMeanValue_fromArduino_toHTML);
-            client.print( "|" );  client.print(numberOfEggTurns_fromArduino_toHTML);
-            
+          client.flush(); //??????????????
+          client.print(header);
+          client.print(sensor1_value);   
+          client.print( "|" );  client.print(sensor2_value);   
+          client.print( "|" );  client.print(sensor3_value);  
+          client.print( "|" );  client.print(actualTemperature_value);
+          client.print( "|" );  client.print(higherHysteresisLimit_arduino_html); 
+          client.print( "|" );  client.print(lowerHysteresisLimit_arduino_html);
+          client.print( "|" );  client.print(mainHeaterOn_fromArduino_toHTML);
+          client.print( "|" );  client.print(auxHeaterOn_fromArduino_toHTML);
+          client.print( "|" );  client.print(temperatureControlModality_fromArduino_toHTML);
+          client.print( "|" );  client.print(humidity_fromArduino_toHTML);
+          client.print( "|" );  client.print(wetTermometer_fromArduino_toHTML);
+          client.print( "|" );  client.print(temperatureMeanValue_fromArduino_toHTML);
+          client.print( "|" );  client.print(numberOfEggTurns_fromArduino_toHTML);            
         }
         
-        //Serial.println('@'); 
         return; // perché se procedessi giù rigenero la pagina HTML da capo
       }
 
@@ -788,7 +771,6 @@ void loop() {
       }
 
       if(request.indexOf("favicon.ico") >= 0){
-        //Serial.println('@'); 
         return;
       }
 
@@ -831,66 +813,54 @@ void loop() {
       /* STEPPER MOTOR CONTROL */
       if(request.indexOf("GET /stepperMotorControlPage/stepperMotorForward/on") >= 0){
         stepperMotorForward_var = true; 
-        //Serial.println("stepperMotorForward_var_true");
       }
 
       if(request.indexOf("GET /stepperMotorControlPage/stepperMotorForward/off") >= 0){
         stepperMotorForward_var = false; 
-        //Serial.println("stepperMotorForward_var_false");
       }
 
       if(request.indexOf("GET /stepperMotorControlPage/stepperMotorBackward/on") >= 0){
         stepperMotorBackward_var = true; 
-        //Serial.println("stepperMotorBackward_var_true");
       }
 
       if(request.indexOf("GET /stepperMotorControlPage/stepperMotorBackward/off") >= 0){
         stepperMotorBackward_var = false; 
-        //Serial.println("stepperMotorBackward_var_false");
       }
 
       /* MAIN HEATER */
       if(request.indexOf("GET /manualControlPage/mainHeater/on") >= 0){
         mainHeaterOn_var = true; 
-        //Serial.println("mainHeaterOn_var_true");
       }
 
       if(request.indexOf("GET /manualControlPage/mainHeater/off") >= 0){ 
-        mainHeaterOn_var = false;    
-        //Serial.println("mainHeaterOn_var_false");       
+        mainHeaterOn_var = false;          
       } 
 
       /* AUXILIARY HEATER */
       if(request.indexOf("GET /manualControlPage/auxHeater/on") >= 0){
         auxHeaterOn_var = true;
-        //Serial.println("auxHeaterOn_var_true");
       }
 
       if(request.indexOf("GET /manualControlPage/auxHeater/off") >= 0){
         auxHeaterOn_var = false;
-        //Serial.println("auxHeaterOn_var_false"); 
       }
 
       /* UPPER FAN */
       if(request.indexOf("GET /manualControlPage/upperFan/on") >= 0){
         upperFanOn_var = true;
-        //Serial.println("upperFanOn_var_true");
       }
 
       if(request.indexOf("GET /manualControlPage/upperFan/off") >= 0){
         upperFanOn_var = false; 
-        //Serial.println("upperFanOn_var_false");
       }  
 
       /* LOWER FAN */
       if(request.indexOf("GET /manualControlPage/lowerFan/on") >= 0){
         lowerFanOn_var = true;
-        //Serial.println("lowerFanOn_var_true");
       }      
       
       if(request.indexOf("GET /manualControlPage/lowerFan/off") >= 0){
         lowerFanOn_var = false;
-        //Serial.println("lowerFanOn_var_false");
       } 
 
 
@@ -1140,14 +1110,15 @@ void loop() {
         byte charCount = sprintf(bufferCharArray, "<TMP07, %d>", temperatureControlModality_user_html); //sprintf function returns the number of characters written to the array
         listofDataToSend[listofDataToSend_numberOfData] = bufferCharArray;
         listofDataToSend_numberOfData++;
+        send_temperatureControlModality_user_html = false;
       }
 
       if(listofDataToSend_numberOfData > 0){
-        Serial.print("#"); // SYMBOL TO START BOARDS TRANSMISSION
+        Serial.print('#'); // SYMBOL TO START BOARDS TRANSMISSION
         for(byte i = 0; i < listofDataToSend_numberOfData; i++){
           Serial.print(listofDataToSend[i]); 
         }
-        Serial.print("@"); // SYMBOL TO END BOARDS TRANSMISSION
+        Serial.print('@'); // SYMBOL TO END BOARDS TRANSMISSION
       }
     }
   }
@@ -1163,9 +1134,12 @@ int readFromBoard(){ // returns the number of commands received
   bool enableReading = false;
   byte receivedCommandsIndex = 0;
 
+  unsigned long  startReceiving; // mi ricordo appena entro in while loop
+
   while(receivingDataFromBoard){
     // qui è bloccante...assumo che prima o poi arduino pubblichi
     if(Serial.available() > 0){ // no while, perché potrei avere un attimo il buffer vuoto...senza aver ancora ricevuto il terminatore
+      startReceiving = millis(); // ogni volta in cui leggo resetto il timer
       char rc = Serial.read(); 
 
       if(rc == '#'){ // // SYMBOL TO START TRANSMISSION (tutto quello che c'era prima era roba spuria che ho pulito)
@@ -1193,6 +1167,13 @@ int readFromBoard(){ // returns the number of commands received
             rcIndex ++;
           }
         }
+      }
+    }
+    else{
+      // timer che conta perché non riceviamo più e mi fa uscire??
+      // se sono qui è perché sto aspettando, ma non ricevendo
+      if((millis() - startReceiving) > 750){ // se passo in attesa più di 750ms, allora intervengo e mando fuori
+        receivingDataFromBoard = false;
       }
     }
   }
@@ -1289,10 +1270,4 @@ float getFloatFromStringHtmlPage(String string){ //inputNumber, 23;
     }
   }
   return atof(receivedChars);  
-}
-
-void serialFlush(){
-  while(Serial.available() > 0) { 
-    char t = Serial.read();
-  }
 }
