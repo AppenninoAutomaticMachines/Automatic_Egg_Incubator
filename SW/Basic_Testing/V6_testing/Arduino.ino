@@ -44,7 +44,7 @@
 // A4 and A5 used for RTC module
 
 #define SERIAL_SPEED 19200 
-#define WATCHDOG_ENABLE true
+#define WATCHDOG_ENABLE false
 #define DEFAULT_DEBOUNCE_TIME 25 //ms
 #define ENABLE_SERIAL_PRINT_TO_ESP8266 true
 #define ENABLE_SERIAL_PRINT_DEBUG false
@@ -136,6 +136,7 @@ byte eggsTurnerState = 0;
 bool turnEggs_cmd = false;
 
 trigger stepperAutomaticControl_trigger;
+trigger automaticControl_trigger;
 
 unsigned int numberOfEggTurns_counter = 0;
 /* END MOTORS SECTION */
@@ -149,7 +150,7 @@ unsigned int numberOfEggTurns_counter = 0;
    SDA   -->   A4 (SDA)
    SCL   -->   A5 (SCL)
 */
-#define RTC_IS_CONNECTED true
+#define RTC_IS_CONNECTED false
 
 RTC_DS3231 rtc;
 
@@ -185,10 +186,10 @@ byte numberOfCommandsFromBoard;
 String listofDataToSend[MAX_NUMBER_OF_COMMANDS_TO_BOARD];
 byte listofDataToSend_numberOfData = 0;
 
-char bufferCharArray[25]; // buffer lo metto qui
+char bufferCharArray[35]; // buffer lo metto qui
 // handling float numbers
 char bufferChar[35];
-char fbuffChar[10];
+char fbuffChar[15];
 
 /* GENERAL */
 bool cycle_toggle_pin_var = false;
@@ -236,9 +237,6 @@ void setup() {
     wdt_disable();
     wdt_enable(WDTO_2S);
   }
-  
-  serialFlush();
-  delay(5);
 
   /* TEMPERATURES SECTION */
   higherHysteresisLimit = 37.5;
@@ -266,8 +264,6 @@ void setup() {
     }
   }
   /* END TEMPERATURES SECTION */
-
-  rightInductor_input.changePolarity(); // DUMMY con sensore NON balluff
 
   dht.begin();
 
@@ -298,7 +294,7 @@ void loop() {
   /* TEMPERATURES SECTION */
   if(!inhibit_stepperMotorRunning){
     digitalWrite(CYCLE_TOGGLE_ANALOG0_PIN, HIGH);
-    if(millis() - lastTempRequest >= (2*conversionTime_DS18B20_sensors)){
+    if(millis() - lastTempRequest >= (2.5*conversionTime_DS18B20_sensors)){
       controlTemperatureIndex = 0;
       for(byte index = 0; index < Limit; index++){
         // Call the function to convert the device address to a char array
@@ -306,10 +302,16 @@ void loop() {
         if(strcmp(addressCharArray, comparisonAddress) == 0){
           // calcolo dell'umidità
           humiditySensor_temperature = sensors.getTempC(Thermometer[index]);
+          if(humiditySensor_temperature < 0.0){
+            humiditySensor_temperature = 1.5;
+          }
         }
         else{
           // gli altri li possiamo streammare verso html
           temperatures[controlTemperatureIndex] = sensors.getTempC(Thermometer[index]); // memorizza tutte le temperature che ci pensa l'oggetto temperatureController a gestirle
+          if(temperatures[controlTemperatureIndex] < 0.0){
+            temperatures[controlTemperatureIndex] = 1.5;
+          }
           controlTemperatureIndex += 1;
         }     
         
@@ -338,6 +340,11 @@ void loop() {
       digitalWrite(LOWER_FAN_PIN, HIGH); 
     }
     else{
+      if(automaticControl_trigger.catchFallingEdge()){ // catch della rimozione del controllo automatico: chiamo lo stop del motore.
+        // se stavo scaldando, mainHeater_var rimane scritta. Appena esco dal comando automatico delle temperature devo pulire le variabili di riscaldamento
+        mainHeater_var = false;
+        auxHeater_var = false;
+      }
       digitalWrite(MAIN_HEATER_PIN, mainHeater_var);
       digitalWrite(AUX_HEATER_PIN, auxHeater_var);
       digitalWrite(UPPER_FAN_PIN, upperFan_var); 
@@ -345,7 +352,7 @@ void loop() {
     }
   }
   else{
-    // mentre inibisco il controllo di temperatura perché il motore gira, è opportuno 
+    // mentre inibisco il controllo di temperatura perché il motore gira, è opportuno: a regime, con temperatura di riferimento raggiunta, anche solo 30s di rotazione full riscaldamento pososno creare problema di surriscaldamento.
     mainHeater_var = false;
     auxHeater_var = false;
     digitalWrite(MAIN_HEATER_PIN, mainHeater_var);
@@ -545,20 +552,6 @@ void loop() {
       default:
         break;
     }
-
-    if(ENABLE_SERIAL_PRINT_DEBUG){      
-      Serial.print(eggsTurnerState);
-      Serial.print("  ");
-      Serial.print(leftInductor_input.getInputState());
-      Serial.print("  ");
-      Serial.print(rightInductor_input.getInputState());
-      Serial.print(" ");
-      Serial.print(secondsToGO);
-      Serial.print(" ");
-      Serial.print(secondsGone);
-      Serial.print(" ");
-      Serial.println();
-    }
   }
   else{
     if(stepperAutomaticControl_trigger.catchFallingEdge()){ // catch della rimozione del controllo automatico: chiamo lo stop del motore.
@@ -594,32 +587,32 @@ void loop() {
 
       strcpy(bufferChar, "<t1, ");
       dtostrf( temperatures[0], 1, 1, fbuffChar); 
-      listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(strcat(bufferChar, fbuffChar), ">"), '\0');
+      listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(strcat(bufferChar, fbuffChar), ">"), "\0");
       listofDataToSend_numberOfData++;
 
       strcpy(bufferChar, "<t2, ");
       dtostrf( temperatures[1], 1, 1, fbuffChar); 
-      listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(strcat(bufferChar, fbuffChar), ">"), '\0');
+      listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(strcat(bufferChar, fbuffChar), ">"), "\0");
       listofDataToSend_numberOfData++; 
 
       strcpy(bufferChar, "<t3, ");
       dtostrf( temperatures[2], 1, 1, fbuffChar); 
-      listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(strcat(bufferChar, fbuffChar), ">"), '\0');
+      listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(strcat(bufferChar, fbuffChar), ">"), "\0");
       listofDataToSend_numberOfData++;
 
       strcpy(bufferChar, "<aT, "); // actualTemperature
       dtostrf(temperatureController.getActualTemperature(), 1, 1, fbuffChar); 
-      listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(strcat(bufferChar, fbuffChar), ">"), '\0');
+      listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(strcat(bufferChar, fbuffChar), ">"), "\0");
       listofDataToSend_numberOfData++;
     
       strcpy(bufferChar, "<hHL, "); //higher Hysteresis Limit from Arduino
       dtostrf(higherHysteresisLimit, 1, 1, fbuffChar); 
-      listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(strcat(bufferChar, fbuffChar), ">"), '\0');
+      listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(strcat(bufferChar, fbuffChar), ">"), "\0");
       listofDataToSend_numberOfData++;
 
       strcpy(bufferChar, "<lHL, "); //lower Hysteresis Limit from Arduino
       dtostrf(lowerHysteresisLimit, 1, 1, fbuffChar); 
-      listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(strcat(bufferChar, fbuffChar), ">"), '\0');
+      listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(strcat(bufferChar, fbuffChar), ">"), "\0");
       listofDataToSend_numberOfData++;
 
       // feedback about mainHeater state
@@ -638,19 +631,19 @@ void loop() {
       // humidity misurata dal DHT22
       strcpy(bufferChar, "<hDHT, ");
       dtostrf(humidity_fromDHT22, 1, 1, fbuffChar); 
-      listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(strcat(bufferChar, fbuffChar), ">"), '\0');
+      listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(strcat(bufferChar, fbuffChar), ">"), "\0");
       listofDataToSend_numberOfData++;
 
       // temperatura del bulbo bagnato misurata da DS18B20 temperatureWet_fromDS18B20
       strcpy(bufferChar, "<tWDS, ");
       dtostrf(wetTermometer_fromDS18B20, 1, 1, fbuffChar); 
-      listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(strcat(bufferChar, fbuffChar), ">"), '\0');
+      listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(strcat(bufferChar, fbuffChar), ">"), "\0");
       listofDataToSend_numberOfData++;
 
       // valore medio della temperatura nella incubatrice  temperatureMeanValue
       strcpy(bufferChar, "<tMV, ");
       dtostrf(temperatureMeanValue, 1, 1, fbuffChar); 
-      listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(strcat(bufferChar, fbuffChar), ">"), '\0');
+      listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(strcat(bufferChar, fbuffChar), ">"), "\0");
       listofDataToSend_numberOfData++;
 
       //  numero di girate di uova numberOfEggTurns_counter = nET	
@@ -660,11 +653,11 @@ void loop() {
 
       if(ENABLE_SERIAL_PRINT_TO_ESP8266){
         if(listofDataToSend_numberOfData > 0){
-          Serial.print("#"); // SYMBOL TO START BOARDS TRANSMISSION
+          Serial.print('#'); // SYMBOL TO START BOARDS TRANSMISSION
           for(byte i = 0; i < listofDataToSend_numberOfData; i++){
             Serial.print(listofDataToSend[i]); 
           }
-          Serial.print("@"); // SYMBOL TO END BOARDS TRANSMISSION
+          Serial.print('@'); // SYMBOL TO END BOARDS TRANSMISSION
         }
       }
     }
@@ -749,6 +742,7 @@ void loop() {
 
   /* analisi sui comandi ricevuti */
   stepperAutomaticControl_trigger.periodicRun(stepperAutomaticControl_var);
+  automaticControl_trigger.periodicRun(automaticControl_var);
   
 
   inhibit_stepperMotorRunning = eggsTurnerStepperMotor.get_stepCommand(); 
@@ -758,7 +752,7 @@ void loop() {
   }  
 
   digitalWrite(CYCLE_TOGGLE_PIN, cycle_toggle_pin_var);
-    cycle_toggle_pin_var = !cycle_toggle_pin_var;
+  cycle_toggle_pin_var = !cycle_toggle_pin_var;
   
 }
 
@@ -770,9 +764,12 @@ int readFromBoard(){ // returns the number of commands received
   bool enableReading = false;
   byte receivedCommandsIndex = 0;
 
+  unsigned long  startReceiving; // mi ricordo appena entro in while loop
+
   while(receivingDataFromBoard){
     // qui è bloccante...assumo che prima o poi arduino pubblichi
     if(Serial.available() > 0){ // no while, perché potrei avere un attimo il buffer vuoto...senza aver ancora ricevuto il terminatore
+      startReceiving = millis(); // ogni volta in cui leggo resetto il timer
       char rc = Serial.read(); 
 
       if(rc == '#'){ // // SYMBOL TO START TRANSMISSION (tutto quello che c'era prima era roba spuria che ho pulito)
@@ -800,6 +797,13 @@ int readFromBoard(){ // returns the number of commands received
             rcIndex ++;
           }
         }
+      }
+    }
+    else{
+      // timer che conta perché non riceviamo più e mi fa uscire??
+      // se sono qui è perché sto aspettando, ma non ricevendo
+      if((millis() - startReceiving) > 750){ // se passo in attesa più di 750ms, allora intervengo e mando fuori
+        receivingDataFromBoard = false;
       }
     }
   }
@@ -832,12 +836,6 @@ int getIntFromString(String string, char divider){
   }
 
   return string.substring(index, string.length()).toInt();
-}
-
-void serialFlush(){
-  while(Serial.available() > 0){
-    char t = Serial.read();
-  }
 }
 
 // Function to convert a byte to its hexadecimal representation
