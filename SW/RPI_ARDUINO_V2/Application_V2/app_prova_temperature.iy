@@ -1,0 +1,249 @@
+from flask import Flask, render_template
+from flask_socketio import SocketIO, emit
+import random
+import time
+import threading
+import queue
+import serial
+import re
+
+
+# Configure the serial port
+port = "/dev/ttyUSB0"
+baudrate = 9600
+timeout = 0.1
+
+
+app = Flask(__name__)
+app.config['SECRET_KEY'] = 'secret!'
+socketio = SocketIO(app)
+
+temperature_queue = queue.Queue()
+
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+def monitoring_temperatures_task():
+    try:
+        while True:
+            try:
+                # Open the serial port
+                ser = serial.Serial(port, baudrate, timeout=timeout)
+                print("Serial port opened successfully")
+                read_from_arduino(ser)
+            except serial.SerialException as e:
+                print(f"Failed to open serial port: {e}")
+            finally:
+                try:
+                    ser.close()
+                except Exception as e:
+                    print(f"Error closing serial port: {e}")
+        
+            print("Retrying in 5 seconds...")
+            time.sleep(5)
+    except KeyboardInterrupt:
+        print("Program interrupted")
+        
+    """
+    while True:
+        data = {
+            'temp1': random.uniform(20, 25),
+            'temp2': random.uniform(20, 25),
+            'temp3': random.uniform(20, 25),
+            'mainHeater': random.choice([True, False]),
+            'auxHeater': random.choice([True, False]),
+            'machineState': random.randint(0, 5)
+        }
+        # Send data to HTML page
+        socketio.emit('data_update', data)
+        
+        # Send data to periodic_task via the queue
+        temperature_queue.put(data)
+        
+        # Sleep for 100ms
+        time.sleep(0.1)
+        """
+
+def read_from_arduino(serial_port):
+    buffer = ''
+    saving = False
+    dataDict = {}
+    while True:
+        try:
+            if serial_port.in_waiting > 0:
+                data = serial_port.read()
+                data = data.decode('utf-8')
+                if data == '<':
+                    saving = True
+                if saving:
+                    buffer += data
+                if data == '>':
+                    saving = False
+                    # Using regex to extract the substrings
+                    match = re.match(r"<([^,]+),([^>]+)>", buffer)
+                    if match:
+                        string_part = match.group(1)
+                        number_part = match.group(2)
+
+                        # Convert the number part to float or int
+                        if '.' in number_part:
+                            number = float(number_part)
+                        else:
+                            number = int(number_part)
+                        
+                        #print("String part:", string_part)
+                        #print("Number part:", number)
+                        if "1" in string_part:
+                            dataDict['temp1'] = round(number, 2)
+                        elif "2" in string_part:
+                            dataDict['temp2'] = round(number, 2)
+                        elif "3" in string_part:
+                            dataDict['temp3'] = round(number, 2)
+                            dataDict['mainHeater'] = random.choice([True, False])
+                            dataDict['auxHeater'] = random.choice([True, False])
+                            dataDict['machineState'] = random.randint(0, 5)
+                            socketio.emit('data_update', dataDict)
+                            dataDict = {}
+
+                        else:
+                            print("The input string does not match the expected format.")
+                    
+                    buffer = ''
+                """
+                if data == '#':
+                    print()
+                """
+        except UnicodeDecodeError as e:
+            print(f"Decode error: {e}")
+            # Clear the input buffer to avoid repeated errors
+            serial_port.reset_input_buffer()
+        except serial.SerialException as e:
+            print(f"Serial error: {e}")
+            break
+
+
+def periodic_task():
+    while True:
+        try:
+            # Perform other actions here
+            #print("Periodic task is doing other things...")
+            time.sleep(1)  # Simulate doing something else for 1 second
+            
+            # Check for new data in the queue
+            if not temperature_queue.empty():
+                data = temperature_queue.get()
+                # Process the temperature data
+                '''
+                print(f"Processing temperature data: {data}")
+                if data['temp1'] > 24:
+                    print("Alert: Temperature 1 exceeds threshold!")
+                if data['temp2'] > 24:
+                    print("Alert: Temperature 2 exceeds threshold!")
+                if data['temp3'] > 24:
+                    print("Alert: Temperature 3 exceeds threshold!")
+                '''
+        except Exception as e:
+            print(f"Error in periodic_task: {e}")
+
+def send_async_messages():
+    colors = ['red', 'orange', 'yellow', 'green', 'blue']
+    messages = [
+        "Critical: System failure detected!",
+        "Warning: High temperature recorded.",
+        "Note: System maintenance required.",
+        "Info: All systems operational."
+    ]
+    priorities = {
+        'red': 0,
+        'orange': 1,
+        'yellow': 2,
+        'green': 3,
+        'blue': 4
+    }
+    while True:
+        message = random.choice(messages)
+        color = random.choice(colors)
+        socketio.emit('async_message', {'text': message, 'color': color})
+        time.sleep(random.randint(5, 15))
+        
+def send_async_messages_FILO():
+    while True:
+        message = "Messaggio da funzione Aync Di Filo"
+        color = 'red'
+        socketio.emit('async_message', {'text': message, 'color': color})
+        time.sleep(10)
+
+
+@socketio.on('command')
+def handle_command(data):
+    print(f"Received command: {data['cmd']} from button {data['button']}")
+    if data['cmd'] == 'start':
+        # Handle start command
+        print("Handling start command")
+    elif data['cmd'] == 'stop':
+        # Handle stop command
+        print("Handling stop command")
+    elif data['cmd'] == 'reset':
+        # Handle reset command
+        print("Handling reset command")
+        socketio.emit('clear_messages')
+
+
+@socketio.on('number')
+def handle_number(data):
+    number = data.get('number')
+    print(f"Received number: {number}")
+    # Handle the number as needed
+    emit('message', {'text': f'Received number: {number}', 'color': 'blue'})
+
+@socketio.on('higherHysteresisLimit')
+def handle_higher_hysteresis_limit(data):
+    higher_hysteresis_limit = data.get('higherHysteresisLimit')
+    print(f"Received higher hysteresis limit: {higher_hysteresis_limit}")
+    # Handle the higher hysteresis limit as needed
+    emit('message', {'text': f'Received higher hysteresis limit: {higher_hysteresis_limit}', 'color': 'green'})
+
+@socketio.on('lowerHysteresisLimit')
+def handle_lower_hysteresis_limit(data):
+    lower_hysteresis_limit = data.get('lowerHysteresisLimit')
+    print(f"Received lower hysteresis limit: {lower_hysteresis_limit}")
+    # Handle the lower hysteresis limit as needed
+    emit('message', {'text': f'Received lower hysteresis limit: {lower_hysteresis_limit}', 'color': 'orange'})
+    
+@socketio.on('flag1')
+def handle_flag(data):
+    flag1 = data.get('flag1', False)
+    # Handle the flag logic here
+    print(f'Flag1: {flag1}')
+    
+@socketio.on('flag2')
+def handle_flag(data):
+    flag2 = data.get('flag2', False)
+    # Handle the flag logic here
+    print(f'Flag2: {flag2}')
+
+@socketio.on('option')
+def handle_option(data):
+    option = data.get('option', '')
+    # Handle the option logic here
+    print(f'Option selected: {option}')
+
+def process_number(number):
+    # Implement your logic to process the number
+    print(f"Processing number: {number}")
+
+def process_higher_hysteresis_limit(limit):
+    # Implement your logic to process the higher hysteresis limit
+    print(f"Processing higher hysteresis limit: {limit}")
+
+def process_lower_hysteresis_limit(limit):
+    # Implement your logic to process the lower hysteresis limit
+    print(f"Processing lower hysteresis limit: {limit}")
+
+if __name__ == '__main__':
+    threading.Thread(target=monitoring_temperatures_task).start()
+    threading.Thread(target=periodic_task).start()
+    threading.Thread(target=send_async_messages).start()
+    threading.Thread(target=send_async_messages_FILO).start()
+    socketio.run(app, host='0.0.0.0', port=5000)
