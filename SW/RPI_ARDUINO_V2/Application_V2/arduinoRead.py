@@ -6,7 +6,7 @@ port = "/dev/ttyUSB0"
 baudrate = 9600
 timeout = 0.1
 
-def read_from_arduino(serial_port):
+def read_from_arduino_old(serial_port):
     buffer = ''
     while True:
         try:
@@ -18,6 +18,35 @@ def read_from_arduino(serial_port):
                     buffer = ''
                 else:
                     buffer += data
+        except UnicodeDecodeError as e:
+            print(f"Decode error: {e}")
+            # Clear the input buffer to avoid repeated errors
+            serial_port.reset_input_buffer()
+        except serial.SerialException as e:
+            print(f"Serial error: {e}")
+            break
+            
+def read_from_arduino(serial_port):
+    buffer = ''
+    bufferForUsage = ''
+    saving = False
+    while True:
+        try:
+            if serial_port.in_waiting > 0:
+                data = serial_port.read()
+                data = data.decode('utf-8')
+                if data == '<':
+                	saving = True
+                if saving:
+                	buffer += data
+                if data == '>':
+                	saving = False
+                	bufferForUsage = buffer
+                	print(buffer)
+                	buffer = ''
+                if data == '#':
+                	print()
+                	
         except UnicodeDecodeError as e:
             print(f"Decode error: {e}")
             # Clear the input buffer to avoid repeated errors
