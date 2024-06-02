@@ -89,9 +89,9 @@
             var socket = io();
 
             socket.on('data_update', function(data) {
-                document.getElementById('temp1').innerText = data.temp1.toFixed(2) + ' °C';
-                document.getElementById('temp2').innerText = data.temp2.toFixed(2) + ' °C';
-                document.getElementById('temp3').innerText = data.temp3.toFixed(2) + ' °C';
+                document.getElementById('TMP01').innerText = data.TMP01.toFixed(2) + ' °C';
+                document.getElementById('TMP02').innerText = data.TMP02.toFixed(2) + ' °C';
+                document.getElementById('TMP03').innerText = data.TMP03.toFixed(2) + ' °C';
                 
                 var mainHeaterElement = document.getElementById('mainHeater');
                 mainHeaterElement.innerText = data.mainHeater ? "ON" : "OFF";
@@ -217,9 +217,9 @@
     <div class="container">
         <div class="sensor-data">
             <h2>Sensor Data</h2>
-            <p>Temperature Sensor 1: <span id="temp1">-- °C</span></p>
-            <p>Temperature Sensor 2: <span id="temp2">-- °C</span></p>
-            <p>Temperature Sensor 3: <span id="temp3">-- °C</span></p>
+            <p>Temperature Sensor 1: <span id="TMP01">-- °C</span></p>
+            <p>Temperature Sensor 2: <span id="TMP02">-- °C</span></p>
+            <p>Temperature Sensor 3: <span id="TMP03">-- °C</span></p>
         </div>
         <div class="system-info">
             <h2>System Info</h2>
