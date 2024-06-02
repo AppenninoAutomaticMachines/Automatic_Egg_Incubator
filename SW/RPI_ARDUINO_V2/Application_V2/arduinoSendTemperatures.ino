@@ -117,6 +117,9 @@ bool ledCheck = false; // variabile che fa il check del led PIN 13. rimane falsa
 void setup() {
   pinMode(LED_BUILTIN, OUTPUT);
 
+  pinMode(7, INPUT);
+  pinMode(8, INPUT);
+
   Serial.begin(SERIAL_SPEED);
   Serial.println("inizio");
 
@@ -172,30 +175,48 @@ void loop() {
   } 
   digitalWrite(CYCLE_TOGGLE_ANALOG0_PIN, LOW);
 
-  if(gotTemperatures){
-    listofDataToSend_numberOfData = 0;
+  listofDataToSend_numberOfData = 0;
+  if(gotTemperatures){    
     strcpy(bufferChar, "<t1, ");
     dtostrf( temperatures[0], 1, 1, fbuffChar); 
-    listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(strcat(bufferChar, fbuffChar), ">"), "\0");
+    listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(bufferChar, fbuffChar), ">");
     listofDataToSend_numberOfData++;
 
     strcpy(bufferChar, "<t2, ");
     dtostrf( temperatures[1], 1, 1, fbuffChar); 
-    listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(strcat(bufferChar, fbuffChar), ">"), "\0");
+    listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(bufferChar, fbuffChar), ">");
     listofDataToSend_numberOfData++; 
 
     strcpy(bufferChar, "<t3, ");
     dtostrf( temperatures[2], 1, 1, fbuffChar); 
-    listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(strcat(bufferChar, fbuffChar), ">"), "\0");
+    listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(bufferChar, fbuffChar), ">");
     listofDataToSend_numberOfData++;
-
-    if(listofDataToSend_numberOfData > 0){
-      for(byte i = 0; i < listofDataToSend_numberOfData; i++){
-        Serial.print(listofDataToSend[i]); 
-      }
-      Serial.print('#'); // SYMBOL TO END BOARDS TRANSMISSION
-    }
     gotTemperatures = false;
+  }
+
+  if(digitalRead(7)){
+    listofDataToSend[listofDataToSend_numberOfData] = "<pin7, HIGH>";
+    listofDataToSend_numberOfData++;
+  }
+  else{
+    listofDataToSend[listofDataToSend_numberOfData] = "<pin7, LOW>";
+    listofDataToSend_numberOfData++;
+  }
+
+  if(digitalRead(8)){
+    listofDataToSend[listofDataToSend_numberOfData] = "<pin8, HIGH>";
+    listofDataToSend_numberOfData++;
+  }
+  else{
+    listofDataToSend[listofDataToSend_numberOfData] = "<pin8, LOW>";
+    listofDataToSend_numberOfData++;
+  }
+
+  if(listofDataToSend_numberOfData > 0){
+    for(byte i = 0; i < listofDataToSend_numberOfData; i++){
+      Serial.print(listofDataToSend[i]); 
+    }
+    Serial.print('#'); // SYMBOL TO END BOARDS TRANSMISSION
   }
   
   
