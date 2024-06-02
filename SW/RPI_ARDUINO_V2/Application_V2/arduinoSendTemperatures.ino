@@ -29,7 +29,7 @@
 
 // A4 and A5 used for RTC module
 
-#define SERIAL_SPEED 9600 
+#define SERIAL_SPEED 19200 
 #define WATCHDOG_ENABLE true
 #define DEFAULT_DEBOUNCE_TIME 25 //ms
 #define ENABLE_SERIAL_PRINT_TO_ESP8266 true
@@ -152,7 +152,7 @@ void setup() {
 void loop() {    
   /* TEMPERATURES SECTION */
   digitalWrite(CYCLE_TOGGLE_ANALOG0_PIN, HIGH);
-  if(millis() - lastTempRequest >= (conversionTime_DS18B20_sensors)){
+  if(millis() - lastTempRequest >= (1000)){ // conversionTime_DS18B20_sensors refresh temperature ogni 1s
     controlTemperatureIndex = 0;
     for(byte index = 0; index < Limit; index++){
       // Call the function to convert the device address to a char array
@@ -177,42 +177,44 @@ void loop() {
 
   listofDataToSend_numberOfData = 0;
   if(gotTemperatures){    
-    strcpy(bufferChar, "<t1, ");
+    strcpy(bufferChar, "<TMP01,");
     dtostrf( temperatures[0], 1, 1, fbuffChar); 
     listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(bufferChar, fbuffChar), ">");
     listofDataToSend_numberOfData++;
 
-    strcpy(bufferChar, "<t2, ");
+    strcpy(bufferChar, "<TMP02,");
     dtostrf( temperatures[1], 1, 1, fbuffChar); 
     listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(bufferChar, fbuffChar), ">");
     listofDataToSend_numberOfData++; 
 
-    strcpy(bufferChar, "<t3, ");
+    strcpy(bufferChar, "<TMP03,");
     dtostrf( temperatures[2], 1, 1, fbuffChar); 
     listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(bufferChar, fbuffChar), ">");
     listofDataToSend_numberOfData++;
     gotTemperatures = false;
   }
-
+  /*
   if(digitalRead(7)){
-    listofDataToSend[listofDataToSend_numberOfData] = "<pin7, HIGH>";
+    listofDataToSend[listofDataToSend_numberOfData] = "<pin7,HIGH>";
     listofDataToSend_numberOfData++;
   }
   else{
-    listofDataToSend[listofDataToSend_numberOfData] = "<pin7, LOW>";
+    listofDataToSend[listofDataToSend_numberOfData] = "<pin7,LOW>";
     listofDataToSend_numberOfData++;
   }
 
   if(digitalRead(8)){
-    listofDataToSend[listofDataToSend_numberOfData] = "<pin8, HIGH>";
+    listofDataToSend[listofDataToSend_numberOfData] = "<pin8,HIGH>";
     listofDataToSend_numberOfData++;
   }
   else{
-    listofDataToSend[listofDataToSend_numberOfData] = "<pin8, LOW>";
+    listofDataToSend[listofDataToSend_numberOfData] = "<pin8,LOW>";
     listofDataToSend_numberOfData++;
   }
+  */
 
   if(listofDataToSend_numberOfData > 0){
+    Serial.print('@'); // SYMBOL TO END BOARDS TRANSMISSION
     for(byte i = 0; i < listofDataToSend_numberOfData; i++){
       Serial.print(listofDataToSend[i]); 
     }
