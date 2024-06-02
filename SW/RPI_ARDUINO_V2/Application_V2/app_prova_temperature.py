@@ -10,7 +10,7 @@ import re
 
 # Configure the serial port
 port = "/dev/ttyUSB0"
-baudrate = 9600
+baudrate = 19200
 timeout = 0.1
 
 
@@ -24,96 +24,56 @@ temperature_queue = queue.Queue()
 def index():
     return render_template('index.html')
 
-def monitoring_temperatures_task():
+def monitoringArduino_task():
     try:
+        ser = serial.Serial(port, baudrate, timeout=timeout)
+        print("Serial port opened successfully")
         while True:
-            try:
-                # Open the serial port
-                ser = serial.Serial(port, baudrate, timeout=timeout)
-                print("Serial port opened successfully")
-                read_from_arduino(ser)
-            except serial.SerialException as e:
-                print(f"Failed to open serial port: {e}")
-            finally:
-                try:
-                    ser.close()
-                except Exception as e:
-                    print(f"Error closing serial port: {e}")
-        
-            print("Retrying in 5 seconds...")
-            time.sleep(5)
+            read_from_arduino(ser)
+    except serial.SerialException as e:
+        print(f"Failed to open serial port: {e}")
     except KeyboardInterrupt:
         print("Program interrupted")
-        
-    """
-    while True:
-        data = {
-            'temp1': random.uniform(20, 25),
-            'temp2': random.uniform(20, 25),
-            'temp3': random.uniform(20, 25),
-            'mainHeater': random.choice([True, False]),
-            'auxHeater': random.choice([True, False]),
-            'machineState': random.randint(0, 5)
-        }
-        # Send data to HTML page
-        socketio.emit('data_update', data)
-        
-        # Send data to periodic_task via the queue
-        temperature_queue.put(data)
-        
-        # Sleep for 100ms
-        time.sleep(0.1)
-        """
+    finally:
+        try:
+            ser.close()
+            print("Serial port closed")
+        except Exception as e:
+            print(f"Error closing serial port: {e}")
 
 def read_from_arduino(serial_port):
     buffer = ''
+    startTransmission = False
     saving = False
     dataDict = {}
+    temp_data_list = []
+   
     while True:
         try:
             if serial_port.in_waiting > 0:
-                data = serial_port.read()
-                data = data.decode('utf-8')
-                if data == '<':
-                    saving = True
-                if saving:
-                    buffer += data
-                if data == '>':
-                    saving = False
-                    # Using regex to extract the substrings
-                    match = re.match(r"<([^,]+),([^>]+)>", buffer)
-                    if match:
-                        string_part = match.group(1)
-                        number_part = match.group(2)
-
-                        # Convert the number part to float or int
-                        if '.' in number_part:
-                            number = float(number_part)
-                        else:
-                            number = int(number_part)
+                dataRead = serial_port.read()
+                dataRead = dataRead.decode('utf-8')
+                if dataRead == '@':
+                    startTransmission = True
+                if startTransmission:
+                    if dataRead == '<':
+                        saving = True
+                    if saving:
+                        buffer += dataRead
+                    if dataRead == '>':
+                        saving = False
+                        decodeMessage(buffer, temp_data_list)
+                        buffer = ''
                         
-                        #print("String part:", string_part)
-                        #print("Number part:", number)
-                        if "1" in string_part:
-                            dataDict['temp1'] = round(number, 2)
-                        elif "2" in string_part:
-                            dataDict['temp2'] = round(number, 2)
-                        elif "3" in string_part:
-                            dataDict['temp3'] = round(number, 2)
-                            dataDict['mainHeater'] = random.choice([True, False])
-                            dataDict['auxHeater'] = random.choice([True, False])
-                            dataDict['machineState'] = random.randint(0, 5)
-                            socketio.emit('data_update', dataDict)
-                            dataDict = {}
-
-                        else:
-                            print("The input string does not match the expected format.")
-                    
-                    buffer = ''
-                """
-                if data == '#':
-                    print()
-                """
+                        if len(temp_data_list) == 3:
+                            # se ho collezionato le 3 temperature
+                            combined_data = {}
+                            for item in temp_data_list:
+                                combined_data.update(item)
+                            temperature_queue.put(combined_data)
+                            temp_data_list.clear()
+                    if dataRead == '#':
+                       startTransmission = False
         except UnicodeDecodeError as e:
             print(f"Decode error: {e}")
             # Clear the input buffer to avoid repeated errors
@@ -121,6 +81,36 @@ def read_from_arduino(serial_port):
         except serial.SerialException as e:
             print(f"Serial error: {e}")
             break
+def is_number(s):
+    try:
+        float(s)  # Try to convert to float
+        return True
+    except ValueError:
+        return False
+        
+def decodeMessage(buffer, temp_data_list):
+    match = re.match(r"<([^,]+),([^>]+)>", buffer)
+    if match:
+        infoName_part = match.group(1)
+        infoData_part = match.group(2)
+        
+                    
+        if is_number(infoData_part):
+            # Convert the number part to float or int
+            if '.' in infoData_part:
+                number = float(infoData_part)
+            else:
+                number = int(infoData_part)
+
+            # Example actions based on infoName_part
+            if infoName_part in ["TMP01", "TMP02", "TMP03"]:
+                temp_data_list.append({infoName_part: number})
+        else:
+            ciao = False
+            #print("Info Name part:", infoName_part)
+            #print("Info Data part:", infoData_part)  
+    else:
+        print("The input string does not match the expected format.")
 
 
 def periodic_task():
@@ -128,21 +118,17 @@ def periodic_task():
         try:
             # Perform other actions here
             #print("Periodic task is doing other things...")
-            time.sleep(1)  # Simulate doing something else for 1 second
             
             # Check for new data in the queue
             if not temperature_queue.empty():
                 data = temperature_queue.get()
+                
                 # Process the temperature data
-                '''
-                print(f"Processing temperature data: {data}")
-                if data['temp1'] > 24:
-                    print("Alert: Temperature 1 exceeds threshold!")
-                if data['temp2'] > 24:
-                    print("Alert: Temperature 2 exceeds threshold!")
-                if data['temp3'] > 24:
-                    print("Alert: Temperature 3 exceeds threshold!")
-                '''
+                data.update({'mainHeater': random.choice([True, False])})
+                data.update({'auxHeater': random.choice([True, False])})
+                data.update({'machineState': random.randint(0, 5)})
+                # Send data to HTML page
+                socketio.emit('data_update', data)
         except Exception as e:
             print(f"Error in periodic_task: {e}")
 
@@ -242,7 +228,7 @@ def process_lower_hysteresis_limit(limit):
     print(f"Processing lower hysteresis limit: {limit}")
 
 if __name__ == '__main__':
-    threading.Thread(target=monitoring_temperatures_task).start()
+    threading.Thread(target=monitoringArduino_task).start()
     threading.Thread(target=periodic_task).start()
     threading.Thread(target=send_async_messages).start()
     threading.Thread(target=send_async_messages_FILO).start()
