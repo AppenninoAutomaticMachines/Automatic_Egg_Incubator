@@ -171,6 +171,10 @@ int minutesGone; // minuti passati dalla precedente girata
 int seconds_trigger_interval = 30; //  TESTING: giriamo ogni x secondi
 int secondsToGO; // minuti mancanti alla prossima girata
 int secondsGone; // minuti passati dalla precedente girata
+
+bool newDay = false; // per ricordarmi del passaggio del nuovo giorno
+DateTime previousDay; // Store the last trigger time
+
 /* END RTC SECTION */
 
 float temp_sensor1, temp_sensor2, temp_sensor3;
@@ -281,6 +285,7 @@ void setup() {
 
     // Initialize last trigger time to current time
     lastTriggerTime = rtc.now();
+    previousDay = rtc.now();
     /* END RTC SECTION */
   }
   else{
@@ -441,6 +446,17 @@ void loop() {
           }
         }
       }
+
+      if (now.day() != previousDay.day()) {
+        // giorno passato, azzero il contatore di girate delle uova
+        numberOfEggTurns_counter = 0;
+        newDay = true;
+        previousDay = now;
+      }
+      else{
+        newDay = false;
+      }
+      
       // Check for overflow ??
       if (now.unixtime() < 0) {
         //Serial.println("RTC overflow detected. Resetting...");
