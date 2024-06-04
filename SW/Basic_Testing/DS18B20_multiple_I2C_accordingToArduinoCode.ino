@@ -4,9 +4,7 @@
 #include <ProfiloLibrary.h>
 #include <OneWire.h>
 #include <DallasTemperature.h>
-#include <DHT.h>
 #include <Wire.h>
-#include <RTClib.h>
 
 
 /* PIN ARDUINO */
@@ -114,6 +112,7 @@ bool inhibit_stepperMotorRunning = false;
 
 bool ledCheck = false; // variabile che fa il check del led PIN 13. rimane falsa, quindi tiene accesa il led. Appena faccio un accesso da HTML, allora resetto il led.
 
+unsigned long startMeasure, finishMeasure;
 void setup() {
   pinMode(LED_BUILTIN, OUTPUT);
 
@@ -148,8 +147,10 @@ void setup() {
 
 void loop() {    
   /* TEMPERATURES SECTION */
+  
   digitalWrite(CYCLE_TOGGLE_ANALOG0_PIN, HIGH);
   if(millis() - lastTempRequest >= (conversionTime_DS18B20_sensors)){
+    startMeasure = millis();
     controlTemperatureIndex = 0;
     for(byte index = 0; index < Limit; index++){
       // Call the function to convert the device address to a char array
@@ -169,11 +170,17 @@ void loop() {
   
     sensors.requestTemperatures();
     lastTempRequest = millis();
+    finishMeasure = millis();
   } 
   digitalWrite(CYCLE_TOGGLE_ANALOG0_PIN, LOW);
 
+  
+
+  
+
   if(gotTemperatures){
-    Serial.print("Temp1: ");
+    Serial.print(finishMeasure - startMeasure);
+    Serial.print("  Temp1: ");
     Serial.print(temperatures[0]);
     Serial.print("  Temp2: ");
     Serial.print(temperatures[1]);
@@ -182,6 +189,8 @@ void loop() {
     Serial.println();
     gotTemperatures = false;
   }
+
+  
   
   
 
@@ -289,17 +298,3 @@ void addressToCharArray(DeviceAddress deviceAddress, char *charArray) {
   charArray[16] = '\0';
 }
 
-int computeTimeDifference_inMinutes(DateTime currentTime, DateTime lastTrigger){
-  // unixtime --> is a standard way of representing time as a single numeric value
-  unsigned long diffSeconds = currentTime.unixtime() - lastTrigger.unixtime();
-  int differenceInMinutes = (diffSeconds % 3600) / 60;
-
-  return differenceInMinutes;
-}
-
-int computeTimeDifference_inSeconds(DateTime currentTime, DateTime lastTrigger){
-  // unixtime --> is a standard way of representing time as a single numeric value
-  unsigned long diffSeconds = currentTime.unixtime() - lastTrigger.unixtime();
-
-  return diffSeconds;
-}
