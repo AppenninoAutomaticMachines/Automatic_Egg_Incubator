@@ -123,10 +123,6 @@ bool stepperAutomaticControl_var = false;
 antiDebounceInput leftInductor_input(LEFT_INDUCTOR_PIN, DEFAULT_DEBOUNCE_TIME);
 antiDebounceInput rightInductor_input(RIGHT_INDUCTOR_PIN, DEFAULT_DEBOUNCE_TIME);
 
-// gestione emergenza: se il segnale sta su per 800ms e sono in controllo automatico, allora ferma tutto.
-TON leftInductor_TON(800); 
-TON rightInductor_TON(800);
-
 // variabile per manual control
 bool stepperMotor_moveForward_var = false;
 bool stepperMotor_moveBackward_var = false;
@@ -150,7 +146,7 @@ unsigned int numberOfEggTurns_counter = 0;
    SDA   -->   A4 (SDA)
    SCL   -->   A5 (SCL)
 */
-#define RTC_IS_CONNECTED true
+#define RTC_IS_CONNECTED false
 
 RTC_DS3231 rtc;
 
@@ -168,7 +164,7 @@ int minutesToGO; // minuti mancanti alla prossima girata
 int minutesGone; // minuti passati dalla precedente girata
 
 #define SECONDS_CONFIGURATION true
-int seconds_trigger_interval = 30; //  TESTING: giriamo ogni x secondi
+int seconds_trigger_interval = 60; //  TESTING: giriamo ogni x secondi
 int secondsToGO; // minuti mancanti alla prossima girata
 int secondsGone; // minuti passati dalla precedente girata
 
@@ -478,7 +474,7 @@ void loop() {
           secondsGone = now_millis - lastTriggerTime_millis;
           secondsToGO = seconds_trigger_interval - secondsGone;
 
-          if(secondsGone >= seconds_trigger_interval) {
+          if(secondsGone >= seconds_trigger_interval*1000) {
             turnEggs_cmd = true;
           }
         }
