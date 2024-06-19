@@ -601,8 +601,8 @@ bool stepperMotorControlPage_var = false;
 bool automaticControlPage_var = false;
 bool manualControlPage_var = false;
 
-bool automaticControl_var = false; // variabile attivazione del controllo automatico di temperatura
-bool automaticControl_varOld = false;
+bool automaticControl_var = true; // variabile attivazione del controllo automatico di temperatura
+bool automaticControl_varOld = true;
 
 bool stepperMotorAutomaticControl_var = false; // variabile di attivazione del controllo automatico dello stepper
 bool stepperMotorAutomaticControl_varOld = false;
