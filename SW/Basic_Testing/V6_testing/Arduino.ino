@@ -70,7 +70,7 @@ unsigned long lastTempRequest;
 
 temperatureController temperatureController;
 
-bool automaticControl_var = false;
+bool automaticControl_var = true; //di default partiamo con controllo automatico a true
 
 float higherHysteresisLimit, lowerHysteresisLimit;
 
@@ -337,8 +337,8 @@ void loop() {
       mainHeater_var = temperatureController.getOutputState();
       auxHeater_var = false;
       digitalWrite(MAIN_HEATER_PIN, mainHeater_var);
-      digitalWrite(UPPER_FAN_PIN, HIGH); 
-      digitalWrite(LOWER_FAN_PIN, HIGH); 
+      digitalWrite(UPPER_FAN_PIN, LOW); // logica negata, in connessione hw: normalmente chiuso per non dover eccitare costanemente il relè
+      digitalWrite(LOWER_FAN_PIN, LOW); // logica negata, in connessione hw: normalmente chiuso per non dover eccitare costanemente il relè
     }
     else{
       if(automaticControl_trigger.catchFallingEdge()){ // catch della rimozione del controllo automatico: chiamo lo stop del motore.
@@ -348,8 +348,8 @@ void loop() {
       }
       digitalWrite(MAIN_HEATER_PIN, mainHeater_var);
       digitalWrite(AUX_HEATER_PIN, auxHeater_var);
-      digitalWrite(UPPER_FAN_PIN, upperFan_var); 
-      digitalWrite(LOWER_FAN_PIN, lowerFan_var);
+      digitalWrite(UPPER_FAN_PIN, !upperFan_var); // logica negata, in connessione hw: normalmente chiuso per non dover eccitare costanemente il relè
+      digitalWrite(LOWER_FAN_PIN, !lowerFan_var);
     }
   }
   else{
