@@ -406,13 +406,9 @@ String automaticControl_html_1 = R"=====(
       </form>
      </div>
     </div>
-   <div id='commands_section'>     
-     <div id='content_commands_section'> 
 )====="; 
 
 String automaticControl_html_2 = R"=====(
-     </div>
-   </div>
  </body>
 </html>
 )====="; 
@@ -901,6 +897,7 @@ void loop() {
         case AUTOMATIC_CONTROL_PAGE:
           client.print(automaticControl_html_1);
           /* AUTOMATIC CONTROL ACTIVATION/DEACTIVATION button */ 
+          /*
           if(automaticControl_var){
             client.print("<p>Controllo automatico: <b style='color:green'>ON</b></p>");
             client.print("<p><a href=\"/automaticControlPage/automaticControl/off\"><button class=\"button buttonOff\">OFF</button></a></p>"); 
@@ -909,8 +906,10 @@ void loop() {
             client.print("<p>Controllo automatico: <b style='color:red'>OFF</b></p>");
             client.print("<p><a href=\"/automaticControlPage/automaticControl/on\"><button class=\"button buttonOn\">ON</button></a></p>"); 
           }  
+          */
 
           /* STEPPER MOTOR AUTOMATIC CONTROL ACTIVATION/DEACTIVATION button */ 
+          /*
           if(stepperMotorAutomaticControl_var){
             client.print("<p>Automatico Motore Girauova: <b style='color:green'>ON</b></p>");
             client.print("<p><a href=\"/automaticControlPage/stepperMotorAutomaticControl/off\"><button class=\"button buttonOff\">OFF</button></a></p>"); 
@@ -919,7 +918,7 @@ void loop() {
             client.print("<p>Automatico Motore Girauova: <b style='color:red'>OFF</b></p>");
             client.print("<p><a href=\"/automaticControlPage/stepperMotorAutomaticControl/on\"><button class=\"button buttonOn\">ON</button></a></p>"); 
           }         
-
+          */
           /* ACTUATOR STATE DISPLAY */
           client.print(automaticControl_html_2);
           break;
