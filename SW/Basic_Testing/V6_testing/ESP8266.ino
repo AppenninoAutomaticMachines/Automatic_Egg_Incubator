@@ -1270,3 +1270,9 @@ float getFloatFromStringHtmlPage(String string){ //inputNumber, 23;
   }
   return atof(receivedChars);  
 }
+
+void serialFlush(){
+  while(Serial.available() > 0) {
+    char t = Serial.read();
+  }
+}
