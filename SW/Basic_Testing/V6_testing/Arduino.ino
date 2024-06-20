@@ -25,7 +25,7 @@
 
 /* PIN ARDUINO */
 #define MAIN_HEATER_PIN 12
-#define AUX_HEATER_PIN 11
+#define MANUAL_PIN 11
 #define UPPER_FAN_PIN 10
 #define LOWER_FAN_PIN 9
 #define STEPPPER_MOTOR_STEP_PIN 8
@@ -224,7 +224,7 @@ void setup() {
 
 
   pinMode(MAIN_HEATER_PIN, OUTPUT);
-  pinMode(AUX_HEATER_PIN, OUTPUT);
+  pinMode(MANUAL_PIN, OUTPUT);
   pinMode(UPPER_FAN_PIN, OUTPUT);
   pinMode(LOWER_FAN_PIN, OUTPUT);
 
@@ -337,6 +337,7 @@ void loop() {
       mainHeater_var = temperatureController.getOutputState();
       auxHeater_var = false;
       digitalWrite(MAIN_HEATER_PIN, mainHeater_var);
+      delay(250);
       digitalWrite(UPPER_FAN_PIN, LOW); // logica negata, in connessione hw: normalmente chiuso per non dover eccitare costanemente il relè
       delay(250);
       digitalWrite(LOWER_FAN_PIN, LOW); // logica negata, in connessione hw: normalmente chiuso per non dover eccitare costanemente il relè
@@ -348,7 +349,7 @@ void loop() {
         auxHeater_var = false;
       }
       digitalWrite(MAIN_HEATER_PIN, mainHeater_var);
-      digitalWrite(AUX_HEATER_PIN, auxHeater_var);
+      delay(250);
       digitalWrite(UPPER_FAN_PIN, !upperFan_var); // logica negata, in connessione hw: normalmente chiuso per non dover eccitare costanemente il relè
       delay(250);
       digitalWrite(LOWER_FAN_PIN, !lowerFan_var);
@@ -359,7 +360,6 @@ void loop() {
     mainHeater_var = false;
     auxHeater_var = false;
     digitalWrite(MAIN_HEATER_PIN, mainHeater_var);
-    digitalWrite(AUX_HEATER_PIN, auxHeater_var);
   }
   /* END TEMPERATURES SECTION */
 
@@ -676,8 +676,6 @@ void loop() {
       }
     }
   }
-    
-  
   
 
   // appena il buffer è pieno, mi blocco a leggerlo. Significa che ESP8266 ha pubblicato dei dati.
@@ -765,8 +763,16 @@ void loop() {
     wdt_reset();
   }  
 
+  /* FEEDBACK SECTION */
+
   digitalWrite(CYCLE_TOGGLE_PIN, cycle_toggle_pin_var);
   cycle_toggle_pin_var = !cycle_toggle_pin_var;
+
+  /* per interruttore manuale: per vedere se il programma sta girando o se si è imbananato da qualche parte. */
+  if(ledCheck){
+    // ON/OFF manuale del led builtin lo faccio solo dopo averlo spento da connessione HTML come feedback della ricezione dei comandi
+    digitalWrite(LED_BUILTIN, digitalRead(MANUAL_PIN));
+  }
   
 }
 
