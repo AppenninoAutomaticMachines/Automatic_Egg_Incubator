@@ -224,7 +224,7 @@ void setup() {
 
 
   pinMode(MAIN_HEATER_PIN, OUTPUT);
-  pinMode(MANUAL_PIN, OUTPUT);
+  pinMode(MANUAL_PIN, INPUT);
   pinMode(UPPER_FAN_PIN, OUTPUT);
   pinMode(LOWER_FAN_PIN, OUTPUT);
 
@@ -287,6 +287,9 @@ void setup() {
   else{
     lastTriggerTime_millis = millis();
   }
+
+  delay(750);
+  serialFlush();
 
   digitalWrite(LED_BUILTIN, HIGH); // all'avvio accendo il LED_BUILTIN. Durante il funzionamento lo resetto. Se ritorno e lo vedo acceso, significa che ha agito il watchdog.
 }
@@ -473,10 +476,10 @@ void loop() {
 
         if(eggsTurnerState == 2 || eggsTurnerState == 4){
           // Check if the trigger interval has passed: MINUTI
-          secondsGone = now_millis - lastTriggerTime_millis;
+          secondsGone = floor( (now_millis - lastTriggerTime_millis) / 1000.0);
           secondsToGO = seconds_trigger_interval - secondsGone;
 
-          if(secondsGone >= seconds_trigger_interval*1000) {
+          if(secondsGone >= seconds_trigger_interval) {
             turnEggs_cmd = true;
           }
         }
@@ -486,9 +489,7 @@ void loop() {
           secondsToGO = 0;
         }
       }
-    }
-
-    
+    }    
 
       
 
@@ -566,6 +567,15 @@ void loop() {
       default:
         break;
     }
+
+    /*
+    Serial.print(secondsGone);
+    Serial.print("  ");
+    Serial.print(turnEggs_cmd);
+    Serial.print("  ");
+    Serial.print(eggsTurnerState);
+    Serial.println();
+    */
   }
   else{
     if(stepperAutomaticControl_trigger.catchFallingEdge()){ // catch della rimozione del controllo automatico: chiamo lo stop del motore.
@@ -897,4 +907,10 @@ int computeTimeDifference_inSeconds(DateTime currentTime, DateTime lastTrigger){
 // Function to reset the RTC module
 void resetRTC() {
   rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
+}
+
+void serialFlush(){
+  while(Serial.available() > 0) {
+    char t = Serial.read();
+  }
 }
