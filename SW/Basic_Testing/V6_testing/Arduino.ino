@@ -118,7 +118,7 @@ stepperMotor eggsTurnerStepperMotor(STEPPPER_MOTOR_STEP_PIN, STEPPPER_MOTOR_DIRE
 bool move = false;
 bool direction = false; 
 
-bool stepperAutomaticControl_var = false;
+bool stepperAutomaticControl_var = true; // parto di default a true con il girauova
 
 antiDebounceInput leftInductor_input(LEFT_INDUCTOR_PIN, DEFAULT_DEBOUNCE_TIME);
 antiDebounceInput rightInductor_input(RIGHT_INDUCTOR_PIN, DEFAULT_DEBOUNCE_TIME);
@@ -164,7 +164,7 @@ int minutesToGO; // minuti mancanti alla prossima girata
 int minutesGone; // minuti passati dalla precedente girata
 
 #define SECONDS_CONFIGURATION true
-int seconds_trigger_interval = 60; //  TESTING: giriamo ogni x secondi
+int seconds_trigger_interval = 180; //  TESTING: giriamo ogni 3 minuti
 int secondsToGO; // minuti mancanti alla prossima girata
 int secondsGone; // minuti passati dalla precedente girata
 
@@ -702,12 +702,14 @@ void loop() {
         if(tempReceivedCommand.indexOf("STP04") >= 0){ //stepperMotorBackwardOff
           stepperMotor_stop_var = true;
         }
+        /* ELIMINAZIONE DEL CONTROLLO AUTOMATICO: DEFAULT A TRUE
         if(tempReceivedCommand.indexOf("STP05") >= 0){ //stepperMotorAutomaticControlOn
           stepperAutomaticControl_var = true;
         }
         if(tempReceivedCommand.indexOf("STP06") >= 0){ //stepperMotorAutomaticControlOff
           stepperAutomaticControl_var = false;
         }
+        */
         if(tempReceivedCommand.indexOf("TMP01") >= 0){ //mainHeaterOn
           mainHeater_var = true;
         }
@@ -732,12 +734,14 @@ void loop() {
         if(tempReceivedCommand.indexOf("ACT04") >= 0){ //lowerFanOff
           lowerFan_var = false;
         }
+        /* ELIMINAZIONE DEL CONTROLLO AUTOMATICO: DEFAULT A TRUE
         if(tempReceivedCommand.indexOf("GNR01") >= 0){ //automaticControlOn
           automaticControl_var = true;
         }
         if(tempReceivedCommand.indexOf("GNR02") >= 0){ //automaticControlOff
           automaticControl_var = false;
         }
+        */
         if(tempReceivedCommand.indexOf("TMP05") >= 0){ //setting higherHysteresisLimit from ESP8266 HMTL page
           higherHysteresisLimit = getFloatFromString(tempReceivedCommand, ',');
         }
