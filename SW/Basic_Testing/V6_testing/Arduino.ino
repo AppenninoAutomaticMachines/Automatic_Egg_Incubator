@@ -338,6 +338,7 @@ void loop() {
       auxHeater_var = false;
       digitalWrite(MAIN_HEATER_PIN, mainHeater_var);
       digitalWrite(UPPER_FAN_PIN, LOW); // logica negata, in connessione hw: normalmente chiuso per non dover eccitare costanemente il relè
+      delay(250);
       digitalWrite(LOWER_FAN_PIN, LOW); // logica negata, in connessione hw: normalmente chiuso per non dover eccitare costanemente il relè
     }
     else{
@@ -349,6 +350,7 @@ void loop() {
       digitalWrite(MAIN_HEATER_PIN, mainHeater_var);
       digitalWrite(AUX_HEATER_PIN, auxHeater_var);
       digitalWrite(UPPER_FAN_PIN, !upperFan_var); // logica negata, in connessione hw: normalmente chiuso per non dover eccitare costanemente il relè
+      delay(250);
       digitalWrite(LOWER_FAN_PIN, !lowerFan_var);
     }
   }
