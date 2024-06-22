@@ -25,7 +25,7 @@
 
 /* PIN ARDUINO */
 #define MAIN_HEATER_PIN 12
-#define MANUAL_PIN 11
+#define AUX_HEATER_PIN 11
 #define UPPER_FAN_PIN 10
 #define LOWER_FAN_PIN 9
 #define STEPPPER_MOTOR_STEP_PIN 8
@@ -91,6 +91,10 @@ char addressCharArray[17]; // 16 characters for the address + 1 for null termina
 char comparisonAddress[] = "28FF888230180179"; // indirizzo del sensore di temperatura che uso per fare HUMIDITY
 
 byte controlTemperatureIndex; // i sensori di temperatura sono 4, ma quelli effettivi per il controllo della T sono 3. Uno è per l'umidità. Serve un indice separato.
+
+bool mainHeaterSelected = true;
+float temperature_heater_selection_lower_treshold, temperature_heater_selection_upper_treshold;
+unsigned long timeToActivate_temperatureHeaterSelection = 300000; //5 minuti = 5*60*1000 = 300000
 /* END TEMPERATURES SECTION */
 
 /* DHT22 HUMIDITY SENSOR */
@@ -224,9 +228,16 @@ void setup() {
 
 
   pinMode(MAIN_HEATER_PIN, OUTPUT);
-  pinMode(MANUAL_PIN, INPUT);
+  pinMode(AUX_HEATER_PIN, OUTPUT);
+
   pinMode(UPPER_FAN_PIN, OUTPUT);
   pinMode(LOWER_FAN_PIN, OUTPUT);
+
+  // resetting an putting to low level FAN commands:
+  delay(250);
+  digitalWrite(UPPER_FAN_PIN, LOW); // logica negata, in connessione hw: normalmente chiuso per non dover eccitare costanemente il relè
+  delay(250);
+  digitalWrite(LOWER_FAN_PIN, LOW); // logica negata, in connessione hw: normalmente chiuso per non dover eccitare costanemente il relè
 
   pinMode(LEFT_INDUCTOR_PIN, INPUT);
   pinMode(RIGHT_INDUCTOR_PIN, INPUT);
@@ -263,6 +274,10 @@ void setup() {
       //delay(750/ (1 << (12-TEMPERATURE_PRECISION)));
     }
   }
+
+  temperature_heater_selection_upper_treshold = 36.5;
+  temperature_heater_selection_lower_treshold = 34.0;
+  
   /* END TEMPERATURES SECTION */
 
   dht.begin();
@@ -339,11 +354,49 @@ void loop() {
     if(automaticControl_var){
       mainHeater_var = temperatureController.getOutputState();
       auxHeater_var = false;
+
+      /*
+        Nuova logica di controllo:
+          se la temperatura è sotto ad un certo livello dobbiamo scaldare molto e uso il riscaldatore principale, che assorbe 2A e scalda di più
+          Se invece è sotto un certo livello, allora scaldo con il riscaldatore ausiliario per essere più precisi nel riscaldamento.
+          Devo fare un po' di isteresi, che scrivo applicativa, altrimenti rischio di ballare fra un riscaldatore e l'altro
+
+          mainHeaterSelected true -> 
+      */
+      // Hysteresis control
+      if (temperatureC > upperThreshold && !ledState) {
+        digitalWrite(ledPin, HIGH);
+        ledState = true;
+        Serial.println("LED turned ON");
+      } else if (temperatureC < lowerThreshold && ledState) {
+        digitalWrite(ledPin, LOW);
+        ledState = false;
+        Serial.println("LED turned OFF");
+      }
+      if(temperatureController.getOutputState()){ // devo scaldare. Entriamo in questo IF per decidere quale riscaldatore usare.
+        if(temperatureController.getActualTemperature() > temperature_heater_selection_upper_treshold && mainHeaterSelected){ // Appena passiamo la temperatura limite superiore allora attivo il secondo riscaldatore
+          mainHeaterSelected = false;
+        } else if(temperatureController.getActualTemperature() < temperature_heater_selection_lower_treshold && !mainHeaterSelected){ // Se scendo troppo allora seleziono il riscaldatore più potente
+          mainHeaterSelected = true;
+        }
+
+        if(mainHeaterSelected){
+          mainHeater_var = true;
+          auxHeater_var = false;
+        }
+        else{
+          mainHeater_var = false;
+          auxHeater_var = true;
+        }
+      }
+      else{
+        mainHeater_var = false;
+        auxHeater_var = false;
+      }
+
       digitalWrite(MAIN_HEATER_PIN, mainHeater_var);
-      delay(250);
-      digitalWrite(UPPER_FAN_PIN, LOW); // logica negata, in connessione hw: normalmente chiuso per non dover eccitare costanemente il relè
-      delay(250);
-      digitalWrite(LOWER_FAN_PIN, LOW); // logica negata, in connessione hw: normalmente chiuso per non dover eccitare costanemente il relè
+      delay(150);
+      digitalWrite(AUX_HEATER_PIN, auxHeater_var);
     }
     else{
       if(automaticControl_trigger.catchFallingEdge()){ // catch della rimozione del controllo automatico: chiamo lo stop del motore.
