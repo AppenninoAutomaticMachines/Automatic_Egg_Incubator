@@ -364,15 +364,6 @@ void loop() {
           mainHeaterSelected true -> 
       */
       // Hysteresis control
-      if (temperatureC > upperThreshold && !ledState) {
-        digitalWrite(ledPin, HIGH);
-        ledState = true;
-        Serial.println("LED turned ON");
-      } else if (temperatureC < lowerThreshold && ledState) {
-        digitalWrite(ledPin, LOW);
-        ledState = false;
-        Serial.println("LED turned OFF");
-      }
       if(temperatureController.getOutputState()){ // devo scaldare. Entriamo in questo IF per decidere quale riscaldatore usare.
         if(temperatureController.getActualTemperature() > temperature_heater_selection_upper_treshold && mainHeaterSelected){ // Appena passiamo la temperatura limite superiore allora attivo il secondo riscaldatore
           mainHeaterSelected = false;
