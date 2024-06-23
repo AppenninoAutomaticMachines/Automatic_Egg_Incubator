@@ -95,6 +95,9 @@ byte controlTemperatureIndex; // i sensori di temperatura sono 4, ma quelli effe
 bool mainHeaterSelected = true;
 float temperature_heater_selection_lower_treshold, temperature_heater_selection_upper_treshold;
 unsigned long timeToActivate_temperatureHeaterSelection = 300000; //5 minuti = 5*60*1000 = 300000
+
+trigger mainHeaterSeleted_trigger; // rising/falling edge di quando dobbiamo usare il riscaldatore principale
+trigger temperatureController_outputState_trigger; // rising/falling edge di quando dobbiamo scaldare o no. Ogni volta che cambia, mettiamo un delay per essere sicuri di non fare accendi/spegni con mal-letture dei sensori
 /* END TEMPERATURES SECTION */
 
 /* DHT22 HUMIDITY SENSOR */
@@ -259,6 +262,7 @@ void setup() {
   sensors.requestTemperatures();
   lastTempRequest = millis(); 
   conversionTime_DS18B20_sensors = 750 / (1 << (12 - TEMPERATURE_PRECISION));  // res in {9,10,11,12}
+  delay(4*conversionTime_DS18B20_sensors);
 
 
   if (numberOfDevices > MAX_SENSORS){
@@ -275,8 +279,8 @@ void setup() {
     }
   }
 
-  temperature_heater_selection_upper_treshold = 36.5;
-  temperature_heater_selection_lower_treshold = 34.0;
+  temperature_heater_selection_upper_treshold = 36.8;
+  temperature_heater_selection_lower_treshold = 36.2;
   
   /* END TEMPERATURES SECTION */
 
@@ -303,7 +307,7 @@ void setup() {
     lastTriggerTime_millis = millis();
   }
 
-  delay(750);
+  delay(2500);
   serialFlush();
 
   digitalWrite(LED_BUILTIN, HIGH); // all'avvio accendo il LED_BUILTIN. Durante il funzionamento lo resetto. Se ritorno e lo vedo acceso, significa che ha agito il watchdog.
@@ -312,8 +316,7 @@ void setup() {
 void loop() {    
   /* TEMPERATURES SECTION */
   if(!inhibit_stepperMotorRunning){
-    digitalWrite(CYCLE_TOGGLE_ANALOG0_PIN, HIGH);
-    if(millis() - lastTempRequest >= (2.5*conversionTime_DS18B20_sensors)){
+    if(millis() - lastTempRequest >= (4*conversionTime_DS18B20_sensors)){
       controlTemperatureIndex = 0;
       for(byte index = 0; index < Limit; index++){
         // Call the function to convert the device address to a char array
@@ -333,14 +336,14 @@ void loop() {
           }
           controlTemperatureIndex += 1;
         }     
-        
+        delay(5);
       }
       gotTemperatures = true;
     
       sensors.requestTemperatures();
+      delay(10);
       lastTempRequest = millis();
     } 
-    digitalWrite(CYCLE_TOGGLE_ANALOG0_PIN, LOW);
 
     temperatureController.setTemperatureHysteresis(lowerHysteresisLimit, higherHysteresisLimit);
     temperatureController.setControlModality(temperatureControlModality); 
@@ -348,12 +351,6 @@ void loop() {
     if(gotTemperatures){
       // ha senso fare l'update solo quando arrivano le nuove temperature da valutare
       temperatureController.periodicRun(temperatures, 3); // 3 sono i sensori che usiamo per fare il controllo della temperatura
-    }
-    
-
-    if(automaticControl_var){
-      mainHeater_var = temperatureController.getOutputState();
-      auxHeater_var = false;
 
       /*
         Nuova logica di controllo:
@@ -364,49 +361,71 @@ void loop() {
           mainHeaterSelected true -> 
       */
       // Hysteresis control
-      if(temperatureController.getOutputState()){ // devo scaldare. Entriamo in questo IF per decidere quale riscaldatore usare.
-        if(temperatureController.getActualTemperature() > temperature_heater_selection_upper_treshold && mainHeaterSelected){ // Appena passiamo la temperatura limite superiore allora attivo il secondo riscaldatore
-          mainHeaterSelected = false;
-        } else if(temperatureController.getActualTemperature() < temperature_heater_selection_lower_treshold && !mainHeaterSelected){ // Se scendo troppo allora seleziono il riscaldatore più potente
-          mainHeaterSelected = true;
-        }
+      /* Selezione del riscaldatore in base alla temperatura */
+      if(temperatureController.getActualTemperature() > temperature_heater_selection_upper_treshold && mainHeaterSelected){ // Appena passiamo la temperatura limite superiore allora attivo il secondo riscaldatore
+        mainHeaterSelected = false;
+      } else if(temperatureController.getActualTemperature() < temperature_heater_selection_lower_treshold && !mainHeaterSelected){ // Se scendo troppo allora seleziono il riscaldatore più potente
+        mainHeaterSelected = true;
+      }
 
+      /* generazione dei trigger */
+      mainHeaterSeleted_trigger.periodicRun(mainHeaterSelected);
+
+      /*
+        Questo codice mi serve per spegnere con un po' di delay un riscaldatore quando passiamo all'altro. Ricorda che non voglio avere switch contemporanei dei relè,
+        per ridurre il problema dell'assorbimento di corrente.
+        Quindi, se devo switchare riscaldatore mentre è acceso l'altro, mi prendo un po' di delay.
+      */
+      if(mainHeaterSeleted_trigger.catchRisingEdge()){ // switchare da AUX --> MAIN
+        if(auxHeater_var){ // se sto scaldando con l'aux allora lo spengo + delay
+          auxHeater_var = false;
+          digitalWrite(AUX_HEATER_PIN, auxHeater_var);
+          delay(250);
+        }
+      }
+
+      if(mainHeaterSeleted_trigger.catchFallingEdge()){ // switchare da MAIN --> AUX
+        if(mainHeater_var){ // se sto scaldando con il main allora lo spengo + delay
+          mainHeater_var = false;
+          digitalWrite(MAIN_HEATER_PIN, mainHeater_var);
+          delay(250);
+        }
+      }
+
+      /* scaldiamo in base al riscaldatore selezionato */
+      if(temperatureController.getOutputState()){ 
         if(mainHeaterSelected){
           mainHeater_var = true;
-          auxHeater_var = false;
+          digitalWrite(MAIN_HEATER_PIN, mainHeater_var);
         }
         else{
-          mainHeater_var = false;
           auxHeater_var = true;
+          digitalWrite(AUX_HEATER_PIN, auxHeater_var);
         }
       }
       else{
-        mainHeater_var = false;
-        auxHeater_var = false;
+        if(mainHeaterSelected){
+          mainHeater_var = false;
+          digitalWrite(MAIN_HEATER_PIN, mainHeater_var);
+        }
+        else{
+          auxHeater_var = false;
+          digitalWrite(AUX_HEATER_PIN, auxHeater_var);
+        }
       }
 
-      digitalWrite(MAIN_HEATER_PIN, mainHeater_var);
-      delay(150);
-      digitalWrite(AUX_HEATER_PIN, auxHeater_var);
-    }
-    else{
-      if(automaticControl_trigger.catchFallingEdge()){ // catch della rimozione del controllo automatico: chiamo lo stop del motore.
-        // se stavo scaldando, mainHeater_var rimane scritta. Appena esco dal comando automatico delle temperature devo pulire le variabili di riscaldamento
-        mainHeater_var = false;
-        auxHeater_var = false;
+      temperatureController_outputState_trigger.periodicRun(temperatureController.getOutputState());
+
+      if(temperatureController_outputState_trigger.catchRisingEdge() || temperatureController_outputState_trigger.catchFallingEdge()){
+        delay(250);
       }
-      digitalWrite(MAIN_HEATER_PIN, mainHeater_var);
-      delay(250);
-      digitalWrite(UPPER_FAN_PIN, !upperFan_var); // logica negata, in connessione hw: normalmente chiuso per non dover eccitare costanemente il relè
-      delay(250);
-      digitalWrite(LOWER_FAN_PIN, !lowerFan_var);
     }
   }
   else{
     // mentre inibisco il controllo di temperatura perché il motore gira, è opportuno: a regime, con temperatura di riferimento raggiunta, anche solo 30s di rotazione full riscaldamento pososno creare problema di surriscaldamento.
-    mainHeater_var = false;
-    auxHeater_var = false;
-    digitalWrite(MAIN_HEATER_PIN, mainHeater_var);
+    digitalWrite(MAIN_HEATER_PIN, false);
+    //delay(150);    // questo codice gira con la ciclicità del motore, quidni non posso mettere il delay. No problem, tanto gli heater sono accesi/spenti in modo che ce ne sia uno per volta on. Quindi posso chiamare in contemporanea lo spegnimento dei due heater.
+    digitalWrite(AUX_HEATER_PIN, false);
   }
   /* END TEMPERATURES SECTION */
 
@@ -824,14 +843,7 @@ void loop() {
   /* FEEDBACK SECTION */
 
   digitalWrite(CYCLE_TOGGLE_PIN, cycle_toggle_pin_var);
-  cycle_toggle_pin_var = !cycle_toggle_pin_var;
-
-  /* per interruttore manuale: per vedere se il programma sta girando o se si è imbananato da qualche parte. */
-  if(ledCheck){
-    // ON/OFF manuale del led builtin lo faccio solo dopo averlo spento da connessione HTML come feedback della ricezione dei comandi
-    digitalWrite(LED_BUILTIN, digitalRead(MANUAL_PIN));
-  }
-  
+  cycle_toggle_pin_var = !cycle_toggle_pin_var;  
 }
 
 int readFromBoard(){ // returns the number of commands received
