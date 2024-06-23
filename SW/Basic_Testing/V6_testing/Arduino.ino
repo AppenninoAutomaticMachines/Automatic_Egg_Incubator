@@ -94,7 +94,6 @@ byte controlTemperatureIndex; // i sensori di temperatura sono 4, ma quelli effe
 
 bool mainHeaterSelected = true;
 float temperature_heater_selection_lower_treshold, temperature_heater_selection_upper_treshold;
-unsigned long timeToActivate_temperatureHeaterSelection = 300000; //5 minuti = 5*60*1000 = 300000
 
 trigger mainHeaterSeleted_trigger; // rising/falling edge di quando dobbiamo usare il riscaldatore principale
 trigger temperatureController_outputState_trigger; // rising/falling edge di quando dobbiamo scaldare o no. Ogni volta che cambia, mettiamo un delay per essere sicuri di non fare accendi/spegni con mal-letture dei sensori
@@ -171,7 +170,7 @@ int minutesToGO; // minuti mancanti alla prossima girata
 int minutesGone; // minuti passati dalla precedente girata
 
 #define SECONDS_CONFIGURATION true
-int seconds_trigger_interval = 180; //  TESTING: giriamo ogni 3 minuti
+int seconds_trigger_interval = 3600; //  TESTING: giriamo ogni 3 minuti
 int secondsToGO; // minuti mancanti alla prossima girata
 int secondsGone; // minuti passati dalla precedente girata
 
@@ -253,8 +252,8 @@ void setup() {
   }
 
   /* TEMPERATURES SECTION */
-  higherHysteresisLimit = 37.5;
-  lowerHysteresisLimit = 37.0;
+  higherHysteresisLimit = 37.8;
+  lowerHysteresisLimit = 37.4;
 
   sensors.begin();
   numberOfDevices = sensors.getDeviceCount();
@@ -279,8 +278,8 @@ void setup() {
     }
   }
 
-  temperature_heater_selection_upper_treshold = 36.8;
-  temperature_heater_selection_lower_treshold = 36.2;
+  temperature_heater_selection_upper_treshold = 37.0;
+  temperature_heater_selection_lower_treshold = 36.8;
   
   /* END TEMPERATURES SECTION */
 
