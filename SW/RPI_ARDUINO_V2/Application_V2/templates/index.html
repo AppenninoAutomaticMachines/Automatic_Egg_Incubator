@@ -102,6 +102,11 @@
                 auxHeaterElement.style.color = data.auxHeater ? "green" : "red";
                 
                 document.getElementById('machineState').innerText = data.machineState;
+                
+                document.getElementById('sendHigherHysteresisLimit_currentValue').innerText = data.sendHigherHysteresisLimit_currentValue;
+                document.getElementById('sendLowerHysteresisLimit_currentValue').innerText = data.sendLowerHysteresisLimit_currentValue;
+                
+                
             });
 
             function displayMessage(message) {
@@ -239,9 +244,12 @@
             <br><br>
             <input type="text" id="higherHysteresisLimitInput" placeholder="Higher Hysteresis Limit">
             <button id="sendHigherHysteresisLimitBtn" class="button">Send Higher Hysteresis Limit</button>
+            Current Value:[<span id="sendHigherHysteresisLimit_currentValue">--</span>]
             <br><br>
+            
             <input type="text" id="lowerHysteresisLimitInput" placeholder="Lower Hysteresis Limit">
             <button id="sendLowerHysteresisLimitBtn" class="button">Send Lower Hysteresis Limit</button>
+            Current Value:[<span id="sendLowerHysteresisLimit_currentValue">--</span>]            
             <br><br>
     
 	    <!-- Add checkboxes for Flag1 and Flag2 -->
@@ -272,6 +280,7 @@
             <div id="messages" class="message-container"></div>
         </div>
     </div>
+    <button onclick="window.location.href='/machine_stats'" class="button">View Machine Stats</button>
     <footer>
         <p>Profilo Is Back - Made in Appennino</p>
     </footer>
