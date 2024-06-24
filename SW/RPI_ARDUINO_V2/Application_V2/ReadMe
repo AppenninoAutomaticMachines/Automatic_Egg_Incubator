@@ -1,0 +1,8 @@
+Parto con un codice Arduino di base che si occupa di leggere i sensori multipli presenti sulla linea I2C.
+Prende i dati, li wrappa in modo opportuno e li manda periodicamente indietro.
+La ciclica è lenta, mando indietro ogni 1000ms
+Questo è il tempo ciclo del controllo di temperatura fatto dal programma python di raspberry.
+
+Poi farò la parte che legge i comandi che riceve e, n base a quelli, decide cosa fare.
+
+Stepper: aggiungere funzionalità dell'abiltiazione/disabilitazione del modulo.
