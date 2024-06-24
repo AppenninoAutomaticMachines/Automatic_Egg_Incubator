@@ -284,11 +284,12 @@ void loop() {
 
 
 
-  /* SERIAL COMMUNICATION FROM ARDUINO TO RASPBERRY: SEND BACK SENSOR VALUES */
-  if(gotTemperatures){
-    gotTemperatures = false;
-    // riempo i dati per la trasmissione
-    listofDataToSend_numberOfData = 0; // ad ogni giro lo azzero   
+  /* SERIAL COMMUNICATION FROM ARDUINO TO RASPBERRY: SEND BACK SENSOR VALUES AND OTHER INFOS */
+  // riempo i dati per la trasmissione
+  listofDataToSend_numberOfData = 0; // ad ogni giro lo azzero  
+
+  if(gotTemperatures){ // questo if riempe la trasmissione con i dati delle temperature. (ma potrei mandarne in modo asincrono anche altri...)
+    gotTemperatures = false;    
 
     strcpy(bufferChar, "<TMP01,");
     dtostrf( temperatures[0], 1, 1, fbuffChar); 
@@ -304,14 +305,20 @@ void loop() {
     dtostrf( temperatures[2], 1, 1, fbuffChar); 
     listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(bufferChar, fbuffChar), ">");
     listofDataToSend_numberOfData++;
+  }
 
-    if(listofDataToSend_numberOfData > 0){
-      Serial.print("@"); // SYMBOL TO START BOARDS TRANSMISSION
-      for(byte i = 0; i < listofDataToSend_numberOfData; i++){
-        Serial.print(listofDataToSend[i]); 
-      }
-      Serial.print("#"); // SYMBOL TO END BOARDS TRANSMISSION
+  /* 
+    Lascio spazio per riempire il buffer di trasmissione con cose che non siano delle temperature...
+    es. ho finito il turn delle uova...oppure è stata aperta la porta dell'incubatrice 
+  */
+
+  if(listofDataToSend_numberOfData > 0){
+    Serial.print("@"); // SYMBOL TO START BOARDS TRANSMISSION
+    for(byte i = 0; i < listofDataToSend_numberOfData; i++){
+      Serial.print(listofDataToSend[i]); 
+
     }
+    Serial.print("#"); // SYMBOL TO END BOARDS TRANSMISSION
   }
 }
 
