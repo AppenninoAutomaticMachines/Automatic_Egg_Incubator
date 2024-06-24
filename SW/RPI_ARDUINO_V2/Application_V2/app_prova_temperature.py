@@ -1,4 +1,4 @@
-from flask import Flask, render_template
+from flask import Flask, render_template, jsonify
 from flask_socketio import SocketIO, emit
 import random
 import time
@@ -6,6 +6,8 @@ import threading
 import queue
 import serial
 import re
+import psutil  # Import psutil for system statistics
+
 
 
 # Configure the serial port
@@ -23,10 +25,27 @@ temperature_queue = queue.Queue()
 @app.route('/')
 def index():
     return render_template('index.html')
+    
+@app.route('/machine_stats')
+def machine_stats():
+    return render_template('machine_stats.html')
+
+@socketio.on('request_stats')
+def handle_request_stats():
+    cpu_usage = psutil.cpu_percent(interval=1)
+    memory_info = psutil.virtual_memory()
+    memory_usage = memory_info.percent
+    disk_usage = psutil.disk_usage('/').percent
+    stats = {
+        'cpu_usage': cpu_usage,
+        'memory_usage': memory_usage,
+        'disk_usage': disk_usage
+    }
+    emit('machine_stats', stats)
 
 def monitoringArduino_task():
     try:
-        ser = serial.Serial(port, baudrate, timeout=timeout)
+        ser = serial.Serial(port, baudrate)
         print("Serial port opened successfully")
         while True:
             read_from_arduino(ser)
@@ -51,8 +70,7 @@ def read_from_arduino(serial_port):
     while True:
         try:
             if serial_port.in_waiting > 0:
-                dataRead = serial_port.read()
-                dataRead = dataRead.decode('utf-8')
+                dataRead = serial_port.read().decode('utf-8')
                 if dataRead == '@':
                     startTransmission = True
                 if startTransmission:
@@ -105,6 +123,8 @@ def decodeMessage(buffer, temp_data_list):
             # Example actions based on infoName_part
             if infoName_part in ["TMP01", "TMP02", "TMP03"]:
                 temp_data_list.append({infoName_part: number})
+                
+            # AGGIUNGERE QUI ALTRE INFO CHE VENGONO DA ARDUINO #
         else:
             ciao = False
             #print("Info Name part:", infoName_part)
@@ -127,6 +147,9 @@ def periodic_task():
                 data.update({'mainHeater': random.choice([True, False])})
                 data.update({'auxHeater': random.choice([True, False])})
                 data.update({'machineState': random.randint(0, 5)})
+                
+                data.update({'sendHigherHysteresisLimit_currentValue': random.randint(0, 5)})
+                data.update({'sendLowerHysteresisLimit_currentValue': random.randint(0, 5)})
                 # Send data to HTML page
                 socketio.emit('data_update', data)
         except Exception as e:
