@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Machine Statistics</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f7f7f7;
+            color: #333;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 0;
+            padding: 0;
+        }
+        header, footer {
+            background-color: #333;
+            color: white;
+            width: 100%;
+            text-align: center;
+            padding: 1em 0;
+        }
+        .container {
+            margin: 20px;
+            padding: 20px;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            width: 80%;
+            max-width: 800px;
+        }
+        h1 {
+            color: #333;
+        }
+        .button {
+            background-color: #333;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+        .button:hover {
+            background-color: #555;
+        }
+        .stats {
+            margin: 20px 0;
+        }
+        .button-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-top: 20px;
+        }
+    </style>
+    <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', (event) => {
+            var socket = io();
+
+            socket.on('machine_stats', function(data) {
+                document.getElementById('cpu_usage').innerText = data.cpu_usage + ' %';
+                document.getElementById('memory_usage').innerText = data.memory_usage + ' %';
+                document.getElementById('disk_usage').innerText = data.disk_usage + ' %';
+            });
+
+            document.getElementById('refreshStatsBtn').addEventListener('click', () => {
+                socket.emit('request_stats');
+            });
+
+            document.getElementById('backBtn').addEventListener('click', () => {
+                window.location.href = '/';
+            });
+
+            // Add event listeners for general purpose buttons
+            document.querySelectorAll('.general-button').forEach(button => {
+                button.addEventListener('click', () => {
+                    alert('Button ' + button.id + ' clicked');
+                });
+            });
+        });
+    </script>
+</head>
+<body>
+    <header>
+        <h1>Machine Statistics</h1>
+    </header>
+    <div class="container">
+        <div class="stats">
+            <h2>CPU Usage: <span id="cpu_usage">-- %</span></h2>
+            <h2>Memory Usage: <span id="memory_usage">-- %</span></h2>
+            <h2>Disk Usage: <span id="disk_usage">-- %</span></h2>
+        </div>
+        <button id="refreshStatsBtn" class="button">Refresh Stats</button>
+        <button id="backBtn" class="button">Back</button>
+        <div class="button-grid">
+            <button id="button1" class="button general-button">Button 1</button>
+            <button id="button2" class="button general-button">Button 2</button>
+            <button id="button3" class="button general-button">Button 3</button>
+            <button id="button4" class="button general-button">Button 4</button>
+            <button id="button5" class="button general-button">Button 5</button>
+            <button id="button6" class="button general-button">Button 6</button>
+        </div>
+    </div>
+    <footer>
+        <p>Machine Statistics Page</p>
+    </footer>
+</body>
+</html>
