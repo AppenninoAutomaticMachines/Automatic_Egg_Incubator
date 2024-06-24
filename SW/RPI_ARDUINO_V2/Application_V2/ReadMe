@@ -6,3 +6,8 @@ Questo è il tempo ciclo del controllo di temperatura fatto dal programma python
 Poi farò la parte che legge i comandi che riceve e, n base a quelli, decide cosa fare.
 
 Stepper: aggiungere funzionalità dell'abiltiazione/disabilitazione del modulo.
+
+
+FILE:
+python: app_prova_temperature.py
+Arduino: Arduino.ino
