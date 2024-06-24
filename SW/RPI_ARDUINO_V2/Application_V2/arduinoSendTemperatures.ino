@@ -218,7 +218,7 @@ void loop() {
     for(byte i = 0; i < listofDataToSend_numberOfData; i++){
       Serial.print(listofDataToSend[i]); 
     }
-    Serial.print('#'); // SYMBOL TO END BOARDS TRANSMISSION
+    Serial.println('#'); // SYMBOL TO END BOARDS TRANSMISSION
   }
   
   
