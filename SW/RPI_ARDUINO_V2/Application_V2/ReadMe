@@ -20,4 +20,12 @@ currentConfiguration --> folder in cui salvo i parametri correnti (a valle della
 dentro ci sono i file json che contengono le variabili persistenti in formato JSON.
 Appena il programma parte prende di default l'ultimo set di parametri salvato in currentConfig.
 Poi metto un tasto in HMI che permette di caricare i parametri (selezionando a mano il file).
+Ho fatto una variabile globale che si chiama configuration, dove ci sono tutti i campi che voglio gestire in modo persistente.
+
+TO DO 
+next step è implementare il salvataggio periodico dei dati su un file.
+Io farei un file per ogni giorno, sarà poi lo strumento di statistica a giostrare i dati.
+Tasto, nella pagina dedicata, di clear statistics. Sarà buona norma, all'avvio della macchina, pulire la cartella delle statistiche.
+folder delle statistiche Machine_Statistics.
+
 
