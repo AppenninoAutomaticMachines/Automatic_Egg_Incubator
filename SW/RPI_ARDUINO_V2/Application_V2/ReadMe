@@ -11,3 +11,13 @@ Stepper: aggiungere funzionalità dell'abiltiazione/disabilitazione del modulo.
 FILE:
 python: app_prova_temperature.py
 Arduino: Arduino.ino
+
+
+Aggiungo l'infrastruttura per la gestione della persistenza dei parametri:
+defaultConfiguration --> folder dentro cui carico i parametri di default per le varie tipologie.
+currentConfiguration --> folder in cui salvo i parametri correnti (a valle della pressione di un tasto di Save Parameters nella pagina HTML di controllo HMI
+
+dentro ci sono i file json che contengono le variabili persistenti in formato JSON.
+Appena il programma parte prende di default l'ultimo set di parametri salvato in currentConfig.
+Poi metto un tasto in HMI che permette di caricare i parametri (selezionando a mano il file).
+
