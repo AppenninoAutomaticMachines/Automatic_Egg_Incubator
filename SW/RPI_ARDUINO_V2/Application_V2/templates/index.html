@@ -177,6 +177,14 @@
                 clearMessages();
                 socket.emit('command', { cmd: 'reset', button: 'Reset' });
             });
+            
+            document.getElementById('loadParametersBtn').addEventListener('click', () => {
+                socket.emit('command', { cmd: 'load_parameters', button: 'loadParameters' });
+            });
+            
+            document.getElementById('saveParametersBtn').addEventListener('click', () => {
+                socket.emit('command', { cmd: 'save_parameters', button: 'saveParameters' });
+            });
 
             document.getElementById('sendNumberBtn').addEventListener('click', () => {
                 let number = document.getElementById('numberInput').value;
@@ -196,18 +204,22 @@
             document.getElementById('sortPriority').addEventListener('change', sortMessages);
             
             document.getElementById('flag1').addEventListener('change', (event) => {
-		socket.emit('flag1', { flag1: event.target.checked });
-	    });
+		        socket.emit('flag1', { flag1: event.target.checked });
+	        });
 
-	    document.getElementById('flag2').addEventListener('change', (event) => {
-		socket.emit('flag2', { flag2: event.target.checked });
-	    });
+	        document.getElementById('flag2').addEventListener('change', (event) => {
+		        socket.emit('flag2', { flag2: event.target.checked });
+	        });
 
-	    document.querySelectorAll('input[name="option"]').forEach((radio) => {
-		radio.addEventListener('change', (event) => {
-		    socket.emit('option', { option: event.target.value });
-		});
-	    });
+	        document.querySelectorAll('input[name="option"]').forEach((radio) => {
+		        radio.addEventListener('change', (event) => {
+		            socket.emit('option', { option: event.target.value });
+		        });
+	        });
+            
+            document.getElementById('viewStatsBtn').addEventListener('click', () => {
+                window.location.href = '/machine_stats';
+            });
 
             function clearMessages() {
                 document.getElementById('messages').innerHTML = '';
@@ -236,9 +248,14 @@
             <h2>Controls</h2>
             <button id="startBtn" class="button">Start</button>
             <button id="stopBtn" class="button">Stop</button>
-            <button id="resetBtn" class="button">Reset</button>
-            
+            <button id="resetBtn" class="button">Reset</button>            
             <br><br>
+        </div>            
+        <div class="parameters">
+            <h2>Parameters</h2>
+            <button id="loadParametersBtn" class="button">Load Params</button>
+            <button id="saveParametersBtn" class="button">Save Params</button>
+            <br>
             <input type="text" id="numberInput" placeholder="Enter a number">
             <button id="sendNumberBtn" class="button">Send Number</button>
             <br><br>
@@ -280,7 +297,9 @@
             <div id="messages" class="message-container"></div>
         </div>
     </div>
-    <button onclick="window.location.href='/machine_stats'" class="button">View Machine Stats</button>
+    <div class="container">
+        <button id="viewStatsBtn" class="button">View Machine Statistics</button>
+    </div>
     <footer>
         <p>Profilo Is Back - Made in Appennino</p>
     </footer>
