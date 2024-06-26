@@ -7,6 +7,10 @@ import queue
 import serial
 import re
 import psutil  # Import psutil for system statistics
+import easygui
+import os
+import json
+from datetime import datetime
 
 
 
@@ -139,6 +143,22 @@ def periodic_task():
             # Perform other actions here
             #print("Periodic task is doing other things...")
             
+            '''
+            Appena arrivano nuove temperature, chiama la funzione che controlla tutta la parte di temperature e heaters.
+            + fa memorizzazione dei dati nei file esterni.
+            combo box per la modalità di controllo (temperatura massima, media...)
+            + fai esclusione delle temperature non lette correttamente, se ci sono.
+            in uscita avrai unicamente i comandi di on/off degli attuatori. (le tempistiche le gestisci qui...)
+            
+            L'invio dei comandi ad arduino lo voglio mantenere asyncrono: stampo i comando dove ne ho bisogno (solo nel periodic task...concorrenza...)
+            
+            
+            chiamata alla funzione ceh controlla lo stepper (guarda se deve girare e se si manda il comando). Controllo parametri
+            impostati a video + manuale + lay_horizontal
+            
+            
+            '''
+            
             # Check for new data in the queue
             if not temperature_queue.empty():
                 data = temperature_queue.get()
@@ -155,7 +175,7 @@ def periodic_task():
         except Exception as e:
             print(f"Error in periodic_task: {e}")
 
-def send_async_messages():
+def send_async_messages_task_fnct():
     colors = ['red', 'orange', 'yellow', 'green', 'blue']
     messages = [
         "Critical: System failure detected!",
@@ -176,7 +196,7 @@ def send_async_messages():
         socketio.emit('async_message', {'text': message, 'color': color})
         time.sleep(random.randint(5, 15))
         
-def send_async_messages_FILO():
+def send_async_messages_task_fnct_FILO():
     while True:
         message = "Messaggio da funzione Aync Di Filo"
         color = 'red'
@@ -197,6 +217,13 @@ def handle_command(data):
         # Handle reset command
         print("Handling reset command")
         socketio.emit('clear_messages')
+    elif data['cmd'] == 'load_parameters':
+        print("Handling load_parameters command")
+        select_file()
+    elif data['cmd'] == 'save_parameters':
+        print("Handling save_parameters command")
+        global configuration
+        print(configuration)
 
 
 @socketio.on('number')
@@ -237,7 +264,7 @@ def handle_option(data):
     option = data.get('option', '')
     # Handle the option logic here
     print(f'Option selected: {option}')
-
+   
 def process_number(number):
     # Implement your logic to process the number
     print(f"Processing number: {number}")
@@ -249,10 +276,123 @@ def process_higher_hysteresis_limit(limit):
 def process_lower_hysteresis_limit(limit):
     # Implement your logic to process the lower hysteresis limit
     print(f"Processing lower hysteresis limit: {limit}")
+    
+def send_async_message(message, color):
+    '''
+    colors = ['red', 'orange', 'yellow', 'green', 'blue']
+    messages = [
+        "Critical: System failure detected!",
+        "Warning: High temperature recorded.",
+        "Note: System maintenance required.",
+        "Info: All systems operational."
+    ]
+    '''
+    socketio.emit('async_message', {'text': message, 'color': color})
+    
+    
+def select_file():
+    file_path = easygui.fileopenbox()
+    
+    # Check if a file was selected
+    if file_path:
+        # Check if the file has a .json extension
+        if file_path.endswith('.json'):
+            print(f"Selected file: {file_path}")
+            send_async_message(f"Selected file: {file_path}", 'blue')
+            global configuration
+            configuration = load_json_file(file_path)
+        else:
+            print("Error: Selected file is not a .json file.")
+            send_async_message("Error: Selected file is not a .json file.", 'red')
+    else:
+        print("No file selected")   
+        send_async_message("No file selected", 'red')
+        
+#---- HANDLING PERSISTENT PARAMETERS ----#    
+def load_json_file(file_path):
+    with open(file_path, 'r') as f:
+        current_content = json.load(f)
+        print(current_content)
+        return current_content
+
+def get_most_recent_file(folder_path):
+    files = [f for f in os.listdir(folder_path) if f.endswith('.json')]
+    if not files:
+        return None
+    files = [os.path.join(folder_path, f) for f in files]
+    most_recent_file = max(files, key=os.path.getmtime)
+    return most_recent_file
+
+def load_configuration_startup():
+    ''' 
+        Questa è la funzione di startup nel senso che è quella che viene chiamata all'avvio.    
+        Prima guarda se ci sono dei parametri salvati nella cartella currentConfig, se non ce
+        ne sono allora passa a caricare il primo file nella cartella di defaultConfig.
+    '''
+    default_config_folder = 'defaultConfiguration'
+    current_config_folder = 'currentConfiguration'
+    
+    # Check if currentConfiguration folder is empty
+    if not os.listdir(current_config_folder):
+        print("currentConfiguration folder is empty. Loading from defaultConfiguration.")
+        # Load a file from defaultConfiguration
+        default_files = [f for f in os.listdir(default_config_folder) if f.endswith('.json')]
+        if not default_files:
+            raise FileNotFoundError("No JSON files found in defaultConfiguration folder.")
+        # Load the first file (or you can implement logic to select a specific file)
+        default_file_path = os.path.join(default_config_folder, default_files[0])
+        return load_json_file(default_file_path), default_file_path
+    else:
+        # Load the most recent JSON file from currentConfiguration
+        print("Loading the most recent JSON file from currentConfiguration.")
+        most_recent_file = get_most_recent_file(current_config_folder)
+        if not most_recent_file:
+            raise FileNotFoundError("No JSON files found in currentConfiguration folder.")
+        return load_json_file(most_recent_file), most_recent_file       
+        
+        
+        
+        
+#--------- GLOBAL VARIABLES SECTION ---------# 
+
+
+# PERSISTENT VARIABLES SECTION # 
+# Load all those variables being memorized in the configuration files (.json)
+global configuration
+configuration, filename = load_configuration_startup()
+print(f"Loaded configuration from: {filename}")
+
+'''
+tmp_higherHysteresisLimit = configuration["tmp_higherHysteresisLimit"]
+print(f"tmp_higherHysteresisLimit: {tmp_higherHysteresisLimit}")
+
+tmp_lowerHysteresisLimit = configuration["tmp_lowerHysteresisLimit"]
+print(f"tmp_lowerHysteresisLimit: {tmp_lowerHysteresisLimit}")
+
+tmp_higherPercentageToActivateAuxiliaryHeater = configuration["tmp_higherPercentageToActivateAuxiliaryHeater"]
+print(f"tmp_higherPercentageToActivateAuxiliaryHeater: {tmp_higherPercentageToActivateAuxiliaryHeater}")
+
+tmp_lowerPercentageToActivateAuxiliaryHeater = configuration["tmp_lowerPercentageToActivateAuxiliaryHeater"]
+print(f"tmp_lowerPercentageToActivateAuxiliaryHeater: {tmp_lowerPercentageToActivateAuxiliaryHeater}")
+
+stpr_secondsBtwEggsTurn = configuration["stpr_secondsBtwEggsTurn"]
+print(f"stpr_secondsBtwEggsTurn: {stpr_secondsBtwEggsTurn}")
+
+stpr_defaultSpeed = configuration["stpr_defaultSpeed"]
+print(f"stpr_defaultSpeed: {stpr_defaultSpeed}")
+'''
+print()
+
+
+
+
+#--------- END GLOBAL VARIABLES SECTION ---------# 
+
+
 
 if __name__ == '__main__':
     threading.Thread(target=monitoringArduino_task).start()
     threading.Thread(target=periodic_task).start()
-    threading.Thread(target=send_async_messages).start()
-    threading.Thread(target=send_async_messages_FILO).start()
+    threading.Thread(target=send_async_messages_task_fnct).start()
+    threading.Thread(target=send_async_messages_task_fnct_FILO).start()
     socketio.run(app, host='0.0.0.0', port=5000)
