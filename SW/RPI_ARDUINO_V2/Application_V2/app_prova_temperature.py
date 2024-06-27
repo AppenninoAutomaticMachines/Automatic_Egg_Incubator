@@ -20,6 +20,7 @@ import matplotlib.pyplot as plt
 
 # Configure the serial port
 port = "COM6"
+port = "/dev/ttyUSB0"
 baudrate = 19200
 timeout = 0.1
 
