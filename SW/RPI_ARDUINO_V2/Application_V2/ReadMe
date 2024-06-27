@@ -22,10 +22,18 @@ Appena il programma parte prende di default l'ultimo set di parametri salvato in
 Poi metto un tasto in HMI che permette di caricare i parametri (selezionando a mano il file).
 Ho fatto una variabile globale che si chiama configuration, dove ci sono tutti i campi che voglio gestire in modo persistente.
 
-TO DO 
+
 next step è implementare il salvataggio periodico dei dati su un file.
 Io farei un file per ogni giorno, sarà poi lo strumento di statistica a giostrare i dati.
 Tasto, nella pagina dedicata, di clear statistics. Sarà buona norma, all'avvio della macchina, pulire la cartella delle statistiche.
 folder delle statistiche Machine_Statistics.
 
+TO DO
+- verificare plot all data + plot show non bloccante
+- fare il dailiy plot
+- impostare la pagina delle statistiche: visualizzare le temperature anche qui + mettere i tasti per i grafici e gestire handler
+
+
+
+- iniziare ad implementare un po' di logica nel periodicTask
 
