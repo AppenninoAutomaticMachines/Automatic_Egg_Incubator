@@ -1,3 +1,4 @@
+import matplotlib
 from flask import Flask, render_template, jsonify
 from flask_socketio import SocketIO, emit
 import random
@@ -17,6 +18,9 @@ import zipfile
 
 import pandas as pd
 import matplotlib.pyplot as plt
+import webbrowser
+import platform
+import subprocess
 
 # Configure the serial port
 port = "COM6"
@@ -29,6 +33,8 @@ app.config['SECRET_KEY'] = 'secret!'
 socketio = SocketIO(app)
 
 temperature_queue = queue.Queue()
+
+matplotlib.use('Agg')
 
 
 @app.route('/')
@@ -56,21 +62,36 @@ def handle_request_stats():
 
 
 def monitoringArduino_task():
-    try:
-        ser = serial.Serial(port, baudrate)
-        print("Serial port opened successfully")
-        while True:
-            read_from_arduino(ser)
-    except serial.SerialException as e:
-        print(f"Failed to open serial port: {e}")
-    except KeyboardInterrupt:
-        print("Program interrupted")
-    finally:
+    global simulationActive
+    if simulationActive:
+        # l'idea è pubblicare le temperature sulla temperature_queue ogni 2 secondi
         try:
-            ser.close()
-            print("Serial port closed")
+            while True:
+                # Simulate data coming from Arduino
+                combined_data = {}
+                for item in range(0, 3):
+                    sensor_key = f'TMP0{item + 1}'
+                    combined_data[sensor_key] = round(random.uniform(200, 300) / 10, 2)
+                temperature_queue.put(combined_data)
+                time.sleep(2)
         except Exception as e:
-            print(f"Error closing serial port: {e}")
+            print(f"An error occurred: {e}")
+    else:
+        try:
+            ser = serial.Serial(port, baudrate)
+            print("Serial port opened successfully")
+            while True:
+                read_from_arduino(ser)
+        except serial.SerialException as e:
+            print(f"Failed to open serial port: {e}")
+        except KeyboardInterrupt:
+            print("Program interrupted")
+        finally:
+            try:
+                ser.close()
+                print("Serial port closed")
+            except Exception as e:
+                print(f"Error closing serial port: {e}")
 
 
 def read_from_arduino(serial_port):
@@ -264,7 +285,7 @@ def handle_command(data):
         print("Handling reset command")
         socketio.emit('clear_messages')
 
-        plot_all_data('Machine_Statistics')
+        plot_all_data('Machine_Statistics','Images') # prima cartella da dove peschi le statistiche, poi quella dove stampi le immagini
 
 
     elif data['cmd'] == 'load_parameters':
@@ -413,7 +434,7 @@ def load_configuration_startup():
         return load_json_file(most_recent_file), most_recent_file
 
 
-def plot_all_data(folder_path):
+def plot_all_data(folder_path, images_folder_path):
     all_data = []
 
     # Read all CSV files in the folder
@@ -444,11 +465,29 @@ def plot_all_data(folder_path):
     plt.grid(True)
     plt.xticks(rotation=45)
     plt.tight_layout()
-    plt.show(block=False)
+
+    # Save the plot as an SVG file
+    all_data_folder_path = os.path.join(images_folder_path, 'allData_temperaturesPlot')
+    svg_filename = os.path.join(all_data_folder_path, 'all_data_plot.svg')
+    plt.savefig(svg_filename, format='svg')
+    plt.close()  # Close the plot to free up memory
+
+    # Open the SVG file with an image viewer
+    open_with_image_viewer(svg_filename)
+
+def open_with_image_viewer(file_path):
+    system = platform.system()
+    if system == 'Windows':
+        os.startfile(file_path)
+    elif system == 'Darwin':  # macOS
+        subprocess.call(['open', file_path])
+    else:  # Linux
+        subprocess.call(['xdg-open', file_path])
 
 
 # --------- GLOBAL VARIABLES SECTION ---------#
-
+global simulationActive
+simulationActive = True
 
 # PERSISTENT VARIABLES SECTION # 
 # Load all those variables being memorized in the configuration files (.json)
@@ -481,9 +520,16 @@ print()
 
 #--- Create Machine_Statistic folder ---#
 machine_statistics_folder_path = "Machine_Statistics"
-
 if not os.path.exists(machine_statistics_folder_path):
         os.makedirs(machine_statistics_folder_path)
+
+# --- Create Images folder ---#
+images_folder_path = "Images"
+if not os.path.exists(images_folder_path):
+    os.makedirs(images_folder_path)
+
+all_data_folder_path = os.path.join(images_folder_path, 'allData_temperaturesPlot') #cartella che contiene i plot che fai quando clicchi il pulsante per plottare tutta l'incubata
+os.makedirs(all_data_folder_path, exist_ok = True)
 
 
 
@@ -493,4 +539,4 @@ if __name__ == '__main__':
     threading.Thread(target=periodic_task).start()
     threading.Thread(target=send_async_messages_task_fnct).start()
     threading.Thread(target=send_async_messages_task_fnct_FILO).start()
-    socketio.run(app, host='0.0.0.0', port=5000) #, allow_unsafe_werkzeug=True) - per nuove versioni di flask socket IO
+    socketio.run(app, host='0.0.0.0', port=5000, allow_unsafe_werkzeug=True) #- per nuove versioni di flask socket IO
