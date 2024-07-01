@@ -28,12 +28,15 @@ Io farei un file per ogni giorno, sarà poi lo strumento di statistica a giostra
 Tasto, nella pagina dedicata, di clear statistics. Sarà buona norma, all'avvio della macchina, pulire la cartella delle statistiche.
 folder delle statistiche Machine_Statistics.
 
-TO DO
-- verificare plot all data + plot show non bloccante
-- fare il dailiy plot
-- impostare la pagina delle statistiche: visualizzare le temperature anche qui + mettere i tasti per i grafici e gestire handler
+02/07/2024
+- messo chiamata a programma python esterno appInteractivePlot. Premo il tasto che lancia l'esecuzione di un programma che si occupa di fare i plot dei dati.
+
+- impostare la pagina delle statistiche: visualizzare le temperature anche qui + mettere i tasti per i grafici e gestire handler. Da qui ci accorgiamo pian piano delle necessità
+sulla visualizzazione dei grafici
+- migliorare la visualizzazione senza buchi dei dati: problema del timestamp messo senza dati associati.
 
 
 
 - iniziare ad implementare un po' di logica nel periodicTask
+- funzionalità manuale di attivazione/disattivazione forzata degli attuatori
 
