@@ -285,7 +285,12 @@ def handle_command(data):
         print("Handling reset command")
         socketio.emit('clear_messages')
 
-        plot_all_data('Machine_Statistics','Images') # prima cartella da dove peschi le statistiche, poi quella dove stampi le immagini
+        command = ['C:/Users/pietr/PycharmProjects/pythonProject/.venv/Scripts/python.exe', 'provaMatplotlib_inetractive.py', 'PLOT_ALL_DATA']
+        # Start the process
+        process = subprocess.Popen(command)
+
+        # Continue with your main program here without waiting
+        print("Subprocess started and main program continues...")
 
 
     elif data['cmd'] == 'load_parameters':
