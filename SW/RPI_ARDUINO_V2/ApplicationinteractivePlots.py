@@ -3,6 +3,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.widgets import CheckButtons
 from datetime import datetime
+import sys
 
 
 def plot_all_data(folder_path):
@@ -115,6 +116,28 @@ def plot_current_day_data_interactive(folder_path):
     plt.show()
 
 
+# Check the number of arguments passed
+if len(sys.argv) < 2:
+    print("Usage: python path_to_your_script.py arg1")
+    sys.exit(1)
+
+# Extract arguments
+arg1 = sys.argv[1]
+
+print(f"Argument 1: {arg1}") # arg1 = quale tipo di statistica vogliamo eseguire.
+
 # Example usage
-plot_all_data('Machine_Statistics')
-plot_current_day_data_interactive('Machine_Statistics')
+try:
+    if arg1 == 'PLOT_ALL_DATA':
+        plot_all_data('Machine_Statistics')
+    elif arg1 == 'PLOT_CURRENT_DAY_DATA':
+        plot_current_day_data_interactive('Machine_Statistics')
+    else:
+        raise ValueError("Invalid arg1 value: {}".format(arg1))
+
+except ValueError as ve:
+    print("Error:", ve)
+    # Handle the error appropriately, such as logging or providing feedback to the user
+except Exception as e:
+    print("An unexpected error occurred:", e)
+    # Handle other unexpected errors
