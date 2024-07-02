@@ -115,16 +115,16 @@
                 socket.emit('refresh_absolute_temperatures');
             });
 			
-			document.getElementById('allDayData_TemperaturesBtn').addEventListener('click', () => {
-                socket.emit('plot_allDayData_Temperatures');
+			document.getElementById('allDaysData_TemperaturesBtn').addEventListener('click', () => {
+                socket.emit('plot_allDaysData_Temperatures');
             });
 			
 			document.getElementById('currentDayData_TemperaturesBtn').addEventListener('click', () => {
                 socket.emit('plot_currentDayData_Temperatures');
             });
 			
-			document.getElementById('allDayData_HumidityBtn').addEventListener('click', () => {
-                socket.emit('plot_allDayData_Humidity');
+			document.getElementById('allDaysData_HumidityBtn').addEventListener('click', () => {
+                socket.emit('plot_allDaysData_Humidity');
             });
 			
 			document.getElementById('currentDayData_HumidityBtn').addEventListener('click', () => {
@@ -194,12 +194,12 @@
 			<h2>Buttons section</h2>
 			<h3>Temperatures Graphs</h3>
             <div class="button-grid">
-                <button id="allDayData_TemperaturesBtn" class="button">Plot All Day Data</button>
+                <button id="allDaysData_TemperaturesBtn" class="button">Plot All Days Data</button>
                 <button id="currentDayData_TemperaturesBtn" class="button">Plot Current Day Data</button>
             </div>
 			<h3>Humidity Graphs</h3>
             <div class="button-grid">
-                <button id="allDayData_HumidityBtn" class="button">Plot All Day Data</button>
+                <button id="allDaysData_HumidityBtn" class="button">Plot All Days Data</button>
                 <button id="currentDayData_HumidityBtn" class="button">Plot Current Day Data</button>
             </div>
         </div>
