@@ -5,10 +5,29 @@ from matplotlib.widgets import CheckButtons
 from datetime import datetime
 import sys
 
+''' 
+	Tanto le statistiche sono sempre qui dentro:
+	/Machine_Statistics
+			/Temperatures
+			/Humidity
+			
+	E in ogni subfolder memorizzo i vari dati.
+'''
 
-def plot_all_data(folder_path):
+def plot_all_days(data_type):
     all_data = []
 
+	machine_statistics_folder_path = "Machine_Statistics"
+	# faccio selezione del folder da cui pescare i dati.
+	if data_type == 'Temperatures':
+		folder_path = os.path.join(machine_statistics_folder_path, 'Temperatures')
+	elif data_type == 'Humidity':
+		folder_path = os.path.join(machine_statistics_folder_path, 'Humidity')
+	else:
+        raise ValueError("Invalid plot configuration")	
+		
+	print(folder_path)
+	
     # Read all CSV files in the folder
     file_count = 0
     for file_name in os.listdir(folder_path):
@@ -66,9 +85,20 @@ def plot_all_data(folder_path):
 
 
 # Function to plot current day's data interactively
-def plot_current_day_data_interactive(folder_path):
+def plot_current_day(data_type):
     current_date = datetime.now().strftime('%Y-%m-%d')
-    file_path = os.path.join(folder_path, f"{current_date}_temperatures.csv")
+	
+	machine_statistics_folder_path = "Machine_Statistics"
+	# faccio selezione del folder da cui pescare i dati.
+	if data_type == 'Temperatures':
+		folder_path = os.path.join(machine_statistics_folder_path, 'Temperatures')
+	elif data_type == 'Humidity':
+		folder_path = os.path.join(machine_statistics_folder_path, 'Humidity')
+	else:
+        raise ValueError("Invalid plot configuration")	
+		
+	# i files avranno lo stesso formato, tanto è già la cartella che li separa	
+    file_path = os.path.join(folder_path, f"{current_date}.csv")
 
     if not os.path.exists(file_path):
         print(f"No data file found for the current day: {current_date}")
@@ -128,10 +158,14 @@ print(f"Argument 1: {arg1}") # arg1 = quale tipo di statistica vogliamo eseguire
 
 # Example usage
 try:
-    if arg1 == 'PLOT_ALL_DATA':
-        plot_all_data('Machine_Statistics')
-    elif arg1 == 'PLOT_CURRENT_DAY_DATA':
-        plot_current_day_data_interactive('Machine_Statistics')
+    if arg1 == 'PLOT_ALL_DAYS_DATA_TEMPERATURES':
+        plot_all_days('Temperatures')
+    elif arg1 == 'PLOT_CURRENT_DAY_DATA_TEMPERATURES':
+        plot_current_day('Temperatures')
+	elif arg1 == 'PLOT_ALL_DAYS_DATA_HUMIDITY':
+        plot_all_days('Humidity')
+	elif arg1 == 'PLOT_CURRENT_DAY_DATA_HUMIDITY':
+        plot_current_day('Humidity')
     else:
         raise ValueError("Invalid arg1 value: {}".format(arg1))
 
