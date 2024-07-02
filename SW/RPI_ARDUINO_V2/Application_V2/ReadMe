@@ -36,7 +36,7 @@ folder delle statistiche Machine_Statistics.
 * Sensore 1 - Sensore 2
 * Sensore 3 - Sensore 4
 * Umidità - Temperatura Bulbo umido
-* Temperatura Media Incubatrice
+* min mean max temperature: mi predispongo nel caso di tanti sensori di temperatura, dove a colpo d'occhio posso vedere direttamente il minimo e il massimo valore, senza stare a cercare fra tutti i numeri.
 * Tempo ultima girata - Numero Girate Uova
 * Tempo dall'ultima girata - tempo mancante alla prossima girata
 * Max temperature Reached - Min temperature reached (button for resetting these statistics)
