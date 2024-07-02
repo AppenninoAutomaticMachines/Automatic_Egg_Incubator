@@ -31,6 +31,26 @@ folder delle statistiche Machine_Statistics.
 02/07/2024
 - messo chiamata a programma python esterno appInteractivePlot. Premo il tasto che lancia l'esecuzione di un programma che si occupa di fare i plot dei dati.
 
+03/07/2024
+- Dati da plottare nella zona delle statistiche:
+* Sensore 1 - Sensore 2
+* Sensore 3 - Sensore 4
+* Umidità - Temperatura Bulbo umido
+* Temperatura Media Incubatrice
+* Tempo ultima girata - Numero Girate Uova
+* Tempo dall'ultima girata - tempo mancante alla prossima girata
+* Max temperature Reached - Min temperature reached (button for resetting these statistics)
+
+
+Tasti:
+TEMPERATURE
+* Plot all data - Plot day data
+
+HUMIDITY
+* Plot all data - Plot day data
+
+- aggiugnere la memorizzazione delle statistiche di temperatura
+
 - impostare la pagina delle statistiche: visualizzare le temperature anche qui + mettere i tasti per i grafici e gestire handler. Da qui ci accorgiamo pian piano delle necessità
 sulla visualizzazione dei grafici
 - migliorare la visualizzazione senza buchi dei dati: problema del timestamp messo senza dati associati.
