@@ -56,6 +56,14 @@ sulla visualizzazione dei grafici
 - migliorare la visualizzazione senza buchi dei dati: problema del timestamp messo senza dati associati.
 
 
+03/07/2024
+debug del programma di plot per temperature e umidità
+- da provare python interactive plot, perché ho cambiato gli argomenti
+- cambiare la meomrizzazione dei file nelle due cartelle + implementare memorizzazione di temperature e umidità (memorizzazione flessibile in base al numero di sensori...)
+- cambiare la chiamata al programma python esterno
+
+- impostare la comunicazione dei dati alla pagina machine_statistics.html
+
 
 - iniziare ad implementare un po' di logica nel periodicTask
 - funzionalità manuale di attivazione/disattivazione forzata degli attuatori
