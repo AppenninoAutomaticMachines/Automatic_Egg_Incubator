@@ -7,20 +7,23 @@
     <style>
         body {
             font-family: Arial, sans-serif;
-            background-color: #f7f7f7;
-            color: #333;
+            background-color: #e0f7e9;
+            color: #2e8b57;
             display: flex;
             flex-direction: column;
             align-items: center;
             margin: 0;
-            padding: 0;
+            padding: 20px 0;
         }
         header, footer {
-            background-color: #333;
+            background-color: #2e8b57;
             color: white;
             width: 100%;
             text-align: center;
             padding: 1em 0;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
         }
         .container {
             margin: 20px;
@@ -32,10 +35,12 @@
             max-width: 800px;
         }
         h1 {
-            color: #333;
+            margin: 0;
+            font-size: 1.5em;
+            color: white;
         }
         .button {
-            background-color: #333;
+            background-color: #2e8b57;
             color: white;
             border: none;
             padding: 10px 20px;
@@ -44,16 +49,40 @@
             border-radius: 5px;
         }
         .button:hover {
-            background-color: #555;
+            background-color: #3aa76d;
         }
-        .stats {
+        .stats_4slots {
+			display: grid;
+			grid-template-columns: 2fr 1fr 2fr 1fr;
+			gap: 10px;
+			margin: 20px 0;
+			align-items: center; /* Center items vertically within the grid */
+		}
+		.stats_5slots {
+			display: grid;
+			grid-template-columns: 2fr 1fr 2fr 1fr 2fr;
+			gap: 10px;
+			margin: 20px 0;
+			align-items: center;
+		}
+		.stats_6slots {
+			display: grid;
+			grid-template-columns: 2fr 1fr 2fr 1fr 2fr 1fr;
+			gap: 10px;
+			margin: 20px 0;
+			align-items: center;
+		}
+        .info-section, .button-section {
             margin: 20px 0;
+            padding: 20px;
+            background-color: #f1f1f1;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
         }
         .button-grid {
             display: grid;
-            grid-template-columns: repeat(3, 1fr);
+            grid-template-columns: repeat(2, 1fr); /* 2 = perché voglio allineare solo due bottoni */
             gap: 10px;
-            margin-top: 20px;
         }
     </style>
     <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
@@ -62,24 +91,48 @@
             var socket = io();
 
             socket.on('machine_stats', function(data) {
-                document.getElementById('cpu_usage').innerText = data.cpu_usage + ' %';
-                document.getElementById('memory_usage').innerText = data.memory_usage + ' %';
-                document.getElementById('disk_usage').innerText = data.disk_usage + ' %';
+                document.getElementById('TMP01').innerText = data.TMP01.toFixed(2) + ' °C';
+                document.getElementById('TMP02').innerText = data.TMP02.toFixed(2) + ' °C';
+                document.getElementById('TMP03').innerText = data.TMP03.toFixed(2) + ' °C';
+				document.getElementById('TMP04').innerText = data.TMP04.toFixed(2) + ' °C';
+				
+				document.getElementById('DTH22_humidity').innerText = data.DTH22_humidity.toFixed(2) + ' °C';
+				document.getElementById('DTH22_temperature').innerText = data.DTH22_temperature.toFixed(2) + ' %';
+				
+				document.getElementById('minTemperature').innerText = data.minTemperature.toFixed(2) + ' °C';
+				document.getElementById('meanTemperature').innerText = data.meanTemperature.toFixed(2) + ' °C';
+				document.getElementById('maxTemperature').innerText = data.maxTemperature.toFixed(2) + ' °C';
+				document.getElementById('absoluteMinTemperature').innerText = data.absoluteMinTemperature.toFixed(2) + ' °C';
+				document.getElementById('absoluteMaxTemperature').innerText = data.absoluteMaxTemperature.toFixed(2) + ' °C';
+				
+				document.getElementById('timeLastTurn').innerText = data.timeLastTurn; /* COME STAMPIAMO UN TEMPO?? */
+				document.getElementById('numberOfEggTurns').innerText = data.numberOfEggTurns;
+				document.getElementById('elapsedTimeFromLastTurn').innerText = data.elapsedTimeFromLastTurn;
+				document.getElementById('missingTimeToNextTurn').innerText = data.missingTimeToNextTurn;	
             });
 
-            document.getElementById('refreshStatsBtn').addEventListener('click', () => {
-                socket.emit('request_stats');
+            document.getElementById('refreshAbsBtn').addEventListener('click', () => {
+                socket.emit('refresh_absolute_temperatures');
+            });
+			
+			document.getElementById('allDayData_TemperaturesBtn').addEventListener('click', () => {
+                socket.emit('plot_allDayData_Temperatures');
+            });
+			
+			document.getElementById('currentDayData_TemperaturesBtn').addEventListener('click', () => {
+                socket.emit('plot_currentDayData_Temperatures');
+            });
+			
+			document.getElementById('allDayData_HumidityBtn').addEventListener('click', () => {
+                socket.emit('plot_allDayData_Humidity');
+            });
+			
+			document.getElementById('currentDayData_HumidityBtn').addEventListener('click', () => {
+                socket.emit('plot_currentDayData_Humidity');
             });
 
             document.getElementById('backBtn').addEventListener('click', () => {
                 window.location.href = '/';
-            });
-
-            // Add event listeners for general purpose buttons
-            document.querySelectorAll('.general-button').forEach(button => {
-                button.addEventListener('click', () => {
-                    alert('Button ' + button.id + ' clicked');
-                });
             });
         });
     </script>
@@ -89,21 +142,70 @@
         <h1>Machine Statistics</h1>
     </header>
     <div class="container">
-        <div class="stats">
-            <h2>CPU Usage: <span id="cpu_usage">-- %</span></h2>
-            <h2>Memory Usage: <span id="memory_usage">-- %</span></h2>
-            <h2>Disk Usage: <span id="disk_usage">-- %</span></h2>
+        <div class="info-section">
+			<h2>Temperatures Data</h2>
+            <div class="stats_4slots">
+                <div>Sensor 1:</div>
+                <div id="TMP01">-- °C</div>
+                <div>Sensor 2:</div>
+                <div id="TMP02">-- °C</div>
+                <div>Sensor 3:</div>
+                <div id="TMP03">-- °C</div>
+                <div>Sensor 4:</div>
+                <div id="TMP04">-- °C</div>
+            </div>
+			<h2>Humidity Data</h2>
+            <div class="stats_4slots">
+                <div>Humidity DTH22:</div>
+                <div id="DTH22_humidity">-- %</div>
+                <div>Temperature DHT22:</div>
+                <div id="DTH22_temperature">-- °C</div>
+            </div>
+			<h2>General Statistics</h2>
+            <div class="stats_6slots">
+				<div>Min temp:</div>
+                <div id="minTemperature">-- °C</div>
+                <div>Mean temp:</div>
+                <div id="meanTemperature">-- °C</div>
+				<div>Max temp:</div>
+                <div id="maxTemperature">-- °C</div>
+            </div>
+			<div class="stats_5slots">
+                <div>Abs Min temp:</div>
+                <div id="absoluteMinTemperature">--</div>
+                <div>Abs Max temp:</div>
+                <div id="absoluteMaxTemperature">--</div>
+				<button id="refreshAbsBtn" class="button">Refresh Abs Vals</button>
+            </div>
+			<div class="stats_4slots">
+                <div>Time last turn:</div>
+                <div id="timeLastTurn">--</div>
+                <div>N° of egg turns:</div>
+                <div id="numberOfEggTurns">--</div>
+            </div>
+			<div class="stats_4slots">
+                <div>Elapsed time (prev turn):</div>
+                <div id="elapsedTimeFromLastTurn">--</div>
+                <div>Missing time (next turn):</div>
+                <div id="missingTimeToNextTurn">--</div>
+            </div>
         </div>
-        <button id="refreshStatsBtn" class="button">Refresh Stats</button>
-        <button id="backBtn" class="button">Back</button>
-        <div class="button-grid">
-            <button id="button1" class="button general-button">Button 1</button>
-            <button id="button2" class="button general-button">Button 2</button>
-            <button id="button3" class="button general-button">Button 3</button>
-            <button id="button4" class="button general-button">Button 4</button>
-            <button id="button5" class="button general-button">Button 5</button>
-            <button id="button6" class="button general-button">Button 6</button>
+        <div class="button-section">
+			<h2>Buttons section</h2>
+			<h3>Temperatures Graphs</h3>
+            <div class="button-grid">
+                <button id="allDayData_TemperaturesBtn" class="button">Plot All Day Data</button>
+                <button id="currentDayData_TemperaturesBtn" class="button">Plot Current Day Data</button>
+            </div>
+			<h3>Humidity Graphs</h3>
+            <div class="button-grid">
+                <button id="allDayData_HumidityBtn" class="button">Plot All Day Data</button>
+                <button id="currentDayData_HumidityBtn" class="button">Plot Current Day Data</button>
+            </div>
         </div>
+    </div>
+	<div class="container">
+        <button id="backBtn" class="button">Back to Main Page</button>
     </div>
     <footer>
         <p>Machine Statistics Page</p>
