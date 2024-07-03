@@ -47,20 +47,6 @@ def machine_stats():
     return render_template('machine_stats.html')
 
 
-@socketio.on('request_stats')
-def handle_request_stats():
-    cpu_usage = psutil.cpu_percent(interval=1)
-    memory_info = psutil.virtual_memory()
-    memory_usage = memory_info.percent
-    disk_usage = psutil.disk_usage('/').percent
-    stats = {
-        'cpu_usage': cpu_usage,
-        'memory_usage': memory_usage,
-        'disk_usage': disk_usage
-    }
-    emit('machine_stats', stats)
-
-
 def monitoringArduino_task():
     global simulationActive
     if simulationActive:
@@ -171,7 +157,7 @@ def decodeMessage(buffer, temp_data_list):
 def save_temperatures_data(temperatures): #passo un dictionary di temperature, dimensione variabile per gestire più o meno sensori dinamicamente
     now = datetime.now()
     current_date = now.strftime('%Y-%m-%d')
-    file_path = os.path.join("Machine_Statistics", f"{current_date}_temperatures.csv")
+    file_path = os.path.join("Machine_Statistics/Temperatures", f"{current_date}.csv")
 
     # Initialize the CSV file with headers if it doesn't exist
     if not os.path.exists(file_path):
@@ -226,17 +212,42 @@ def periodic_task():
                 currentTemperatures = temperature_queue.get()
                 save_temperatures_data(currentTemperatures) #{'TMP01': 23.1, 'TMP02': 23.1, 'TMP03': 23.1}
 
+                if current_page == 'index':
+                    data = currentTemperatures
+                    # Process the temperature data
+                    data.update({'mainHeater': random.choice([True, False])})
+                    data.update({'auxHeater': random.choice([True, False])})
+                    data.update({'machineState': random.randint(0, 5)})
 
-                data = currentTemperatures
-                # Process the temperature data
-                data.update({'mainHeater': random.choice([True, False])})
-                data.update({'auxHeater': random.choice([True, False])})
-                data.update({'machineState': random.randint(0, 5)})
+                    data.update({'sendHigherHysteresisLimit_currentValue': random.randint(0, 5)})
+                    data.update({'sendLowerHysteresisLimit_currentValue': random.randint(0, 5)})
+                    
+                    # Send data to HTML page
+                    socketio.emit('data_update', data)
+                
+                elif current_page == 'machine_stats':
+                    data = currentTemperatures
+                    # Process the temperature data
+                    data.update({'DTH22_humidity': random.randint(40, 60)})
+                    data.update({'DTH22_temperature': random.randint(10, 40)})
+                    
+                    data.update({'minTemperature': random.randint(10, 40)})
+                    data.update({'meanTemperature': random.randint(10, 40)})
+                    data.update({'maxTemperature': random.randint(10, 40)})
+                    data.update({'absoluteMinTemperature': random.randint(10, 40)})
+                    data.update({'absoluteMaxTemperature': random.randint(10, 40)})
+                    
+                    # timing shold be give in  seconds (HTML function that handles the conversion in hh:mm:ss)
+                    data.update({'timeLastTurn': random.randint(20, 300)})
+                    data.update({'numberOfEggTurns': random.randint(80, 100)})
+                    data.update({'elapsedTimeFromLastTurn': random.randint(2500, 7200)})
+                    data.update({'missingTimeToNextTurn': random.randint(10000, 50000)})
+                    
+                    # Send data to HTML page
+                    socketio.emit('machine_stats', data)
 
-                data.update({'sendHigherHysteresisLimit_currentValue': random.randint(0, 5)})
-                data.update({'sendLowerHysteresisLimit_currentValue': random.randint(0, 5)})
-                # Send data to HTML page
-                socketio.emit('data_update', data)
+                    
+                
         except Exception as e:
             print(f"Error in periodic_task: {e}")
 
@@ -271,6 +282,13 @@ def send_async_messages_task_fnct_FILO():
         time.sleep(10)
 
 
+@socketio.on('page_load')
+def handle_page_load(data):
+    print(data)
+    global current_page
+    current_page = data['page']
+        
+        
 @socketio.on('command')
 def handle_command(data):
     print(f"Received command: {data['cmd']} from button {data['button']}")
@@ -284,14 +302,6 @@ def handle_command(data):
         # Handle reset command
         print("Handling reset command")
         socketio.emit('clear_messages')
-
-        command = ['C:/Users/pietr/PycharmProjects/pythonProject/.venv/Scripts/python.exe', 'provaMatplotlib_inetractive.py', 'PLOT_ALL_DATA']
-        # Start the process
-        process = subprocess.Popen(command)
-
-        # Continue with your main program here without waiting
-        print("Subprocess started and main program continues...")
-
 
     elif data['cmd'] == 'load_parameters':
         print("Handling load_parameters command")
@@ -345,6 +355,41 @@ def handle_option(data):
     option = data.get('option', '')
     # Handle the option logic here
     print(f'Option selected: {option}')
+    
+    
+# SOCKETIO REQUESTS FROM MACHINE STATISTICS PAGE #
+@socketio.on('refresh_absolute_temperatures')
+def handle_request_stats():
+    print("refresh_absolute_temperatures")
+    
+@socketio.on('plot_allDaysData_Temperatures')
+def handle_request_stats():
+    print("plot_allDaysData_Temperatures")
+    #command = ['C:/Users/pietr/PycharmProjects/pythonProject/.venv/Scripts/python.exe', 'provaMatplotlib_inetractive.py', 'PLOT_ALL_DAYS_DATA_TEMPERATURES']
+    command = ['python', 'appInteractivePlots.py', 'PLOT_ALL_DAYS_DATA_TEMPERATURES']
+    process = subprocess.Popen(command)
+    print("Subprocess started and main program continues...")
+
+@socketio.on('plot_currentDayData_Temperatures')
+def handle_request_stats():
+    print("plot_currentDayData_Temperatures")
+    command = ['python', 'appInteractivePlots.py', 'PLOT_CURRENT_DAY_DATA_TEMPERATURES']
+    process = subprocess.Popen(command)
+    print("Subprocess started and main program continues...")
+
+@socketio.on('plot_allDaysData_Humidity')
+def handle_request_stats():
+    print("plot_allDaysData_Humidity")
+    command = ['python', 'appInteractivePlots.py', 'PLOT_ALL_DAYS_DATA_HUMIDITY']
+    process = subprocess.Popen(command)
+    print("Subprocess started and main program continues...")
+
+@socketio.on('plot_currentDayData_Humidity')
+def handle_request_stats():
+    print("plot_currentDayData_Humidity")
+    command = ['python', 'appInteractivePlots.py', 'PLOT_CURRENT_DAY_DATA_HUMIDITY']
+    process = subprocess.Popen(command)
+    print("Subprocess started and main program continues...")
 
 
 def process_number(number):
@@ -439,60 +484,15 @@ def load_configuration_startup():
         return load_json_file(most_recent_file), most_recent_file
 
 
-def plot_all_data(folder_path, images_folder_path):
-    all_data = []
-
-    # Read all CSV files in the folder
-    for file_name in os.listdir(folder_path):
-        if file_name.endswith('.csv'):
-            file_path = os.path.join(folder_path, file_name)
-            data = pd.read_csv(file_path, parse_dates=['Timestamp'])
-            all_data.append(data)
-
-    if not all_data:
-        print("No data files found in the folder.")
-        return
-
-    # Concatenate all data
-    concatenated_data = pd.concat(all_data)
-    concatenated_data.sort_values('Timestamp', inplace=True)
-
-    # Plot the data
-    plt.figure(figsize=(10, 6))
-    for column in concatenated_data.columns:
-        if column != 'Timestamp':
-            plt.plot(concatenated_data['Timestamp'], concatenated_data[column], label=column)
-
-    plt.xlabel('Timestamp')
-    plt.ylabel('Values')
-    plt.title('Data from All Files')
-    plt.legend()
-    plt.grid(True)
-    plt.xticks(rotation=45)
-    plt.tight_layout()
-
-    # Save the plot as an SVG file
-    all_data_folder_path = os.path.join(images_folder_path, 'allData_temperaturesPlot')
-    svg_filename = os.path.join(all_data_folder_path, 'all_data_plot.svg')
-    plt.savefig(svg_filename, format='svg')
-    plt.close()  # Close the plot to free up memory
-
-    # Open the SVG file with an image viewer
-    open_with_image_viewer(svg_filename)
-
-def open_with_image_viewer(file_path):
-    system = platform.system()
-    if system == 'Windows':
-        os.startfile(file_path)
-    elif system == 'Darwin':  # macOS
-        subprocess.call(['open', file_path])
-    else:  # Linux
-        subprocess.call(['xdg-open', file_path])
 
 
 # --------- GLOBAL VARIABLES SECTION ---------#
+# Global variable to store the current page
+current_page = None
+
+
 global simulationActive
-simulationActive = True
+simulationActive = False
 
 # PERSISTENT VARIABLES SECTION # 
 # Load all those variables being memorized in the configuration files (.json)
@@ -529,12 +529,13 @@ if not os.path.exists(machine_statistics_folder_path):
         os.makedirs(machine_statistics_folder_path)
 
 # --- Create Images folder ---#
-images_folder_path = "Images"
-if not os.path.exists(images_folder_path):
-    os.makedirs(images_folder_path)
+temperatures_folder_path = os.path.join(machine_statistics_folder_path, 'Temperatures')
+if not os.path.exists(temperatures_folder_path):
+    os.makedirs(temperatures_folder_path)
 
-all_data_folder_path = os.path.join(images_folder_path, 'allData_temperaturesPlot') #cartella che contiene i plot che fai quando clicchi il pulsante per plottare tutta l'incubata
-os.makedirs(all_data_folder_path, exist_ok = True)
+humidity_folder_path = os.path.join(machine_statistics_folder_path, 'Humidity')
+if not os.path.exists(humidity_folder_path):
+    os.makedirs(humidity_folder_path)
 
 
 
