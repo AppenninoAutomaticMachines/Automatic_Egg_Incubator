@@ -68,3 +68,4 @@ debug del programma di plot per temperature e umidità
 - iniziare ad implementare un po' di logica nel periodicTask
 - funzionalità manuale di attivazione/disattivazione forzata degli attuatori
 
+- implementare connessione remota
