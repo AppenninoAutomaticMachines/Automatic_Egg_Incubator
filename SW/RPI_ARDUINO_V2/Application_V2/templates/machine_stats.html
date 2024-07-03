@@ -84,20 +84,26 @@
             grid-template-columns: repeat(2, 1fr); /* 2 = perché voglio allineare solo due bottoni */
             gap: 10px;
         }
+        .bold-text {
+            font-weight: bold;
+        }
     </style>
     <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', (event) => {
             var socket = io();
+            
+            // Emit page name on load
+            socket.emit('page_load', { page: 'machine_stats' });
 
             socket.on('machine_stats', function(data) {
                 document.getElementById('TMP01').innerText = data.TMP01.toFixed(2) + ' °C';
                 document.getElementById('TMP02').innerText = data.TMP02.toFixed(2) + ' °C';
                 document.getElementById('TMP03').innerText = data.TMP03.toFixed(2) + ' °C';
-				document.getElementById('TMP04').innerText = data.TMP04.toFixed(2) + ' °C';
+				//document.getElementById('TMP04').innerText = data.TMP04.toFixed(2) + ' °C';
 				
-				document.getElementById('DTH22_humidity').innerText = data.DTH22_humidity.toFixed(2) + ' °C';
-				document.getElementById('DTH22_temperature').innerText = data.DTH22_temperature.toFixed(2) + ' %';
+				document.getElementById('DTH22_humidity').innerText = data.DTH22_humidity.toFixed(2) + ' %';
+				document.getElementById('DTH22_temperature').innerText = data.DTH22_temperature.toFixed(2) + ' °C';
 				
 				document.getElementById('minTemperature').innerText = data.minTemperature.toFixed(2) + ' °C';
 				document.getElementById('meanTemperature').innerText = data.meanTemperature.toFixed(2) + ' °C';
@@ -105,10 +111,10 @@
 				document.getElementById('absoluteMinTemperature').innerText = data.absoluteMinTemperature.toFixed(2) + ' °C';
 				document.getElementById('absoluteMaxTemperature').innerText = data.absoluteMaxTemperature.toFixed(2) + ' °C';
 				
-				document.getElementById('timeLastTurn').innerText = data.timeLastTurn; /* COME STAMPIAMO UN TEMPO?? */
+				document.getElementById('timeLastTurn').innerText = formatTime(data.timeLastTurn); // Updated to format time
 				document.getElementById('numberOfEggTurns').innerText = data.numberOfEggTurns;
-				document.getElementById('elapsedTimeFromLastTurn').innerText = data.elapsedTimeFromLastTurn;
-				document.getElementById('missingTimeToNextTurn').innerText = data.missingTimeToNextTurn;	
+				document.getElementById('elapsedTimeFromLastTurn').innerText = formatTime(data.elapsedTimeFromLastTurn);
+				document.getElementById('missingTimeToNextTurn').innerText = formatTime(data.missingTimeToNextTurn);	
             });
 
             document.getElementById('refreshAbsBtn').addEventListener('click', () => {
@@ -135,6 +141,15 @@
                 window.location.href = '/';
             });
         });
+        
+        // Function to format time from seconds to hh:mm:ss
+        function formatTime(seconds) {
+            const date = new Date(seconds * 1000);
+            const hh = String(date.getUTCHours()).padStart(2, '0');
+            const mm = String(date.getUTCMinutes()).padStart(2, '0');
+            const ss = String(date.getUTCSeconds()).padStart(2, '0');
+            return `${hh}:${mm}:${ss}`;
+        }
     </script>
 </head>
 <body>
@@ -146,48 +161,48 @@
 			<h2>Temperatures Data</h2>
             <div class="stats_4slots">
                 <div>Sensor 1:</div>
-                <div id="TMP01">-- °C</div>
+                <div id="TMP01" class="bold-text">-- °C</div>
                 <div>Sensor 2:</div>
-                <div id="TMP02">-- °C</div>
+                <div id="TMP02" class="bold-text">-- °C</div>
                 <div>Sensor 3:</div>
-                <div id="TMP03">-- °C</div>
+                <div id="TMP03" class="bold-text">-- °C</div>
                 <div>Sensor 4:</div>
-                <div id="TMP04">-- °C</div>
+                <div id="TMP04" class="bold-text">-- °C</div>
             </div>
 			<h2>Humidity Data</h2>
             <div class="stats_4slots">
                 <div>Humidity DTH22:</div>
-                <div id="DTH22_humidity">-- %</div>
+                <div id="DTH22_humidity" class="bold-text">-- %</div>
                 <div>Temperature DHT22:</div>
-                <div id="DTH22_temperature">-- °C</div>
+                <div id="DTH22_temperature" class="bold-text">-- °C</div>
             </div>
 			<h2>General Statistics</h2>
             <div class="stats_6slots">
 				<div>Min temp:</div>
-                <div id="minTemperature">-- °C</div>
+                <div id="minTemperature" class="bold-text">-- °C</div>
                 <div>Mean temp:</div>
-                <div id="meanTemperature">-- °C</div>
+                <div id="meanTemperature" class="bold-text">-- °C</div>
 				<div>Max temp:</div>
-                <div id="maxTemperature">-- °C</div>
+                <div id="maxTemperature" class="bold-text">-- °C</div>
             </div>
 			<div class="stats_5slots">
                 <div>Abs Min temp:</div>
-                <div id="absoluteMinTemperature">--</div>
+                <div id="absoluteMinTemperature" class="bold-text">--</div>
                 <div>Abs Max temp:</div>
-                <div id="absoluteMaxTemperature">--</div>
+                <div id="absoluteMaxTemperature" class="bold-text">--</div>
 				<button id="refreshAbsBtn" class="button">Refresh Abs Vals</button>
             </div>
 			<div class="stats_4slots">
                 <div>Time last turn:</div>
-                <div id="timeLastTurn">--</div>
+                <div id="timeLastTurn" class="bold-text">--</div>
                 <div>N° of egg turns:</div>
-                <div id="numberOfEggTurns">--</div>
+                <div id="numberOfEggTurns" class="bold-text">--</div>
             </div>
 			<div class="stats_4slots">
                 <div>Elapsed time (from prev turn):</div>
-                <div id="elapsedTimeFromLastTurn">--</div>
+                <div id="elapsedTimeFromLastTurn" class="bold-text">--</div>
                 <div>Missing time (to next turn):</div>
-                <div id="missingTimeToNextTurn">--</div>
+                <div id="missingTimeToNextTurn" class="bold-text">--</div>
             </div>
         </div>
         <div class="button-section">
