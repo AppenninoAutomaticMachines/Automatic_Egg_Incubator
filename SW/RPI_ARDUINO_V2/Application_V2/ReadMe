@@ -60,13 +60,15 @@ sulla visualizzazione dei grafici
 debug del programma di plot per temperature e umidità
 - da provare python interactive plot, perché ho cambiato gli argomenti
 - cambiare la meomrizzazione dei file nelle due cartelle + implementare memorizzazione di temperature e umidità (memorizzazione flessibile in base al numero di sensori...)
-- cambiare la chiamata al programma python esterno
+- cambiare la chiamata al programma python esterno FATTO: ok per Ubuntu, lasciato in commento per windows
 
-- aggiungere statistica del tempo di incubata/ore di incubata dal'inizio
+- aggiungere statistica del tempo di incubata/ore di incubata dal'inizio FATTO: messo anche il print corretto dei tempi
 
-- impostare la comunicazione dei dati alla pagina machine_statistics.html
+- impostare la comunicazione dei dati alla pagina machine_statistics.html FATTO: dipendentemente dalla pagina selezionata, python decide opportunamente che dati plottare
 
-
+TO DO:
+- memorizzare data umidità
+- plot raw dei dati + pulire outliers dovuti a mal-letture
 - iniziare ad implementare un po' di logica nel periodicTask
 - funzionalità manuale di attivazione/disattivazione forzata degli attuatori
 
