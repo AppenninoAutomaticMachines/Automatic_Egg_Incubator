@@ -62,6 +62,8 @@ debug del programma di plot per temperature e umidità
 - cambiare la meomrizzazione dei file nelle due cartelle + implementare memorizzazione di temperature e umidità (memorizzazione flessibile in base al numero di sensori...)
 - cambiare la chiamata al programma python esterno
 
+- aggiungere statistica del tempo di incubata/ore di incubata dal'inizio
+
 - impostare la comunicazione dei dati alla pagina machine_statistics.html
 
 
