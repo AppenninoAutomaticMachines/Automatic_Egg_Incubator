@@ -88,6 +88,9 @@
         document.addEventListener('DOMContentLoaded', (event) => {
             var socket = io();
 
+            // Emit page name on load
+            socket.emit('page_load', { page: 'index' });
+            
             socket.on('data_update', function(data) {
                 document.getElementById('TMP01').innerText = data.TMP01.toFixed(2) + ' °C';
                 document.getElementById('TMP02').innerText = data.TMP02.toFixed(2) + ' °C';
