@@ -73,3 +73,7 @@ TO DO:
 - funzionalità manuale di attivazione/disattivazione forzata degli attuatori
 
 - implementare connessione remota
+laser sempre acceso + fotoresistenza
+diapley 7 segmenti per temp media
+bit di alive: se rpy non comunica allora arduino off riscaldatori
+ 
