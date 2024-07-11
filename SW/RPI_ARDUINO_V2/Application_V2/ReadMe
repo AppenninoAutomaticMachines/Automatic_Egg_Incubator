@@ -78,5 +78,5 @@ diapley 7 segmenti per temp media
 bit di alive: se rpy non comunica allora arduino off riscaldatori
 
 allarme per raggiungimento di temperatura troppo alta
-
+- inserimento statistiche uova: uova messe, uova tolte, uova nate, uova infeconde, uova non nate
  
