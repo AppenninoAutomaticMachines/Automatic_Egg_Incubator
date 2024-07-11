@@ -21,6 +21,7 @@ import matplotlib.pyplot as plt
 import webbrowser
 import platform
 import subprocess
+import sys
 
 # Configure the serial port
 port = "COM6"
@@ -33,6 +34,18 @@ app.config['SECRET_KEY'] = 'secret!'
 socketio = SocketIO(app)
 
 temperature_queue = queue.Queue()
+humidity_queue = queue.Queue()
+
+dataQueueFromArduino = queue.Queue() # contiene sia temperature che umidità:
+'''
+è fondamentale rispettare questo ordine. Il riempimento dei dizionari lo segue!
+TMP01
+TMP02
+TMP03
+TMP04
+HUM01
+HTP01 sensore di temperatura dentro DHT22
+'''
 
 matplotlib.use('Agg')
 
@@ -54,11 +67,17 @@ def monitoringArduino_task():
         try:
             while True:
                 # Simulate data coming from Arduino
-                combined_data = {}
+                combined_data_temp = {}
                 for item in range(0, 3):
                     sensor_key = f'TMP0{item + 1}'
-                    combined_data[sensor_key] = round(random.uniform(200, 300) / 10, 2)
-                temperature_queue.put(combined_data)
+                    combined_data_temp[sensor_key] = round(random.uniform(200, 300) / 10, 2)
+                temperature_queue.put(combined_data_temp)
+                
+                combined_data_humidity = {}
+                for item in range(0, 1):
+                    sensor_key = f'HUM0{item + 1}'
+                    combined_data_humidity[sensor_key] = round(random.uniform(100, 800) / 10, 2)
+                humidity_queue.put(combined_data_humidity)
                 time.sleep(2)
         except Exception as e:
             print(f"An error occurred: {e}")
@@ -86,6 +105,10 @@ def read_from_arduino(serial_port):
     saving = False
     dataDict = {}
     temp_data_list = []
+    humidity_data_list = []
+    humidity_temp_data_list = [] # se ho multipli sensori DHT22, allora ho anche più temperature
+    
+    combined_data = {} #dizionario che lascio qui per inizare a collezionare i dati. Lo pubblico sulla queue appena ho raccolto tutto da arduino
 
     while True:
         try:
@@ -100,18 +123,50 @@ def read_from_arduino(serial_port):
                         buffer += dataRead
                     if dataRead == '>':
                         saving = False
-                        decodeMessage(buffer, temp_data_list)
+                        decodeMessage(buffer, temp_data_list, humidity_data_list, humidity_temp_data_list)
                         buffer = ''
-
-                        if len(temp_data_list) == 3:
-                            # se ho collezionato le 3 temperature
-                            combined_data = {}
+                        
+                        if len(temp_data_list) == 4:
+                            # se ho collezionato le 4 temperature
                             for item in temp_data_list:
                                 combined_data.update(item)
-                            temperature_queue.put(combined_data)
                             temp_data_list.clear()
+                            
+                        if len(humidity_data_list) == 1:
+                            # se ho collezionato 1 humidità
+                            for item in humidity_data_list:
+                                combined_data.update(item)
+                            humidity_data_list.clear()
+                            
+                        if len(humidity_temp_data_list) == 1:
+                            # se ho collezionato 1 humidità
+                            for item in humidity_temp_data_list:
+                                combined_data.update(item)
+                            humidity_temp_data_list.clear()
+                        
+                        '''
+                        # gestione della lista delle temperature #
+                        if len(temp_data_list) == 4:
+                            # se ho collezionato le 4 temperature
+                            combined_data_temp = {}
+                            for item in temp_data_list:
+                                combined_data_temp.update(item)
+                            temperature_queue.put(combined_data_temp)
+                            temp_data_list.clear()
+                        
+                        # gestione della lista delle umidità # 
+                        if len(humidity_data_list) == 1:
+                            # se ho collezionato 1 umidità
+                            combined_data_humidity = {}
+                            for item in humidity_data_list:
+                                combined_data_humidity.update(item)
+                            humidity_queue.put(combined_data_humidity)
+                            humidity_data_list.clear()
+                        '''
+                            
                     if dataRead == '#':
                         startTransmission = False
+                        dataQueueFromArduino.put(combined_data) # pubblico sulla queue alla fine di tutta la ricezione
         except UnicodeDecodeError as e:
             print(f"Decode error: {e}")
             # Clear the input buffer to avoid repeated errors
@@ -129,7 +184,7 @@ def is_number(s):
         return False
 
 
-def decodeMessage(buffer, temp_data_list):
+def decodeMessage(buffer, temp_data_list, humidity_data_list, humidity_temp_data_list):
     match = re.match(r"<([^,]+),([^>]+)>", buffer)
     if match:
         infoName_part = match.group(1)
@@ -143,8 +198,14 @@ def decodeMessage(buffer, temp_data_list):
                 number = int(infoData_part)
 
             # Example actions based on infoName_part
-            if infoName_part in ["TMP01", "TMP02", "TMP03"]:
+            if infoName_part in ["TMP01", "TMP02", "TMP03", "TMP04"]:
                 temp_data_list.append({infoName_part: number})
+                
+            if infoName_part in ["HUM01"]:
+                humidity_data_list.append({infoName_part: number})
+                
+            if infoName_part in ["HTP01"]:
+                humidity_temp_data_list.append({infoName_part: number})
 
             # AGGIUNGERE QUI ALTRE INFO CHE VENGONO DA ARDUINO #
         else:
@@ -154,10 +215,20 @@ def decodeMessage(buffer, temp_data_list):
     else:
         print("The input string does not match the expected format.")
 
-def save_temperatures_data(temperatures): #passo un dictionary di temperature, dimensione variabile per gestire più o meno sensori dinamicamente
+def save_data_to_files(data_type, data_dictionary): #passo un dictionary di temperature/humidities, dimensione variabile per gestire più o meno sensori dinamicamente
     now = datetime.now()
     current_date = now.strftime('%Y-%m-%d')
-    file_path = os.path.join("Machine_Statistics/Temperatures", f"{current_date}.csv")
+    
+    machine_statistics_folder_path = "Machine_Statistics"
+    # faccio selezione del folder da cui pescare i dati.
+    if data_type == 'Temperatures':
+	    folder_path = os.path.join(machine_statistics_folder_path, 'Temperatures')
+    elif data_type == 'Humidity':
+	    folder_path = os.path.join(machine_statistics_folder_path, 'Humidity')
+    else:
+        raise ValueError("Invalid path configuration")	
+        
+    file_path = os.path.join(folder_path, f"{current_date}.csv")
 
     # Initialize the CSV file with headers if it doesn't exist
     if not os.path.exists(file_path):
@@ -168,7 +239,7 @@ def save_temperatures_data(temperatures): #passo un dictionary di temperature, d
             result_list = ['Timestamp']
 
             # Append the keys from the dictionary to the list
-            result_list.extend(temperatures.keys())
+            result_list.extend(data_dictionary.keys())
 
             writer.writerow(result_list)
 
@@ -181,7 +252,7 @@ def save_temperatures_data(temperatures): #passo un dictionary di temperature, d
         values_list = [timestamp]
 
         # Append the values from the dictionary to the list
-        values_list.extend(temperatures.values())
+        values_list.extend(data_dictionary.values())
         writer.writerow(values_list)
 
 
@@ -208,28 +279,69 @@ def periodic_task():
             '''
 
             # Check for new data in the queue
-            if not temperature_queue.empty():
-                currentTemperatures = temperature_queue.get()
-                save_temperatures_data(currentTemperatures) #{'TMP01': 23.1, 'TMP02': 23.1, 'TMP03': 23.1}
+            if not dataQueueFromArduino.empty(): 
+                # GETTING DATA FROM QUEUE
+                dataQueueFromArduinoDict = dataQueueFromArduino.get()
+                # Create a new dictionary to store the first 4 temperatures
+                currentTemperatures = {}
 
-                if current_page == 'index':
-                    data = currentTemperatures
-                    # Process the temperature data
+                # Loop through the first 4 items of the original dictionary and add them to the new dictionary
+                for i, (key, value) in enumerate(dataQueueFromArduinoDict.items()):
+                    if i < 4:
+                        currentTemperatures[key] = value
+                    else:
+                        break
+                        
+                # Create a list to store the 5th element
+                currentHumidities = {}
+
+                # Loop through the items of the original dictionary and collect the 5th element, that is the humidity
+                for i, (key, value) in enumerate(dataQueueFromArduinoDict.items()):
+                    if i == 4: #4 <= i <= 5:
+                        currentHumidities[key] = value
+                        
+                # Create a list to store the 6th element
+                currentHumiditiesTemperature = {} # lista che contiene le temperature dai DHT22
+
+                # Loop through the items of the original dictionary and collect the 5th element, that is the humidity
+                for i, (key, value) in enumerate(dataQueueFromArduinoDict.items()):
+                    if i == 5: 
+                        currentHumiditiesTemperature[key] = value                        
+                # END GETTING DATA FROM QUEUE
+                
+                
+                # TEMPERATURE & HUMIDITY HANDLING - [PERIODIC TASK]
+                
+                # END TEMPERATURE & HUMIDITY HANDLING - [PERIODIC TASK]               
+                
+                
+                
+                # SAVING DATA IN FILES
+                save_data_to_files('Temperatures', currentTemperatures) #{'TMP01': 23.1, 'TMP02': 23.1, 'TMP03': 23.1}
+                save_data_to_files('Humidity', currentHumidities) #{'HUM01': 52.5}
+
+                # SENDING DATA TO WEB PAGES
+                if current_page == 'index':                   
+                    data = {}
+                    data.update(currentTemperatures)
+                    data.update({'DTH22_humidity': currentHumidities['HUM01']})
+                    data.update({'DTH22_temperature': currentHumiditiesTemperature['HTP01']})
+                    
                     data.update({'mainHeater': random.choice([True, False])})
                     data.update({'auxHeater': random.choice([True, False])})
                     data.update({'machineState': random.randint(0, 5)})
 
-                    data.update({'sendHigherHysteresisLimit_currentValue': random.randint(0, 5)})
-                    data.update({'sendLowerHysteresisLimit_currentValue': random.randint(0, 5)})
+                    data.update({'sendHigherHysteresisLimit_currentValue': configuration["tmp_higherHysteresisLimit"]})
+                    data.update({'sendLowerHysteresisLimit_currentValue': configuration["tmp_lowerHysteresisLimit"]})
                     
                     # Send data to HTML page
                     socketio.emit('data_update', data)
                 
                 elif current_page == 'machine_stats':
-                    data = currentTemperatures
-                    # Process the temperature data
-                    data.update({'DTH22_humidity': random.randint(40, 60)})
-                    data.update({'DTH22_temperature': random.randint(10, 40)})
+                    data = {}
+                    data.update(currentTemperatures)
+                    data.update({'DTH22_humidity': currentHumidities['HUM01']})
+                    data.update({'DTH22_temperature': currentHumiditiesTemperature['HTP01']})
                     
                     data.update({'minTemperature': random.randint(10, 40)})
                     data.update({'meanTemperature': random.randint(10, 40)})
@@ -302,7 +414,6 @@ def handle_command(data):
         # Handle reset command
         print("Handling reset command")
         socketio.emit('clear_messages')
-
     elif data['cmd'] == 'load_parameters':
         print("Handling load_parameters command")
         select_file()
@@ -310,6 +421,20 @@ def handle_command(data):
         print("Handling save_parameters command")
         global configuration
         print(configuration)
+        save_current_parameter_configuration()
+    elif data['cmd'] == 'show_parameters':
+        print("Handling show_parameters command")
+        # Define the folder
+        folder = './currentConfiguration'
+
+        # Open the most recent file in the default text editor
+        try:
+            open_most_recent_file_in_editor(folder)
+        except FileNotFoundError as e:
+            print(e)
+        except NotImplementedError as e:
+            print(e)
+        
 
 
 @socketio.on('number')
@@ -322,7 +447,10 @@ def handle_number(data):
 
 @socketio.on('higherHysteresisLimit')
 def handle_higher_hysteresis_limit(data):
-    higher_hysteresis_limit = data.get('higherHysteresisLimit')
+    higher_hysteresis_limit = float(data.get('higherHysteresisLimit'))
+    global configuration
+    configuration["tmp_higherHysteresisLimit"] = higher_hysteresis_limit    
+    
     print(f"Received higher hysteresis limit: {higher_hysteresis_limit}")
     # Handle the higher hysteresis limit as needed
     emit('message', {'text': f'Received higher hysteresis limit: {higher_hysteresis_limit}', 'color': 'green'})
@@ -330,7 +458,10 @@ def handle_higher_hysteresis_limit(data):
 
 @socketio.on('lowerHysteresisLimit')
 def handle_lower_hysteresis_limit(data):
-    lower_hysteresis_limit = data.get('lowerHysteresisLimit')
+    lower_hysteresis_limit = float(data.get('lowerHysteresisLimit'))
+    global configuration
+    configuration["tmp_lowerHysteresisLimit"] = lower_hysteresis_limit
+    
     print(f"Received lower hysteresis limit: {lower_hysteresis_limit}")
     # Handle the lower hysteresis limit as needed
     emit('message', {'text': f'Received lower hysteresis limit: {lower_hysteresis_limit}', 'color': 'orange'})
@@ -440,6 +571,24 @@ def select_file():
 
 
 # ---- HANDLING PERSISTENT PARAMETERS ----#
+def save_current_parameter_configuration():
+    # Get the current time formatted as a string
+    now = datetime.now()
+    timestamp = now.strftime('%Y%m%d_%H%M%S')
+
+    # Define the folder and file name
+    folder = './currentConfiguration'
+    os.makedirs(folder, exist_ok=True)  # Create the folder if it doesn't exist
+    file_name = f'currentConfiguration_{timestamp}.json'
+    file_path = os.path.join(folder, file_name)
+
+    # Save the dictionary to a JSON file
+    global configuration
+    with open(file_path, 'w') as json_file:
+        json.dump(configuration, json_file, indent=4)
+
+    print(f"Configuration saved to {file_path}")
+
 def load_json_file(file_path):
     with open(file_path, 'r') as f:
         current_content = json.load(f)
@@ -483,6 +632,17 @@ def load_configuration_startup():
             raise FileNotFoundError("No JSON files found in currentConfiguration folder.")
         return load_json_file(most_recent_file), most_recent_file
 
+def open_most_recent_file_in_editor(folder):
+    most_recent_file = get_most_recent_file(folder)
+    
+    # Determine the platform and open the file in the default text editor
+    if os.name == 'nt':  # For Windows
+        os.startfile(most_recent_file)
+    elif os.name == 'posix':  # For Linux and macOS
+        opener = 'open' if sys.platform == 'darwin' else 'xdg-open'
+        os.system(f'{opener} "{most_recent_file}"')
+    else:
+        raise NotImplementedError("Opening files is not implemented for this operating system.")
 
 
 
