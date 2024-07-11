@@ -65,12 +65,16 @@ debug del programma di plot per temperature e umidità
 - aggiungere statistica del tempo di incubata/ore di incubata dal'inizio FATTO: messo anche il print corretto dei tempi
 
 - impostare la comunicazione dei dati alla pagina machine_statistics.html FATTO: dipendentemente dalla pagina selezionata, python decide opportunamente che dati plottare
+- FATTO memorizzare data umidità
+- FATTO salvataggio dei parametri in cartella currentConfig + visualizzazione del json dei parametri correnti (così vedi anche quelli nascosti)
+- FATTO uniformato i dizionari dei dati passati
+- FATTO uniformato la visualizzazioen delle temperature
+
 
 TO DO:
-- memorizzare data umidità
 - plot raw dei dati + pulire outliers dovuti a mal-letture
-- iniziare ad implementare un po' di logica nel periodicTask
-- funzionalità manuale di attivazione/disattivazione forzata degli attuatori
+- iniziare ad implementare un po' di logica nel periodicTask (sincronizzata con l'arrivo delle temperature)
+- funzionalità manuale di attivazione/disattivazione forzata degli attuatori (periodiTask, ma indipendente dalle temperature)
 
 - implementare connessione remota
 laser sempre acceso + fotoresistenza
