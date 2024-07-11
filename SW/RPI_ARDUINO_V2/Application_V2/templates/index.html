@@ -82,6 +82,16 @@
             margin-top: 20px;
             width: 100%;
         }
+        .stats_4slots {
+			display: grid;
+			grid-template-columns: 2fr 1fr 2fr 1fr;
+			gap: 10px;
+			margin: 20px 0;
+			align-items: center; /* Center items vertically within the grid */
+		}
+		.bold-text {
+            font-weight: bold;
+        }
     </style>
     <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
     <script>
@@ -95,6 +105,10 @@
                 document.getElementById('TMP01').innerText = data.TMP01.toFixed(2) + ' °C';
                 document.getElementById('TMP02').innerText = data.TMP02.toFixed(2) + ' °C';
                 document.getElementById('TMP03').innerText = data.TMP03.toFixed(2) + ' °C';
+				document.getElementById('TMP04').innerText = data.TMP04.toFixed(2) + ' °C';
+				
+				document.getElementById('DTH22_humidity').innerText = data.DTH22_humidity.toFixed(2) + ' %';
+				document.getElementById('DTH22_temperature').innerText = data.DTH22_temperature.toFixed(2) + ' °C';
                 
                 var mainHeaterElement = document.getElementById('mainHeater');
                 mainHeaterElement.innerText = data.mainHeater ? "ON" : "OFF";
@@ -106,8 +120,8 @@
                 
                 document.getElementById('machineState').innerText = data.machineState;
                 
-                document.getElementById('sendHigherHysteresisLimit_currentValue').innerText = data.sendHigherHysteresisLimit_currentValue;
-                document.getElementById('sendLowerHysteresisLimit_currentValue').innerText = data.sendLowerHysteresisLimit_currentValue;
+                document.getElementById('sendHigherHysteresisLimit_currentValue').innerText = data.sendHigherHysteresisLimit_currentValue.toFixed(2) + ' °C';
+                document.getElementById('sendLowerHysteresisLimit_currentValue').innerText = data.sendLowerHysteresisLimit_currentValue.toFixed(2) + ' °C';
                 
                 
             });
@@ -188,6 +202,10 @@
             document.getElementById('saveParametersBtn').addEventListener('click', () => {
                 socket.emit('command', { cmd: 'save_parameters', button: 'saveParameters' });
             });
+            
+            document.getElementById('showParametersBtn').addEventListener('click', () => {
+                socket.emit('command', { cmd: 'show_parameters', button: 'showParameters' });
+            });
 
             document.getElementById('sendNumberBtn').addEventListener('click', () => {
                 let number = document.getElementById('numberInput').value;
@@ -236,10 +254,24 @@
     </header>
     <div class="container">
         <div class="sensor-data">
-            <h2>Sensor Data</h2>
-            <p>Temperature Sensor 1: <span id="TMP01">-- °C</span></p>
-            <p>Temperature Sensor 2: <span id="TMP02">-- °C</span></p>
-            <p>Temperature Sensor 3: <span id="TMP03">-- °C</span></p>
+            <h2>Temperatures Data</h2>
+            <div class="stats_4slots">
+                <div>Sensor 1:</div>
+                <div id="TMP01" class="bold-text">--</div>
+                <div>Sensor 2:</div>
+                <div id="TMP02" class="bold-text">--</div>
+                <div>Sensor 3:</div>
+                <div id="TMP03" class="bold-text">--</div>
+                <div>Sensor 4:</div>
+                <div id="TMP04" class="bold-text">--</div>
+            </div>
+			<h2>Humidity Data</h2>
+            <div class="stats_4slots">
+                <div>Humidity DTH22:</div>
+                <div id="DTH22_humidity" class="bold-text">--</div>
+                <div>Temperature DHT22:</div>
+                <div id="DTH22_temperature" class="bold-text">--</div>
+            </div>
         </div>
         <div class="system-info">
             <h2>System Info</h2>
@@ -258,6 +290,7 @@
             <h2>Parameters</h2>
             <button id="loadParametersBtn" class="button">Load Params</button>
             <button id="saveParametersBtn" class="button">Save Params</button>
+            <button id="showParametersBtn" class="button">Show Params</button>
             <br>
             <input type="text" id="numberInput" placeholder="Enter a number">
             <button id="sendNumberBtn" class="button">Send Number</button>
