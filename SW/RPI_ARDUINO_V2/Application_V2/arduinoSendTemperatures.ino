@@ -192,6 +192,13 @@ void loop() {
     listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(bufferChar, fbuffChar), ">");
     listofDataToSend_numberOfData++;
     gotTemperatures = false;
+
+    float humidityDHT22 = random(150, 850) / 10.0;
+    strcpy(bufferChar, "<HUM01,");
+    dtostrf( humidityDHT22, 1, 1, fbuffChar); 
+    listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(bufferChar, fbuffChar), ">");
+    listofDataToSend_numberOfData++;
+    gotTemperatures = false;
   }
   /*
   if(digitalRead(7)){
