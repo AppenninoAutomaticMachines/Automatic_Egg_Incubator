@@ -79,4 +79,5 @@ bit di alive: se rpy non comunica allora arduino off riscaldatori
 
 allarme per raggiungimento di temperatura troppo alta
 - inserimento statistiche uova: uova messe, uova tolte, uova nate, uova infeconde, uova non nate
+- comandi manuali del motore: vai in automatico, vai in posizioe orizzontale, fai un giro, comando manuale, ritorna in automatico...
  
