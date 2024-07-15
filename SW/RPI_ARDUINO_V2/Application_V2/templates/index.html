@@ -125,6 +125,13 @@
                 
                 
             });
+            
+            // Receive and set the initial state
+            socket.on('initial_state', function(data) {
+                document.getElementById('flag1').checked = data.flag1;
+                document.getElementById('flag2').checked = data.flag2;
+                document.getElementById(data.temperatureControlOption).checked = true;
+            });
 
             function displayMessage(message) {
                 var messagesElement = document.getElementById('messages');
@@ -297,12 +304,12 @@
             <br><br>
             <input type="text" id="higherHysteresisLimitInput" placeholder="Higher Hysteresis Limit">
             <button id="sendHigherHysteresisLimitBtn" class="button">Send Higher Hysteresis Limit</button>
-            Current Value:[<span id="sendHigherHysteresisLimit_currentValue">--</span>]
+            Current Value:[ <span id="sendHigherHysteresisLimit_currentValue" class="bold-text">--</span> ]
             <br><br>
             
             <input type="text" id="lowerHysteresisLimitInput" placeholder="Lower Hysteresis Limit">
             <button id="sendLowerHysteresisLimitBtn" class="button">Send Lower Hysteresis Limit</button>
-            Current Value:[<span id="sendLowerHysteresisLimit_currentValue">--</span>]            
+            Current Value:[ <span id="sendLowerHysteresisLimit_currentValue" class="bold-text">--</span> ]             
             <br><br>
     
 	    <!-- Add checkboxes for Flag1 and Flag2 -->
@@ -315,14 +322,15 @@
 	    <br><br>
 	    
 	    <!-- Add radio buttons -->
+	    <p>Temperature control options:</p>
 	    <label>
-		<input type="radio" name="option" value="option1" id="option1" checked> Option 1
+		<input type="radio" name="option" value="maxValueOption" id="maxValueOption"> Max Value
 	    </label>
 	    <label>
-		<input type="radio" name="option" value="option2" id="option2"> Option 2
+		<input type="radio" name="option" value="meanValueOption" id="meanValueOption"> Mean Value
 	    </label>
 	    <label>
-		<input type="radio" name="option" value="option3" id="option3"> Option 3
+		<input type="radio" name="option" value="minValueOption" id="minValueOption"> Min Value
 	    </label>
         </div>
         <div class="message-section">
