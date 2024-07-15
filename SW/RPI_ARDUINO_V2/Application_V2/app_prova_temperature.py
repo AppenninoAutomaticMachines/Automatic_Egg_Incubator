@@ -295,8 +295,8 @@ def periodic_task():
                 if current_page == 'index':                   
                     data = {}
                     data.update(currentTemperatures)
-                    data.update({'DTH22_humidity': currentHumidities['HUM01']})
-                    data.update({'DTH22_temperature': currentHumiditiesTemperature['HTP01']})
+                    data.update(currentHumidities)
+                    data.update(currentHumiditiesTemperature)
                     
                     data.update({'mainHeater': random.choice([True, False])})
                     data.update({'auxHeater': random.choice([True, False])})
