@@ -289,7 +289,7 @@ def periodic_task():
                 
                 
                 # STATISTICS- [PERIODIC TASK]
-                #temperatures_statistics(currentTemperatures)
+                temperatureTracker.update_temperatures(currentTemperatures)
                 #humidity_statistics(currentHumidities)
                 #timing_statistics()
                 #egg_statistics()
@@ -324,11 +324,11 @@ def periodic_task():
                     data.update(currentHumidities)
                     data.update(currentHumiditiesTemperature)
                     
-                    data.update({'minTemperature': random.randint(10, 40)})
-                    data.update({'meanTemperature': random.randint(10, 40)})
-                    data.update({'maxTemperature': random.randint(10, 40)})
-                    data.update({'absoluteMinTemperature': random.randint(10, 40)})
-                    data.update({'absoluteMaxTemperature': random.randint(10, 40)})
+                    data.update({'minTemperature': temperatureTracker.get_min_temp()})
+                    data.update({'meanTemperature': temperatureTracker.get_mean_temp()})
+                    data.update({'maxTemperature': temperatureTracker.get_max_temp()})
+                    data.update({'absoluteMinTemperature': temperatureTracker.get_abs_min_temp()})
+                    data.update({'absoluteMaxTemperature': temperatureTracker.get_abs_max_temp()})
                     
                     # timing shold be give in  seconds (HTML function that handles the conversion in hh:mm:ss)
                     data.update({'timeLastTurn': random.randint(20, 300)})
@@ -502,6 +502,7 @@ def handle_option(data):
 # SOCKETIO REQUESTS FROM MACHINE STATISTICS PAGE #
 @socketio.on('refresh_absolute_temperatures')
 def handle_request_stats():
+    temperatureTracker.reset_absolute_extremes_to_mean() # problema di concorrenza con periodic task
     print("refresh_absolute_temperatures")
     
 @socketio.on('plot_allDaysData_Temperatures')
@@ -657,7 +658,60 @@ def open_most_recent_file_in_editor(folder):
         
         
 
-
+#--- OBJECT to implement local persistence ---#
+class TemperatureTracker:
+    def __init__(self):
+        self.temp_dict = {}
+        self.abs_min = None
+        self.abs_max = None
+    
+    def update_temperatures(self, new_temp_dict):
+        self.temp_dict = new_temp_dict
+        self.update_absolute_extremes()
+    
+    def get_max_temp(self):
+        if not self.temp_dict:
+            return None
+        return max(self.temp_dict.values())
+    
+    def get_min_temp(self):
+        if not self.temp_dict:
+            return None
+        return min(self.temp_dict.values())
+    
+    def get_mean_temp(self):
+        if not self.temp_dict:
+            return None
+        return sum(self.temp_dict.values()) / len(self.temp_dict)
+        
+    def get_abs_min_temp(self):
+        if not self.abs_min:
+            return None
+        return self.abs_min
+        
+    def get_abs_max_temp(self):
+        if not self.abs_max:
+            return None
+        return self.abs_max
+        
+    def update_absolute_extremes(self):
+        if not self.temp_dict:
+            self.abs_min = None
+            self.abs_max = None
+            return
+        
+        current_min = self.get_min_temp()
+        current_max = self.get_max_temp()
+        
+        if self.abs_min is None or current_min < self.abs_min:
+            self.abs_min = current_min
+        if self.abs_max is None or current_max > self.abs_max:
+            self.abs_max = current_max
+    
+    def reset_absolute_extremes_to_mean(self):
+        mean_temp = self.get_mean_temp()
+        self.abs_min = mean_temp
+        self.abs_max = mean_temp
 
 
 # --------- GLOBAL VARIABLES SECTION ---------#
@@ -694,6 +748,8 @@ stpr_defaultSpeed = configuration["stpr_defaultSpeed"]
 print(f"stpr_defaultSpeed: {stpr_defaultSpeed}")
 '''
 print()
+
+temperatureTracker = TemperatureTracker()
 
 # --------- END GLOBAL VARIABLES SECTION ---------#
 
