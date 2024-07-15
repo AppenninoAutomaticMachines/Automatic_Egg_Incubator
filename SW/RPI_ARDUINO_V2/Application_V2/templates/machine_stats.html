@@ -100,10 +100,10 @@
                 document.getElementById('TMP01').innerText = data.TMP01.toFixed(2) + ' °C';
                 document.getElementById('TMP02').innerText = data.TMP02.toFixed(2) + ' °C';
                 document.getElementById('TMP03').innerText = data.TMP03.toFixed(2) + ' °C';
-				//document.getElementById('TMP04').innerText = data.TMP04.toFixed(2) + ' °C';
+				document.getElementById('TMP04').innerText = data.TMP04.toFixed(2) + ' °C';
 				
-				document.getElementById('DTH22_humidity').innerText = data.DTH22_humidity.toFixed(2) + ' %';
-				document.getElementById('DTH22_temperature').innerText = data.DTH22_temperature.toFixed(2) + ' °C';
+				document.getElementById('HUM01').innerText = data.HUM01.toFixed(2) + ' %';
+				document.getElementById('HTP01').innerText = data.HTP01.toFixed(2) + ' °C';
 				
 				document.getElementById('minTemperature').innerText = data.minTemperature.toFixed(2) + ' °C';
 				document.getElementById('meanTemperature').innerText = data.meanTemperature.toFixed(2) + ' °C';
@@ -161,20 +161,20 @@
 			<h2>Temperatures Data</h2>
             <div class="stats_4slots">
                 <div>Sensor 1:</div>
-                <div id="TMP01" class="bold-text">-- °C</div>
+                <div id="TMP01" class="bold-text">--</div>
                 <div>Sensor 2:</div>
-                <div id="TMP02" class="bold-text">-- °C</div>
+                <div id="TMP02" class="bold-text">--</div>
                 <div>Sensor 3:</div>
-                <div id="TMP03" class="bold-text">-- °C</div>
+                <div id="TMP03" class="bold-text">--</div>
                 <div>Sensor 4:</div>
-                <div id="TMP04" class="bold-text">-- °C</div>
+                <div id="TMP04" class="bold-text">--</div>
             </div>
 			<h2>Humidity Data</h2>
             <div class="stats_4slots">
                 <div>Humidity DTH22:</div>
-                <div id="DTH22_humidity" class="bold-text">-- %</div>
+                <div id="HUM01" class="bold-text">--</div>
                 <div>Temperature DHT22:</div>
-                <div id="DTH22_temperature" class="bold-text">-- °C</div>
+                <div id="HTP01" class="bold-text">--</div>
             </div>
 			<h2>General Statistics</h2>
             <div class="stats_6slots">
