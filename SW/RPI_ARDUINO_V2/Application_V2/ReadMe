@@ -89,5 +89,11 @@ allarme per raggiungimento di temperatura troppo alta
 // sezioen temperature
 // sezione umidità
 // sezione temperature da umidità
+potrei semplicemente specificare un ordine con gli identificativi:
+["TMP01", "TMP02", "TMP03", "TMP04"]
+["HUM01", "TMP02", "TMP03", "TMP04"]
+["HTP", "TMP02", "TMP03", "TMP04"]
+
+
 
  
