@@ -279,11 +279,21 @@ def periodic_task():
                 print("currentHumiditiesTemperature:")
                 print(currentHumiditiesTemperature)
                 '''
-                # END GETTING DATA FROM QUEUE               
+                # END GETTING DATA FROM QUEUE  
+                
+                             
                 
                 # TEMPERATURE & HUMIDITY HANDLING - [PERIODIC TASK]
                 
-                # END TEMPERATURE & HUMIDITY HANDLING - [PERIODIC TASK]               
+                # END TEMPERATURE & HUMIDITY HANDLING - [PERIODIC TASK]       
+                
+                
+                # STATISTICS- [PERIODIC TASK]
+                #temperatures_statistics(currentTemperatures)
+                #humidity_statistics(currentHumidities)
+                #timing_statistics()
+                #egg_statistics()
+                # END STATISTICS - [PERIODIC TASK]         
                 
                 
                 
@@ -311,8 +321,8 @@ def periodic_task():
                 elif current_page == 'machine_stats':
                     data = {}
                     data.update(currentTemperatures)
-                    data.update({'DTH22_humidity': currentHumidities['HUM01']})
-                    data.update({'DTH22_temperature': currentHumiditiesTemperature['HTP01']})
+                    data.update(currentHumidities)
+                    data.update(currentHumiditiesTemperature)
                     
                     data.update({'minTemperature': random.randint(10, 40)})
                     data.update({'meanTemperature': random.randint(10, 40)})
@@ -363,13 +373,29 @@ def send_async_messages_task_fnct_FILO():
         color = 'red'
         socketio.emit('async_message', {'text': message, 'color': color})
         time.sleep(10)
+        
+def web_page_initialization():
+    # funzione che chiamo una volta all'avvio per inviare i dati che ho appena caricato alla pagina web di controllo, in particolare i valori delle selezioni dei controlli:
+    # Send data to HTML page
+    data = {}
+    data.update({'flag1': configuration["flag1"]})
+    data.update({'flag2': configuration["flag2"]})
+    data.update({'temperatureControlOption': configuration["temperatureControlOption"]}) # maxValueOption meanValueOption minValueOption
+    socketio.emit('initial_state', data)
+    print(data)
+    return True
 
-
+webPageInitializationDone = False
 @socketio.on('page_load')
 def handle_page_load(data):
     print(data)
     global current_page
     current_page = data['page']
+    
+    global webPageInitializationDone
+    if not webPageInitializationDone:
+        if current_page == 'index': 
+            webPageInitializationDone = web_page_initialization();
         
         
 @socketio.on('command')
@@ -393,6 +419,14 @@ def handle_command(data):
         global configuration
         print(configuration)
         save_current_parameter_configuration()
+        folder = './currentConfiguration'
+        # Open the most recent file in the default text editor
+        try:
+            open_most_recent_file_in_editor(folder)
+        except FileNotFoundError as e:
+            print(e)
+        except NotImplementedError as e:
+            print(e)
     elif data['cmd'] == 'show_parameters':
         print("Handling show_parameters command")
         # Define the folder
@@ -441,6 +475,8 @@ def handle_lower_hysteresis_limit(data):
 @socketio.on('flag1')
 def handle_flag(data):
     flag1 = data.get('flag1', False)
+    global configuration
+    configuration["flag1"] = flag1  
     # Handle the flag logic here
     print(f'Flag1: {flag1}')
 
@@ -448,6 +484,8 @@ def handle_flag(data):
 @socketio.on('flag2')
 def handle_flag(data):
     flag2 = data.get('flag2', False)
+    global configuration
+    configuration["flag2"] = flag2
     # Handle the flag logic here
     print(f'Flag2: {flag2}')
 
@@ -455,6 +493,8 @@ def handle_flag(data):
 @socketio.on('option')
 def handle_option(data):
     option = data.get('option', '')
+    global configuration
+    configuration["temperatureControlOption"] = option
     # Handle the option logic here
     print(f'Option selected: {option}')
     
@@ -614,11 +654,14 @@ def open_most_recent_file_in_editor(folder):
         os.system(f'{opener} "{most_recent_file}"')
     else:
         raise NotImplementedError("Opening files is not implemented for this operating system.")
+        
+        
+
 
 
 
 # --------- GLOBAL VARIABLES SECTION ---------#
-# Global variable to store the current page
+# Global variable to store the current 
 current_page = None
 
 
@@ -671,9 +714,11 @@ if not os.path.exists(humidity_folder_path):
 
 
 
-if __name__ == '__main__':
+if __name__ == '__main__':    
     threading.Thread(target=monitoringArduino_task).start()
     threading.Thread(target=periodic_task).start()
     threading.Thread(target=send_async_messages_task_fnct).start()
     threading.Thread(target=send_async_messages_task_fnct_FILO).start()
     socketio.run(app, host='0.0.0.0', port=5000, allow_unsafe_werkzeug=True) #- per nuove versioni di flask socket IO
+    
+    
