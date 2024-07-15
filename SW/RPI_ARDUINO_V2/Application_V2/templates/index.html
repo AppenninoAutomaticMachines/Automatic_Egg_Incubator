@@ -107,8 +107,8 @@
                 document.getElementById('TMP03').innerText = data.TMP03.toFixed(2) + ' °C';
 				document.getElementById('TMP04').innerText = data.TMP04.toFixed(2) + ' °C';
 				
-				document.getElementById('DTH22_humidity').innerText = data.DTH22_humidity.toFixed(2) + ' %';
-				document.getElementById('DTH22_temperature').innerText = data.DTH22_temperature.toFixed(2) + ' °C';
+				document.getElementById('HUM01').innerText = data.HUM01.toFixed(2) + ' %';
+				document.getElementById('HTP01').innerText = data.HTP01.toFixed(2) + ' °C';
                 
                 var mainHeaterElement = document.getElementById('mainHeater');
                 mainHeaterElement.innerText = data.mainHeater ? "ON" : "OFF";
@@ -268,9 +268,9 @@
 			<h2>Humidity Data</h2>
             <div class="stats_4slots">
                 <div>Humidity DTH22:</div>
-                <div id="DTH22_humidity" class="bold-text">--</div>
+                <div id="HUM01" class="bold-text">--</div>
                 <div>Temperature DHT22:</div>
-                <div id="DTH22_temperature" class="bold-text">--</div>
+                <div id="HTP01" class="bold-text">--</div>
             </div>
         </div>
         <div class="system-info">
