@@ -1,3 +1,7 @@
+'''
+With new identifiers.
+'''
+
 import matplotlib
 from flask import Flask, render_template, jsonify
 from flask_socketio import SocketIO, emit
@@ -39,13 +43,13 @@ humidity_queue = queue.Queue()
 dataQueueFromArduino = queue.Queue() # contiene sia temperature che umidità:
 '''
 è fondamentale rispettare questo ordine. Il riempimento dei dizionari lo segue!
-TMP01
-TMP02
-TMP03
-TMP04
-HUM01
-HTP01 sensore di temperatura dentro DHT22
+
+["TMP01", "TMP02", "TMP03", "TMP04", "HUM01", "HTP01"]
+
+qui definisco solo gli identificatori che devono essere riuniti in gruppi
 '''
+
+identifiers = ["TMP", "HUM", "HTP"]
 
 matplotlib.use('Agg')
 
@@ -104,9 +108,7 @@ def read_from_arduino(serial_port):
     startTransmission = False
     saving = False
     dataDict = {}
-    temp_data_list = []
-    humidity_data_list = []
-    humidity_temp_data_list = [] # se ho multipli sensori DHT22, allora ho anche più temperature
+    identifiers_data_list = []
     
     combined_data = {} #dizionario che lascio qui per inizare a collezionare i dati. Lo pubblico sulla queue appena ho raccolto tutto da arduino
 
@@ -123,49 +125,17 @@ def read_from_arduino(serial_port):
                         buffer += dataRead
                     if dataRead == '>':
                         saving = False
-                        decodeMessage(buffer, temp_data_list, humidity_data_list, humidity_temp_data_list)
-                        buffer = ''
-                        
-                        if len(temp_data_list) == 4:
-                            # se ho collezionato le 4 temperature
-                            for item in temp_data_list:
-                                combined_data.update(item)
-                            temp_data_list.clear()
-                            
-                        if len(humidity_data_list) == 1:
-                            # se ho collezionato 1 humidità
-                            for item in humidity_data_list:
-                                combined_data.update(item)
-                            humidity_data_list.clear()
-                            
-                        if len(humidity_temp_data_list) == 1:
-                            # se ho collezionato 1 humidità
-                            for item in humidity_temp_data_list:
-                                combined_data.update(item)
-                            humidity_temp_data_list.clear()
-                        
-                        '''
-                        # gestione della lista delle temperature #
-                        if len(temp_data_list) == 4:
-                            # se ho collezionato le 4 temperature
-                            combined_data_temp = {}
-                            for item in temp_data_list:
-                                combined_data_temp.update(item)
-                            temperature_queue.put(combined_data_temp)
-                            temp_data_list.clear()
-                        
-                        # gestione della lista delle umidità # 
-                        if len(humidity_data_list) == 1:
-                            # se ho collezionato 1 umidità
-                            combined_data_humidity = {}
-                            for item in humidity_data_list:
-                                combined_data_humidity.update(item)
-                            humidity_queue.put(combined_data_humidity)
-                            humidity_data_list.clear()
-                        '''
+                        decodeMessage(buffer, identifiers_data_list)
+                        buffer = ''                        
                             
                     if dataRead == '#':
                         startTransmission = False
+                        
+                        for item in identifiers_data_list:
+                            combined_data.update(item)
+                        identifiers_data_list.clear()
+                        
+                        
                         dataQueueFromArduino.put(combined_data) # pubblico sulla queue alla fine di tutta la ricezione
         except UnicodeDecodeError as e:
             print(f"Decode error: {e}")
@@ -184,7 +154,7 @@ def is_number(s):
         return False
 
 
-def decodeMessage(buffer, temp_data_list, humidity_data_list, humidity_temp_data_list):
+def decodeMessage(buffer, identifiers_data_list):
     match = re.match(r"<([^,]+),([^>]+)>", buffer)
     if match:
         infoName_part = match.group(1)
@@ -197,17 +167,16 @@ def decodeMessage(buffer, temp_data_list, humidity_data_list, humidity_temp_data
             else:
                 number = int(infoData_part)
 
-            # Example actions based on infoName_part
-            if infoName_part in ["TMP01", "TMP02", "TMP03", "TMP04"]:
-                temp_data_list.append({infoName_part: number})
-                
-            if infoName_part in ["HUM01"]:
-                humidity_data_list.append({infoName_part: number})
-                
-            if infoName_part in ["HTP01"]:
-                humidity_temp_data_list.append({infoName_part: number})
+            
+            # Questi sono quelli che vengono messi nella struttura standard
+            global identifiers
+            for identifier in identifiers:
+                if infoName_part.startswith(identifier):
+                    identifiers_data_list.append({infoName_part: number})
+                    break
+            # lascio aperta la possibilità che se qualcosa non è in lista identifiers viene gestito a mano qui.
 
-            # AGGIUNGERE QUI ALTRE INFO CHE VENGONO DA ARDUINO #
+            # AGGIUNGERE QUI ALTRE INFO CHE VENGONO DA ARDUINO, ma ad occhio direi di metterle tutte dentro #
         else:
             ciao = False
             # print("Info Name part:", infoName_part)
@@ -282,33 +251,35 @@ def periodic_task():
             if not dataQueueFromArduino.empty(): 
                 # GETTING DATA FROM QUEUE
                 dataQueueFromArduinoDict = dataQueueFromArduino.get()
-                # Create a new dictionary to store the first 4 temperatures
+                #print(dataQueueFromArduinoDict)
+                
+                # Liste di dati da accumulare
                 currentTemperatures = {}
-
+                currentHumidities = {}
+                currentHumiditiesTemperature = {} # lista che contiene le temperature dai DHT22
+                
                 # Loop through the first 4 items of the original dictionary and add them to the new dictionary
                 for i, (key, value) in enumerate(dataQueueFromArduinoDict.items()):
-                    if i < 4:
-                        currentTemperatures[key] = value
-                    else:
-                        break
-                        
-                # Create a list to store the 5th element
-                currentHumidities = {}
-
-                # Loop through the items of the original dictionary and collect the 5th element, that is the humidity
-                for i, (key, value) in enumerate(dataQueueFromArduinoDict.items()):
-                    if i == 4: #4 <= i <= 5:
-                        currentHumidities[key] = value
-                        
-                # Create a list to store the 6th element
-                currentHumiditiesTemperature = {} # lista che contiene le temperature dai DHT22
-
-                # Loop through the items of the original dictionary and collect the 5th element, that is the humidity
-                for i, (key, value) in enumerate(dataQueueFromArduinoDict.items()):
-                    if i == 5: 
-                        currentHumiditiesTemperature[key] = value                        
-                # END GETTING DATA FROM QUEUE
+                    for identifier in identifiers:
+                        if key.startswith("TMP"): 
+                            currentTemperatures[key] = value
+                        elif key.startswith("HUM"):
+                            currentHumidities[key] = value
+                        elif key.startswith("HTP"):
+                            currentHumiditiesTemperature[key] = value
+                        else:
+                            break  
+                '''
+                print("currentTemperatures:")
+                print(currentTemperatures)
                 
+                print("currentHumidities:")
+                print(currentHumidities)
+                
+                print("currentHumiditiesTemperature:")
+                print(currentHumiditiesTemperature)
+                '''
+                # END GETTING DATA FROM QUEUE               
                 
                 # TEMPERATURE & HUMIDITY HANDLING - [PERIODIC TASK]
                 
