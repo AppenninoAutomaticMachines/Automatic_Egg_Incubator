@@ -81,6 +81,8 @@ laser sempre acceso + fotoresistenza
 diapley 7 segmenti per temp media
 bit di alive: se rpy non comunica allora arduino off riscaldatori
 - disabilitazione e abilitazione  dei riscaldatori + interruttori di bypass delle ventole, se producono troppo caldo.
+- ventola di ricambio aria anti-sovratemperatura (anti temperature over-shoot fan)
+
 
 allarme per raggiungimento di temperatura troppo alta
 - inserimento statistiche uova: uova messe, uova tolte, uova nate, uova infeconde, uova non nate
