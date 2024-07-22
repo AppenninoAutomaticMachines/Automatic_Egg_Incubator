@@ -49,6 +49,12 @@
 #define ENABLE_SERIAL_PRINT_TO_ESP8266 true
 #define ENABLE_SERIAL_PRINT_DEBUG false
 
+/* variabile che uso per fare il video. Modifiche:
+- due induttori con normale logica negativa anziché diretta come i balluff
+- cambia il tempo di attesa per la rotazione: pochi secondi anziché un'ora
+*/
+#define ENABLE_VIDEO_MODE true 
+
 /* TEMPERATURES SECTION */
 // ricorda di mettere una alimentazione forte e indipendente per i sensori. Ha migliorato molto la stabilità della lettura.
 OneWire oneWire(ONE_WIRE_BUS);
@@ -170,7 +176,7 @@ int minutesToGO; // minuti mancanti alla prossima girata
 int minutesGone; // minuti passati dalla precedente girata
 
 #define SECONDS_CONFIGURATION true
-int seconds_trigger_interval = 3600; //  TESTING: giriamo ogni 3 minuti
+int seconds_trigger_interval;
 int secondsToGO; // minuti mancanti alla prossima girata
 int secondsGone; // minuti passati dalla precedente girata
 
@@ -244,6 +250,16 @@ void setup() {
   pinMode(LEFT_INDUCTOR_PIN, INPUT);
   pinMode(RIGHT_INDUCTOR_PIN, INPUT);
 
+  if (ENABLE_SERIAL_PRINT_DEBUG){
+    // usiamo induttore cinese per VIDEO, quindi logica negata
+    leftInductor_input.changePolarity();
+    rightInductor_input.changePolarity();
+  }
+  else{
+    // usiamo balluff
+    ; // do nothing
+  }
+
   Serial.begin(SERIAL_SPEED);
 
   if(WATCHDOG_ENABLE){
@@ -304,6 +320,13 @@ void setup() {
   }
   else{
     lastTriggerTime_millis = millis();
+  }
+
+  if(ENABLE_SERIAL_PRINT_DEBUG){
+    seconds_trigger_interval = 2; // per il video aspetta poco, 2 secondi fra una rotazione e l'altra.
+  }
+  else{
+    seconds_trigger_interval = 3600; // per il funzionamento normale aspetta 3600s = 1h fra una rotazione e l'altra.
   }
 
   delay(2500);
