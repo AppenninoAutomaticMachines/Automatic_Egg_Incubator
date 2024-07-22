@@ -250,7 +250,7 @@ void setup() {
   pinMode(LEFT_INDUCTOR_PIN, INPUT);
   pinMode(RIGHT_INDUCTOR_PIN, INPUT);
 
-  if (ENABLE_SERIAL_PRINT_DEBUG){
+  if (ENABLE_VIDEO_MODE){
     // usiamo induttore cinese per VIDEO, quindi logica negata
     leftInductor_input.changePolarity();
     rightInductor_input.changePolarity();
@@ -322,7 +322,7 @@ void setup() {
     lastTriggerTime_millis = millis();
   }
 
-  if(ENABLE_SERIAL_PRINT_DEBUG){
+  if(ENABLE_VIDEO_MODE){
     seconds_trigger_interval = 2; // per il video aspetta poco, 2 secondi fra una rotazione e l'altra.
   }
   else{
