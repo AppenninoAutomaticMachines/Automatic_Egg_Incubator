@@ -75,7 +75,7 @@ debug del programma di plot per temperature e umidità
 
 TO DO:
 - iniziato a scrivere la logica. Clase del temperature controller.
-Potrei farlo più generale: hysteresis control, perché dopo funziona bene sia per temperatura che per umidità.
+Potrei farlo più generale: hysteresis control, perché dopo funziona bene sia per temperatura che per umidità + aggiungi la possibilità dell'attuatore ausiliario con suo piccolo hysteresis control.
 
 - plot raw dei dati + pulire outliers dovuti a mal-letture
 - iniziare ad implementare un po' di logica nel periodicTask (sincronizzata con l'arrivo delle temperature)
