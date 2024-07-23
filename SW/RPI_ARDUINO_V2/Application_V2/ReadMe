@@ -69,9 +69,14 @@ debug del programma di plot per temperature e umidità
 - FATTO salvataggio dei parametri in cartella currentConfig + visualizzazione del json dei parametri correnti (così vedi anche quelli nascosti)
 - FATTO uniformato i dizionari dei dati passati
 - FATTO uniformato la visualizzazioen delle temperature
+- FATTO: configuratore di comunicazione. Metti gli identificatori identifiers = ["TMP", "HUM", "HTP"] e poi si riempono automaticamente i dizionari, se dovesse variare il numero di identificatori.
+  Ovviametne HTML e tipi di dizionari sono da configurare manualmente (temperature, umudità e temperature da dht22 sono i tre che ci sono ora). Se si inviano altri pacchetti di dati, allora si deve cambiare.
 
 
 TO DO:
+- iniziato a scrivere la logica. Clase del temperature controller.
+Potrei farlo più generale: hysteresis control, perché dopo funziona bene sia per temperatura che per umidità.
+
 - plot raw dei dati + pulire outliers dovuti a mal-letture
 - iniziare ad implementare un po' di logica nel periodicTask (sincronizzata con l'arrivo delle temperature)
 - funzionalità manuale di attivazione/disattivazione forzata degli attuatori (periodiTask, ma indipendente dalle temperature)
@@ -89,14 +94,7 @@ allarme per raggiungimento di temperatura troppo alta
 - inserimento statistiche uova: uova messe, uova tolte, uova nate, uova infeconde, uova non nate
 - comandi manuali del motore: vai in automatico, vai in posizioe orizzontale, fai un giro, comando manuale, ritorna in automatico...
 
-- studiare un modo per fare una sorta di 'configuratore' di comunicazione, così modifichi quello e il resto si aggiorna automaticamente
-// sezioen temperature
-// sezione umidità
-// sezione temperature da umidità
-potrei semplicemente specificare un ordine con gli identificativi:
-["TMP01", "TMP02", "TMP03", "TMP04"]
-["HUM01", "TMP02", "TMP03", "TMP04"]
-["HTP", "TMP02", "TMP03", "TMP04"]
+
 
 
 
