@@ -82,7 +82,8 @@ diapley 7 segmenti per temp media
 bit di alive: se rpy non comunica allora arduino off riscaldatori
 - disabilitazione e abilitazione  dei riscaldatori + interruttori di bypass delle ventole, se producono troppo caldo.
 - ventola di ricambio aria anti-sovratemperatura (anti temperature over-shoot fan)
-
+- posizionamento orizzontale dei cestelli: metti una spunta che attiva la modalità di 'hatching', da qui comandi in manuale il motore avanti/intietro per posizionarlo come vuoi
+(oppure aggiungiamo un sensore...ma non ne ho voglia.) Ricorda che se togli spunta devi ripendere a fare quello che stavi facendo.
 
 allarme per raggiungimento di temperatura troppo alta
 - inserimento statistiche uova: uova messe, uova tolte, uova nate, uova infeconde, uova non nate
