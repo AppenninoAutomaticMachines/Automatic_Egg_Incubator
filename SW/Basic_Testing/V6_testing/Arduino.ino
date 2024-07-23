@@ -323,7 +323,7 @@ void setup() {
   }
 
   if(ENABLE_VIDEO_MODE){
-    seconds_trigger_interval = 2; // per il video aspetta poco, 2 secondi fra una rotazione e l'altra.
+    seconds_trigger_interval = 60; // per il video aspetta poco, 60 secondi fra una rotazione e l'altra.
   }
   else{
     seconds_trigger_interval = 3600; // per il funzionamento normale aspetta 3600s = 1h fra una rotazione e l'altra.
