@@ -12,6 +12,11 @@
 
  https://lastminuteengineers.com/multiple-ds18b20-arduino-tutorial/ reading temperature by address
 */
+
+/*
+08/09 TO DO: - collegare ventolina ausiliaria sul PIN 3
+              - testare che ora vada sempre e solo il riscaldatore ausiliario PIN 11
+*/
 /* LIBRARIES */
 #include <SoftwareSerial.h>
 #include <avr/wdt.h>
@@ -33,7 +38,7 @@
 #define STEPPPER_MOTOR_MS1_PIN 6 
 #define STEPPPER_MOTOR_MS2_PIN 5
 #define STEPPPER_MOTOR_MS3_PIN 4
-#define CYCLE_TOGGLE_PIN 3
+#define COOLING_EMERGENCY_FAN_PIN 3
 #define CYCLE_TOGGLE_ANALOG0_PIN 14
 
 #define LEFT_INDUCTOR_PIN 6
@@ -49,13 +54,10 @@
 #define ENABLE_SERIAL_PRINT_TO_ESP8266 true
 #define ENABLE_SERIAL_PRINT_DEBUG false
 
-/* variabile che uso per fare il video. Modifiche:
-- due induttori con normale logica negativa anziché diretta come i balluff
-- cambia il tempo di attesa per la rotazione: pochi secondi anziché un'ora
-*/
-#define ENABLE_VIDEO_MODE true 
-
 /* TEMPERATURES SECTION */
+#define SINGLE_SMALL_HEATER_PRESENT true // true = versione due con solo ventola e riscaldatore ausiliario da 100W. false = versione vecchia con riscaldatore ausiliario e principale
+
+
 // ricorda di mettere una alimentazione forte e indipendente per i sensori. Ha migliorato molto la stabilità della lettura.
 OneWire oneWire(ONE_WIRE_BUS);
 
@@ -176,7 +178,7 @@ int minutesToGO; // minuti mancanti alla prossima girata
 int minutesGone; // minuti passati dalla precedente girata
 
 #define SECONDS_CONFIGURATION true
-int seconds_trigger_interval;
+int seconds_trigger_interval = 3600; //  TESTING: giriamo ogni 3 minuti
 int secondsToGO; // minuti mancanti alla prossima girata
 int secondsGone; // minuti passati dalla precedente girata
 
@@ -204,7 +206,6 @@ char bufferChar[35];
 char fbuffChar[15];
 
 /* GENERAL */
-bool cycle_toggle_pin_var = false;
 bool gotTemperatures = false;
 
 /* variabile che viene messa a true quando viene richiesto al motore di andare.
@@ -231,7 +232,7 @@ void setup() {
   pinMode(STEPPPER_MOTOR_MS3_PIN, OUTPUT);
   digitalWrite(STEPPPER_MOTOR_MS3_PIN, LOW);
 
-  pinMode(CYCLE_TOGGLE_PIN, OUTPUT);
+  pinMode(COOLING_EMERGENCY_FAN_PIN, OUTPUT);
   pinMode(CYCLE_TOGGLE_ANALOG0_PIN, OUTPUT);
 
 
@@ -249,16 +250,6 @@ void setup() {
 
   pinMode(LEFT_INDUCTOR_PIN, INPUT);
   pinMode(RIGHT_INDUCTOR_PIN, INPUT);
-
-  if (ENABLE_VIDEO_MODE){
-    // usiamo induttore cinese per VIDEO, quindi logica negata
-    leftInductor_input.changePolarity();
-    rightInductor_input.changePolarity();
-  }
-  else{
-    // usiamo balluff
-    ; // do nothing
-  }
 
   Serial.begin(SERIAL_SPEED);
 
@@ -322,13 +313,6 @@ void setup() {
     lastTriggerTime_millis = millis();
   }
 
-  if(ENABLE_VIDEO_MODE){
-    seconds_trigger_interval = 60; // per il video aspetta poco, 60 secondi fra una rotazione e l'altra.
-  }
-  else{
-    seconds_trigger_interval = 3600; // per il funzionamento normale aspetta 3600s = 1h fra una rotazione e l'altra.
-  }
-
   delay(2500);
   serialFlush();
 
@@ -383,52 +367,71 @@ void loop() {
           mainHeaterSelected true -> 
       */
       // Hysteresis control
-      /* Selezione del riscaldatore in base alla temperatura */
-      if(temperatureController.getActualTemperature() > temperature_heater_selection_upper_treshold && mainHeaterSelected){ // Appena passiamo la temperatura limite superiore allora attivo il secondo riscaldatore
-        mainHeaterSelected = false;
-      } else if(temperatureController.getActualTemperature() < temperature_heater_selection_lower_treshold && !mainHeaterSelected){ // Se scendo troppo allora seleziono il riscaldatore più potente
-        mainHeaterSelected = true;
-      }
-
-      /* generazione dei trigger */
-      mainHeaterSeleted_trigger.periodicRun(mainHeaterSelected);
-
-      /*
-        Questo codice mi serve per spegnere con un po' di delay un riscaldatore quando passiamo all'altro. Ricorda che non voglio avere switch contemporanei dei relè,
-        per ridurre il problema dell'assorbimento di corrente.
-        Quindi, se devo switchare riscaldatore mentre è acceso l'altro, mi prendo un po' di delay.
-      */
-      if(mainHeaterSeleted_trigger.catchRisingEdge()){ // switchare da AUX --> MAIN
-        if(auxHeater_var){ // se sto scaldando con l'aux allora lo spengo + delay
-          auxHeater_var = false;
-          digitalWrite(AUX_HEATER_PIN, auxHeater_var);
-          delay(250);
+      if(!SINGLE_SMALL_HEATER_PRESENT){
+        /* Selezione del riscaldatore in base alla temperatura */
+        if(temperatureController.getActualTemperature() > temperature_heater_selection_upper_treshold && mainHeaterSelected){ // Appena passiamo la temperatura limite superiore allora attivo il secondo riscaldatore
+          mainHeaterSelected = false;
+        } else if(temperatureController.getActualTemperature() < temperature_heater_selection_lower_treshold && !mainHeaterSelected){ // Se scendo troppo allora seleziono il riscaldatore più potente
+          mainHeaterSelected = true;
         }
-      }
 
-      if(mainHeaterSeleted_trigger.catchFallingEdge()){ // switchare da MAIN --> AUX
-        if(mainHeater_var){ // se sto scaldando con il main allora lo spengo + delay
-          mainHeater_var = false;
-          digitalWrite(MAIN_HEATER_PIN, mainHeater_var);
-          delay(250);
+        /* generazione dei trigger */
+        mainHeaterSeleted_trigger.periodicRun(mainHeaterSelected);
+
+        /*
+          Questo codice mi serve per spegnere con un po' di delay un riscaldatore quando passiamo all'altro. Ricorda che non voglio avere switch contemporanei dei relè,
+          per ridurre il problema dell'assorbimento di corrente.
+          Quindi, se devo switchare riscaldatore mentre è acceso l'altro, mi prendo un po' di delay.
+        */
+        if(mainHeaterSeleted_trigger.catchRisingEdge()){ // switchare da AUX --> MAIN
+          if(auxHeater_var){ // se sto scaldando con l'aux allora lo spengo + delay
+            auxHeater_var = false;
+            digitalWrite(AUX_HEATER_PIN, auxHeater_var);
+            delay(250);
+          }
         }
-      }
 
-      /* scaldiamo in base al riscaldatore selezionato */
-      if(temperatureController.getOutputState()){ 
-        if(mainHeaterSelected){
-          mainHeater_var = true;
-          digitalWrite(MAIN_HEATER_PIN, mainHeater_var);
+        if(mainHeaterSeleted_trigger.catchFallingEdge()){ // switchare da MAIN --> AUX
+          if(mainHeater_var){ // se sto scaldando con il main allora lo spengo + delay
+            mainHeater_var = false;
+            digitalWrite(MAIN_HEATER_PIN, mainHeater_var);
+            delay(250);
+          }
+        }
+
+        /* scaldiamo in base al riscaldatore selezionato */
+        if(temperatureController.getOutputState()){ 
+          if(mainHeaterSelected){
+            mainHeater_var = true;
+            digitalWrite(MAIN_HEATER_PIN, mainHeater_var);
+          }
+          else{
+            auxHeater_var = true;
+            digitalWrite(AUX_HEATER_PIN, auxHeater_var);
+          }
         }
         else{
-          auxHeater_var = true;
-          digitalWrite(AUX_HEATER_PIN, auxHeater_var);
+          if(mainHeaterSelected){
+            mainHeater_var = false;
+            digitalWrite(MAIN_HEATER_PIN, mainHeater_var);
+          }
+          else{
+            auxHeater_var = false;
+            digitalWrite(AUX_HEATER_PIN, auxHeater_var);
+          }
+        }
+
+        temperatureController_outputState_trigger.periodicRun(temperatureController.getOutputState());
+
+        if(temperatureController_outputState_trigger.catchRisingEdge() || temperatureController_outputState_trigger.catchFallingEdge()){
+          delay(250);
         }
       }
       else{
-        if(mainHeaterSelected){
-          mainHeater_var = false;
-          digitalWrite(MAIN_HEATER_PIN, mainHeater_var);
+        /* SINGLE_SMALL_HEATER_PRESENT true significa che c'è solo un riscaldatore piccolo da 100W. Uso sempre quello. */
+        if(temperatureController.getOutputState()){ 
+          auxHeater_var = true;
+          digitalWrite(AUX_HEATER_PIN, auxHeater_var);
         }
         else{
           auxHeater_var = false;
@@ -436,10 +439,14 @@ void loop() {
         }
       }
 
-      temperatureController_outputState_trigger.periodicRun(temperatureController.getOutputState());
-
-      if(temperatureController_outputState_trigger.catchRisingEdge() || temperatureController_outputState_trigger.catchFallingEdge()){
-        delay(250);
+      //SINGLE_SMALL_HEATER_PRESENT tue: seconda versione, ci metto la ventolina di emergenza per raffreddamento.
+      if(SINGLE_SMALL_HEATER_PRESENT){
+        /* isteresi per vedere se siamo oltre il livello alto della temperatura */
+        if(temperatureController.getActualTemperature() > 38.2 && tooHighTemperature){ // Appena passiamo la temperatura limite superiore allora attivo la ventolina di raffreddamento
+          digitalWrite(COOLING_EMERGENCY_FAN_PIN, HIGH);
+        } else if(temperatureController.getActualTemperature() < 38.0 && !tooHighTemperature){ // Appena ristabilizzo sotto i 38.0°, allora spengo la ventolina
+          digitalWrite(COOLING_EMERGENCY_FAN_PIN, LOW);
+        }
       }
     }
   }
@@ -861,11 +868,6 @@ void loop() {
   if(WATCHDOG_ENABLE){
     wdt_reset();
   }  
-
-  /* FEEDBACK SECTION */
-
-  digitalWrite(CYCLE_TOGGLE_PIN, cycle_toggle_pin_var);
-  cycle_toggle_pin_var = !cycle_toggle_pin_var;  
 }
 
 int readFromBoard(){ // returns the number of commands received
