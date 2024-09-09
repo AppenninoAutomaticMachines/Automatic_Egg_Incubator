@@ -87,6 +87,8 @@ bool auxHeater_var = false;
 bool upperFan_var = false;
 bool lowerFan_var = false;
 
+bool tooHighTemperature = false;
+
 
 float temperatures[3]; // declaring it here, once I know the dimension
 int temperatureControlModality = 1; // default TEMPERATURE CONTROL MODALITY 1: actualTemperature = maxValue
