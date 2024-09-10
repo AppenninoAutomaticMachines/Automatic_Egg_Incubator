@@ -80,6 +80,7 @@ Potrei farlo più generale: hysteresis control, perché dopo funziona bene sia p
 - plot raw dei dati + pulire outliers dovuti a mal-letture
 - iniziare ad implementare un po' di logica nel periodicTask (sincronizzata con l'arrivo delle temperature)
 - funzionalità manuale di attivazione/disattivazione forzata degli attuatori (periodiTask, ma indipendente dalle temperature)
+- chat GPT: 'Dynamic TMP data Handling' ho fatto una chat dove cheido come gestire dinamicamente il numero di temperature che arrivano dalla comunicazione con arduino, se dovessi aumentare il numero di sensori senza stare a stravolgere il codice HTML ogni volta.
 
 - implementare connessione remota
 laser sempre acceso + fotoresistenza
