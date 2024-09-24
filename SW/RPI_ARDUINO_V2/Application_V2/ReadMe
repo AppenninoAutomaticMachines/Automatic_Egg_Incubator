@@ -95,6 +95,11 @@ allarme per raggiungimento di temperatura troppo alta
 - inserimento statistiche uova: uova messe, uova tolte, uova nate, uova infeconde, uova non nate
 - comandi manuali del motore: vai in automatico, vai in posizioe orizzontale, fai un giro, comando manuale, ritorna in automatico...
 
+CIRCUITRY
+- aggiunta delle termocoppie come sensori: DS18B20 non vanno bene
+- usare il vemer come sicurezza: regolarlo a 38.2° per aprire il circuito della resistenza, se l'ambiente si dovesse scaldare troppo.
+
+
 
 
 
