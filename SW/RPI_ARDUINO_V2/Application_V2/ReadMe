@@ -76,7 +76,9 @@ debug del programma di plot per temperature e umidità
 TO DO:
 - chiamata a python3 per eseguire i plot
 - correggere file delle persistenti, perché non ricordava i flags 
-- quando ritorni alla pagina iniziale devi ripristinare le variabili di current config e non lasciare le selection vuote
+- quando ritorni alla pagina iniziale devi ripristinare le variabili di current config e non lasciare le selection vuote: la chiamata a webPageInitialization la faccio sempre, ogni volta che rientro in questa pagina. Ed invio alla web page 
+  (+ di conseguenza gestione lato HTML) del payload contenente i dati persistenti. Solo quando si 'carica' la pagina, ovvero al suo avvio (ma non una volta e basta per sempre)
+
 - iniziato a scrivere la logica. Clase del temperature controller.
 Potrei farlo più generale: hysteresis control, perché dopo funziona bene sia per temperatura che per umidità + aggiungi la possibilità dell'attuatore ausiliario con suo piccolo hysteresis control.
 
