@@ -105,6 +105,12 @@ CIRCUITRY
 - aggiunta delle termocoppie come sensori: DS18B20 non vanno bene
 - usare il vemer come sicurezza: regolarlo a 38.2° per aprire il circuito della resistenza, se l'ambiente si dovesse scaldare troppo.
 
+- interruttore generale 220V. interruttore ventola1 + interrutotre ventola2
+- opto + relè per riscaldatore + in serie con il vemer (logica negativa per sicurezza)
+- interruttore alimentatore PC (così puoi attivare le ventole senza la logica)
+
+
+
 
 
 
