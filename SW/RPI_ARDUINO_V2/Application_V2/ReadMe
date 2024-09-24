@@ -74,6 +74,9 @@ debug del programma di plot per temperature e umidità
 
 
 TO DO:
+- chiamata a python3 per eseguire i plot
+- correggere file delle persistenti, perché non ricordava i flags 
+- quando ritorni alla pagina iniziale devi ripristinare le variabili di current config e non lasciare le selection vuote
 - iniziato a scrivere la logica. Clase del temperature controller.
 Potrei farlo più generale: hysteresis control, perché dopo funziona bene sia per temperatura che per umidità + aggiungi la possibilità dell'attuatore ausiliario con suo piccolo hysteresis control.
 
@@ -96,6 +99,7 @@ allarme per raggiungimento di temperatura troppo alta
 - comandi manuali del motore: vai in automatico, vai in posizioe orizzontale, fai un giro, comando manuale, ritorna in automatico...
 
 CIRCUITRY
+- schema per iniziare a fare un quadro
 - aggiunta delle termocoppie come sensori: DS18B20 non vanno bene
 - usare il vemer come sicurezza: regolarlo a 38.2° per aprire il circuito della resistenza, se l'ambiente si dovesse scaldare troppo.
 
