@@ -79,13 +79,13 @@ TO DO:
 - quando ritorni alla pagina iniziale devi ripristinare le variabili di current config e non lasciare le selection vuote: la chiamata a webPageInitialization la faccio sempre, ogni volta che rientro in questa pagina. Ed invio alla web page 
   (+ di conseguenza gestione lato HTML) del payload contenente i dati persistenti. Solo quando si 'carica' la pagina, ovvero al suo avvio (ma non una volta e basta per sempre)
 
-- iniziato a scrivere la logica. Clase del temperature controller.
-Potrei farlo più generale: hysteresis control, perché dopo funziona bene sia per temperatura che per umidità + aggiungi la possibilità dell'attuatore ausiliario con suo piccolo hysteresis control.
-
 - plot raw dei dati + pulire outliers dovuti a mal-letture
 - iniziare ad implementare un po' di logica nel periodicTask (sincronizzata con l'arrivo delle temperature)
 - funzionalità manuale di attivazione/disattivazione forzata degli attuatori (periodiTask, ma indipendente dalle temperature)
 - chat GPT: 'Dynamic TMP data Handling' ho fatto una chat dove cheido come gestire dinamicamente il numero di temperature che arrivano dalla comunicazione con arduino, se dovessi aumentare il numero di sensori senza stare a stravolgere il codice HTML ogni volta.
+- chat GPT: class hysteresisControl --> applicabile al controllo di temperatura e al controllo di umidità
+- per le statistiche delle temperature ho tutto embedded in hysteresisContorl ((massimo, minimo, media)
+
 
 - implementare connessione remota
 laser sempre acceso + fotoresistenza
