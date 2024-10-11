@@ -100,6 +100,8 @@ allarme per raggiungimento di temperatura troppo alta
 - inserimento statistiche uova: uova messe, uova tolte, uova nate, uova infeconde, uova non nate
 - comandi manuali del motore: vai in automatico, vai in posizioe orizzontale, fai un giro, comando manuale, ritorna in automatico...
 
+- oltre che al controllo tramite isteresi fare anche controllo periodico don duty cycle.
+
 CIRCUITRY
 - schema per iniziare a fare un quadro
 - aggiunta delle termocoppie come sensori: DS18B20 non vanno bene
@@ -108,6 +110,9 @@ CIRCUITRY
 - interruttore generale 220V. interruttore ventola1 + interrutotre ventola2
 - opto + relè per riscaldatore + in serie con il vemer (logica negativa per sicurezza)
 - interruttore alimentatore PC (così puoi attivare le ventole senza la logica)
+
+MECCANICA:
+- rotazione con rulli + cinghia sezione circolare
 
 
 
