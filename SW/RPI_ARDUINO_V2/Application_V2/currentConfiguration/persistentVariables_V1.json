@@ -1,8 +1,7 @@
 {
-    "tmp_higherHysteresisLimit": 25.2,
-    "tmp_lowerHysteresisLimit": 23.4,
-    "tmp_higherPercentageToActivateAuxiliaryHeater": 85,
-    "tmp_lowerPercentageToActivateAuxiliaryHeater": 80,
-    "stpr_secondsBtwEggsTurn": 250,
-    "stpr_defaultSpeed": 78
+    "tmp_higherHysteresisLimit": 37.8,
+    "tmp_lowerHysteresisLimit": 37.6,
+    "flag1": true,
+    "flag2": true,
+    "temperatureControlOption": "meanValueOption"
 }
