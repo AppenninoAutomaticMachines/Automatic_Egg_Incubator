@@ -1,9 +1,7 @@
 {
     "tmp_higherHysteresisLimit": 37.8,
-    "tmp_lowerHysteresisLimit": 37.4,
-    "tmp_higherPercentageToActivateAuxiliaryHeater": 98,
-    "tmp_lowerPercentageToActivateAuxiliaryHeater": 96,
-    "temperatureControlOption": "meanValue",
-    "flag1": "true",
-    "flag2": "false"
+    "tmp_lowerHysteresisLimit": 37.6,
+    "flag1": true,
+    "flag2": true,
+    "temperatureControlOption": "meanValueOption"
 }
