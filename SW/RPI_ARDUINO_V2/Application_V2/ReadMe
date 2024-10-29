@@ -85,6 +85,9 @@ TO DO:
 - chat GPT: 'Dynamic TMP data Handling' ho fatto una chat dove cheido come gestire dinamicamente il numero di temperature che arrivano dalla comunicazione con arduino, se dovessi aumentare il numero di sensori senza stare a stravolgere il codice HTML ogni volta.
 - chat GPT: class hysteresisControl --> applicabile al controllo di temperatura e al controllo di umidità
 - per le statistiche delle temperature ho tutto embedded in hysteresisContorl ((massimo, minimo, media)
+- termocoppie: moving average per filtrare  un po' la variabilità
+- termocoppie: confronto con DS18B20
+- controllo di tempo: se il riscaldamento va per troppo tempo e non vedo la temperatura cambiare, allora problema allarme
 
 
 - implementare connessione remota
