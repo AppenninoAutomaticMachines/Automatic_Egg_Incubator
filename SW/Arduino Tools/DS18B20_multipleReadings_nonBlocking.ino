@@ -1,3 +1,10 @@
+/*
+  Codice che uso per fare le letture dei sensori in metodo non-blocking
+  Cablaggio su singolo filo in accordo alle linee guida One-Wire (NO STAR)
+  Devi solo definire il numero previsto di sensori. Necessario per poter definire con precisione gli array in cui vado ad inserire le temperature e gli indirizzi.
+  Questo codice stamperà l'indirizzo del termometro e la temperatura, così puoi vedere quale indirizzo ha un certo sensore. E poi fare cose con questa info.
+*/
+
 /* LIBRARIES */
 #include <SoftwareSerial.h>
 #include <OneWire.h>
@@ -30,12 +37,6 @@ unsigned long lastTempRequest;
 #endif
 
 #define DEVICE_ERROR 85
-
-/* Temperature sensors - addresses. LOWEST number = HIGHEST sensor, then follows the decreasing order */
-char temperatureSensor_address0[] = "28FF640E7213DCBE";
-char temperatureSensor_address1[] = "28FF640E7C2E42E0";
-char temperatureSensor_address2[] = "28FF640E7F7492C3";
-char temperatureSensor_address3[] = "28FF640E7F489F5E";
 
 /* Temperature Diagnostic */
 unsigned int deviceDisconnected[NUMBER_OF_TEMPERATURES_SENSORS_ON_ONE_WIRE_BUS_2];
