@@ -4,7 +4,6 @@
   Devi solo definire il numero previsto di sensori. Necessario per poter definire con precisione gli array in cui vado ad inserire le temperature e gli indirizzi.
   Questo codice stamperà l'indirizzo del termometro e la temperatura, così puoi vedere quale indirizzo ha un certo sensore. E poi fare cose con questa info.
 */
-
 /* LIBRARIES */
 #include <SoftwareSerial.h>
 #include <OneWire.h>
@@ -38,6 +37,12 @@ unsigned long lastTempRequest;
 
 #define DEVICE_ERROR 85
 
+/* Temperature sensors - addresses. LOWEST number = HIGHEST sensor, then follows the decreasing order */
+char temperatureSensor_address0[] = "28FF640E7213DCBE";
+char temperatureSensor_address1[] = "28FF640E7C2E42E0";
+char temperatureSensor_address2[] = "28FF640E7F7492C3";
+char temperatureSensor_address3[] = "28FF640E7F489F5E";
+
 /* Temperature Diagnostic */
 unsigned int deviceDisconnected[NUMBER_OF_TEMPERATURES_SENSORS_ON_ONE_WIRE_BUS_2];
 unsigned int deviceError[NUMBER_OF_TEMPERATURES_SENSORS_ON_ONE_WIRE_BUS_2];
@@ -47,6 +52,8 @@ float temperatures[4];
 float marginFactor = 1.2; // fattore moltiplicativo per aspettare un po' più di delay.
 byte controlTemperatureIndex;
 bool gotTemperatures;
+
+byte orderedIndex;
 
 DeviceAddress tempDeviceAddress; // We'll use this variable to store a found device address
 
@@ -95,14 +102,26 @@ void setup() {
   lastTempRequest = millis(); 
   conversionTime_DS18B20_sensors = 750 / (1 << (12 - TEMPERATURE_PRECISION));  // res in {9,10,11,12}
 
+  orderedIndex = 0;
   for(uint8_t index = 0; index < numberOfDevices; index++){
-    if(sensors.getAddress(Thermometer[index], index)){ // questa funzione prende l'address e lo mette nell'array di indirizzi
-      sensors.setResolution(Thermometer[index], TEMPERATURE_PRECISION);
-      Serial.print("Got sensor: ");
-      addressToCharArray(Thermometer[index], addressCharArray);
-      Serial.println(addressCharArray);
+    if(sensors.getAddress(tempDeviceAddress, index)){ // fetch dell'indirizzo
+      addressToCharArray(tempDeviceAddress, addressCharArray); // indirizzo convertito
 
-      // initializing arrays
+      // ora ordino il vettore dei sensori.
+      if(strcmp(addressCharArray, temperatureSensor_address0) == 0){ // returns 0 when the two strings are identical
+        sensors.getAddress(Thermometer[0], index);
+      }
+      if(strcmp(addressCharArray, temperatureSensor_address1) == 0){ 
+        sensors.getAddress(Thermometer[1], index);
+      }
+      if(strcmp(addressCharArray, temperatureSensor_address2) == 0){ 
+        sensors.getAddress(Thermometer[2], index);
+      }
+      if(strcmp(addressCharArray, temperatureSensor_address3) == 0){ 
+        sensors.getAddress(Thermometer[3], index);
+      }
+
+      // initializing arrays - l'azzeramento posso farlo senza posizioni, non importa, tanto è tutto a 0.
       deviceDisconnected[index] = 0;
       deviceError[index] = 0;
 
@@ -123,7 +142,6 @@ void loop() {
   if(millis() - lastTempRequest >= (conversionTime_DS18B20_sensors * marginFactor)){
     startGetTemperatures = millis(); // per calcolare quanto tempo impiego a fetchare tutte le temperature dai sensori.
     for(uint8_t index = 0; index < numberOfDevices; index++){
-      addressToCharArray(Thermometer[index], addressCharArray);
       /* Memorize all temperatures in an ordered array */
       temperatures[index] = sensors.getTempC(Thermometer[index]);
 
