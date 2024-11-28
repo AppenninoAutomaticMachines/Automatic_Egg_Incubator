@@ -72,6 +72,15 @@ debug del programma di plot per temperature e umidità
 - FATTO: configuratore di comunicazione. Metti gli identificatori identifiers = ["TMP", "HUM", "HTP"] e poi si riempono automaticamente i dizionari, se dovesse variare il numero di identificatori.
   Ovviametne HTML e tipi di dizionari sono da configurare manualmente (temperature, umudità e temperature da dht22 sono i tre che ci sono ora). Se si inviano altri pacchetti di dati, allora si deve cambiare.
 
+CIRCUITRY
+- FATTO schema per iniziare a fare un quadro
+- FATTO prova schema filare e non a stella (segui indicazioni di cablaggio OneWire)
+- FATTO usare il vemer come sicurezza: regolarlo a 38.2° per aprire il circuito della resistenza, se l'ambiente si dovesse scaldare troppo.
+
+- FATTOinterruttore generale 220V. interruttore ventola1 + interrutotre ventola2
+- FATTO opto + relè per riscaldatore + in serie con il vemer (logica negativa per sicurezza)
+- FATTO interruttore alimentatore PC (così puoi attivare le ventole senza la logica)
+
 
 TO DO:
 - chiamata a python3 per eseguire i plot
@@ -105,14 +114,7 @@ allarme per raggiungimento di temperatura troppo alta
 
 - oltre che al controllo tramite isteresi fare anche controllo periodico don duty cycle.
 
-CIRCUITRY
-- schema per iniziare a fare un quadro
-- aggiunta delle termocoppie come sensori: DS18B20 non vanno bene
-- usare il vemer come sicurezza: regolarlo a 38.2° per aprire il circuito della resistenza, se l'ambiente si dovesse scaldare troppo.
 
-- interruttore generale 220V. interruttore ventola1 + interrutotre ventola2
-- opto + relè per riscaldatore + in serie con il vemer (logica negativa per sicurezza)
-- interruttore alimentatore PC (così puoi attivare le ventole senza la logica)
 
 MECCANICA:
 - rotazione con rulli + cinghia sezione circolare
