@@ -80,13 +80,14 @@ CIRCUITRY
 - FATTOinterruttore generale 220V. interruttore ventola1 + interrutotre ventola2
 - FATTO opto + relè per riscaldatore + in serie con il vemer (logica negativa per sicurezza)
 - FATTO interruttore alimentatore PC (così puoi attivare le ventole senza la logica)
+- FATTO quando ritorni alla pagina iniziale devi ripristinare le variabili di current config e non lasciare le selection vuote: la chiamata a webPageInitialization la faccio sempre, ogni volta che rientro in questa pagina. Ed invio alla web page 
+  (+ di conseguenza gestione lato HTML) del payload contenente i dati persistenti. Solo quando si 'carica' la pagina, ovvero al suo avvio (ma non una volta e basta per sempre)
 
 
 TO DO:
 - chiamata a python3 per eseguire i plot
 - correggere file delle persistenti, perché non ricordava i flags 
-- quando ritorni alla pagina iniziale devi ripristinare le variabili di current config e non lasciare le selection vuote: la chiamata a webPageInitialization la faccio sempre, ogni volta che rientro in questa pagina. Ed invio alla web page 
-  (+ di conseguenza gestione lato HTML) del payload contenente i dati persistenti. Solo quando si 'carica' la pagina, ovvero al suo avvio (ma non una volta e basta per sempre)
+
 
 - plot raw dei dati + pulire outliers dovuti a mal-letture
 - iniziare ad implementare un po' di logica nel periodicTask (sincronizzata con l'arrivo delle temperature)
