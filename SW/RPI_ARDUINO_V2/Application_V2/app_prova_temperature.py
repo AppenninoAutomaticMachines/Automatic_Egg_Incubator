@@ -26,10 +26,12 @@ import webbrowser
 import platform
 import subprocess
 import sys
+import logging
 
 # Configure the serial port
 port = "COM6"
-port = "/dev/ttyUSB0"
+#port = "/dev/ttyUSB0"
+port = "/dev/ttyACM0"
 baudrate = 19200
 timeout = 0.1
 
@@ -385,17 +387,15 @@ def web_page_initialization():
     print(data)
     return True
 
-webPageInitializationDone = False
 @socketio.on('page_load')
 def handle_page_load(data):
     print(data)
     global current_page
     current_page = data['page']
     
-    global webPageInitializationDone
-    if not webPageInitializationDone:
-        if current_page == 'index': 
-            webPageInitializationDone = web_page_initialization();
+    # ogni volta in cui carico la pagina, voglio inviare nuovamente la configurazione per visualizzare correttamente le selezioni.
+    if current_page == 'index': 
+        web_page_initialization();
         
         
 @socketio.on('command')
@@ -509,28 +509,28 @@ def handle_request_stats():
 def handle_request_stats():
     print("plot_allDaysData_Temperatures")
     #command = ['C:/Users/pietr/PycharmProjects/pythonProject/.venv/Scripts/python.exe', 'provaMatplotlib_inetractive.py', 'PLOT_ALL_DAYS_DATA_TEMPERATURES']
-    command = ['python', 'appInteractivePlots.py', 'PLOT_ALL_DAYS_DATA_TEMPERATURES']
+    command = ['python3', 'appInteractivePlots.py', 'PLOT_ALL_DAYS_DATA_TEMPERATURES']
     process = subprocess.Popen(command)
     print("Subprocess started and main program continues...")
 
 @socketio.on('plot_currentDayData_Temperatures')
 def handle_request_stats():
     print("plot_currentDayData_Temperatures")
-    command = ['python', 'appInteractivePlots.py', 'PLOT_CURRENT_DAY_DATA_TEMPERATURES']
+    command = ['python3', 'appInteractivePlots.py', 'PLOT_CURRENT_DAY_DATA_TEMPERATURES']
     process = subprocess.Popen(command)
     print("Subprocess started and main program continues...")
 
 @socketio.on('plot_allDaysData_Humidity')
 def handle_request_stats():
     print("plot_allDaysData_Humidity")
-    command = ['python', 'appInteractivePlots.py', 'PLOT_ALL_DAYS_DATA_HUMIDITY']
+    command = ['python3', 'appInteractivePlots.py', 'PLOT_ALL_DAYS_DATA_HUMIDITY']
     process = subprocess.Popen(command)
     print("Subprocess started and main program continues...")
 
 @socketio.on('plot_currentDayData_Humidity')
 def handle_request_stats():
     print("plot_currentDayData_Humidity")
-    command = ['python', 'appInteractivePlots.py', 'PLOT_CURRENT_DAY_DATA_HUMIDITY']
+    command = ['python3', 'appInteractivePlots.py', 'PLOT_CURRENT_DAY_DATA_HUMIDITY']
     process = subprocess.Popen(command)
     print("Subprocess started and main program continues...")
 
