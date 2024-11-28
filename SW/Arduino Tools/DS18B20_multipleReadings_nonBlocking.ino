@@ -12,12 +12,15 @@
 
 
 /* General CONSTANTS */
-#define SERIAL_SPEED 9600 
+#define SERIAL_SPEED 19200
+#define ENABLE_ENCODE_PRINT_RPY false //variabile che abilita a printare in seriale in accordo alla comunicazione con raspberry @<># ecc.
+#define ENABLE_DEVICE_ORDERING false // se true devi mettere gli indirizzi nell'ordine che vuoi, se false il vettore delle temperature non è ordinato in base agli indirizzi
+#define NUMBER_OF_TEMPERATURES_SENSORS_ON_ONE_WIRE_BUS_2 3 // 4 sensori di temperatura
 
 /* PIN ARDUINO */
-#define ONE_WIRE_BUS_2 4 //2
+#define ONE_WIRE_BUS_2 2
 #define TEMPERATURE_PRECISION 9 // DS18B20 digital termometer provides 9-bit to 12-bit Celsius temperature measurements
-#define NUMBER_OF_TEMPERATURES_SENSORS_ON_ONE_WIRE_BUS_2 4 // 4 sensori di temperatura
+
 /* TEMPERATURES SECTION */
 // NO STAR/RING connection, only ONE SINGLE WIRE UTP cabme (unshielded twisted pair)
 OneWire oneWire(ONE_WIRE_BUS_2);
@@ -38,6 +41,7 @@ unsigned long lastTempRequest;
 #define DEVICE_ERROR 85
 
 /* Temperature sensors - addresses. LOWEST number = HIGHEST sensor, then follows the decreasing order */
+// RICORDA LA VARIABILE ENABLE_DEVICE_ORDERING
 char temperatureSensor_address0[] = "28FF640E7213DCBE";
 char temperatureSensor_address1[] = "28FF640E7C2E42E0";
 char temperatureSensor_address2[] = "28FF640E7F7492C3";
@@ -59,8 +63,6 @@ DeviceAddress tempDeviceAddress; // We'll use this variable to store a found dev
 
 // Define a char array to store the hexadecimal representation of the address
 char addressCharArray[17]; // 16 characters for the address + 1 for null terminator
-
-char comparisonAddress[] = "28FF888230180179"; // indirizzo del sensore di temperatura che uso per fare HUMIDITY
 
 /* END TEMPERATURES SECTION */
 
@@ -105,21 +107,29 @@ void setup() {
   orderedIndex = 0;
   for(uint8_t index = 0; index < numberOfDevices; index++){
     if(sensors.getAddress(tempDeviceAddress, index)){ // fetch dell'indirizzo
-      addressToCharArray(tempDeviceAddress, addressCharArray); // indirizzo convertito
 
-      // ora ordino il vettore dei sensori.
-      if(strcmp(addressCharArray, temperatureSensor_address0) == 0){ // returns 0 when the two strings are identical
-        sensors.getAddress(Thermometer[0], index);
+      if(ENABLE_DEVICE_ORDERING){
+        addressToCharArray(tempDeviceAddress, addressCharArray); // indirizzo convertito
+        
+        // ora ordino il vettore dei sensori.
+        if(strcmp(addressCharArray, temperatureSensor_address0) == 0){ // returns 0 when the two strings are identical
+          sensors.getAddress(Thermometer[0], index);
+        }
+        if(strcmp(addressCharArray, temperatureSensor_address1) == 0){ 
+          sensors.getAddress(Thermometer[1], index);
+        }
+        if(strcmp(addressCharArray, temperatureSensor_address2) == 0){ 
+          sensors.getAddress(Thermometer[2], index);
+        }
+        if(strcmp(addressCharArray, temperatureSensor_address3) == 0){ 
+          sensors.getAddress(Thermometer[3], index);
+        }
       }
-      if(strcmp(addressCharArray, temperatureSensor_address1) == 0){ 
-        sensors.getAddress(Thermometer[1], index);
+      else{
+        // riempo il vettore di temperature senza alcun ordine topologico.
+        sensors.getAddress(Thermometer[index], index);
       }
-      if(strcmp(addressCharArray, temperatureSensor_address2) == 0){ 
-        sensors.getAddress(Thermometer[2], index);
-      }
-      if(strcmp(addressCharArray, temperatureSensor_address3) == 0){ 
-        sensors.getAddress(Thermometer[3], index);
-      }
+        
 
       // initializing arrays - l'azzeramento posso farlo senza posizioni, non importa, tanto è tutto a 0.
       deviceDisconnected[index] = 0;
@@ -162,36 +172,34 @@ void loop() {
   }   
 
   if(gotTemperatures){
-    Serial.print("Fetch time: ");
-    Serial.print(endGetTemperatures - startGetTemperatures);
-    Serial.print(" ");
-    for(uint8_t index = 0; index < numberOfDevices; index++){
-      addressToCharArray(Thermometer[index], addressCharArray);// Call the function to convert the device address to a char array
-      Serial.print("T");
-      Serial.print(index);
-      Serial.print("-");
-      Serial.print(deviceDisconnected[index]);
-      Serial.print("|");
-      Serial.print(deviceError[index]);
-      Serial.print("-");
-      Serial.print(addressCharArray);
-      Serial.print(": ");
-      Serial.print(temperatures[index]);
-      Serial.print("    ");
+    if(ENABLE_ENCODE_PRINT_RPY){
+      
     }
-    Serial.println();
+    else{
+      // stampo normalmente se sono col PC
+      Serial.print("Fetch time: ");
+      Serial.print(endGetTemperatures - startGetTemperatures);
+      Serial.print(" ");
+      for(uint8_t index = 0; index < numberOfDevices; index++){
+        addressToCharArray(Thermometer[index], addressCharArray);// Call the function to convert the device address to a char array
+        Serial.print("T");
+        Serial.print(index);
+        Serial.print("-");
+        Serial.print(deviceDisconnected[index]);
+        Serial.print("|");
+        Serial.print(deviceError[index]);
+        Serial.print("-");
+        Serial.print(addressCharArray);
+        Serial.print(": ");
+        Serial.print(temperatures[index]);
+        Serial.print("    ");
+      }
+      Serial.println();
+    }
+      
     gotTemperatures = false;
   }
 }
-
-/* BUFFER
-addressToCharArray(Thermometer[index], addressCharArray);// Call the function to convert the device address to a char array
-      if(strcmp(addressCharArray, temperatureSensor_address0) == 0){ // returns 0 when the two strings are identical
-        temperatures[controlTemperatureIndex] = sensors.getTempC(Thermometer[index]);
-      }
-
-
-*/
 
 // Function to convert a byte to its hexadecimal representation
 void byteToHex(uint8_t byteValue, char *hexValue) {
