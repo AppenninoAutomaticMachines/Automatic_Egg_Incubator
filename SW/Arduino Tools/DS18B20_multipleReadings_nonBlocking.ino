@@ -13,7 +13,6 @@
 
 /* General CONSTANTS */
 #define SERIAL_SPEED 19200
-#define ENABLE_ENCODE_PRINT_RPY false //variabile che abilita a printare in seriale in accordo alla comunicazione con raspberry @<># ecc.
 #define ENABLE_DEVICE_ORDERING false // se true devi mettere gli indirizzi nell'ordine che vuoi, se false il vettore delle temperature non è ordinato in base agli indirizzi
 #define NUMBER_OF_TEMPERATURES_SENSORS_ON_ONE_WIRE_BUS_2 3 // 4 sensori di temperatura
 
@@ -172,34 +171,30 @@ void loop() {
   }   
 
   if(gotTemperatures){
-    if(ENABLE_ENCODE_PRINT_RPY){
-      
+    // stampo normalmente se sono col PC
+    Serial.print("Fetch time: ");
+    Serial.print(endGetTemperatures - startGetTemperatures);
+    Serial.print(" ");
+    for(uint8_t index = 0; index < numberOfDevices; index++){
+      addressToCharArray(Thermometer[index], addressCharArray);// Call the function to convert the device address to a char array
+      Serial.print("T");
+      Serial.print(index);
+      Serial.print("-");
+      Serial.print(deviceDisconnected[index]);
+      Serial.print("|");
+      Serial.print(deviceError[index]);
+      Serial.print("-");
+      Serial.print(addressCharArray);
+      Serial.print(": ");
+      Serial.print(temperatures[index]);
+      Serial.print("    ");
     }
-    else{
-      // stampo normalmente se sono col PC
-      Serial.print("Fetch time: ");
-      Serial.print(endGetTemperatures - startGetTemperatures);
-      Serial.print(" ");
-      for(uint8_t index = 0; index < numberOfDevices; index++){
-        addressToCharArray(Thermometer[index], addressCharArray);// Call the function to convert the device address to a char array
-        Serial.print("T");
-        Serial.print(index);
-        Serial.print("-");
-        Serial.print(deviceDisconnected[index]);
-        Serial.print("|");
-        Serial.print(deviceError[index]);
-        Serial.print("-");
-        Serial.print(addressCharArray);
-        Serial.print(": ");
-        Serial.print(temperatures[index]);
-        Serial.print("    ");
-      }
-      Serial.println();
-    }
+    Serial.println();
       
     gotTemperatures = false;
   }
 }
+
 
 // Function to convert a byte to its hexadecimal representation
 void byteToHex(uint8_t byteValue, char *hexValue) {
