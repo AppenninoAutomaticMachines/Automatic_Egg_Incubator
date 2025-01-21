@@ -1,7 +1,7 @@
 import sys
 import random
 from PyQt5 import QtCore, QtWidgets
-from incubatorGUI import Ui_MainWindow  # Import the UI class directly
+from eggsincubatorGUI import Ui_MainWindow  # Import the UI class directly
 
 import serial
 import re
