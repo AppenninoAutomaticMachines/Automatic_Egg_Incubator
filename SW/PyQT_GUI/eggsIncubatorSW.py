@@ -1,104 +1,78 @@
 import sys
 import random
 from PyQt5 import QtCore, QtWidgets
-from eggsincubatorGUI import Ui_MainWindow  # Import the UI class directly
+from eggsIncubatorGUI import Ui_MainWindow  # Import the UI class directly
 
 import serial
 import re
+import os
+from datetime import datetime, timedelta
+import csv
+import time
 
 # ARDUINO serial communication - setup #
-#port = "/dev/ttyUSB0"
 portSetup = "/dev/ttyACM0"
 baudrateSetup = 19200
 timeout = 0.1
 
 identifiers = ["TMP", "HUM", "HTP"]  # Global variable
 
-class mainSoftwareThread(QtCore.QThread):
-    # Signal to send updated temperature values to the GUI
-    update_temperatures = QtCore.pyqtSignal(list)
-
-    def __init__(self):
-        super().__init__()
-        self.running = True
-        self.current_data = []  # Holds the most recent data received from SerialThread
-
-    def run(self):
-        while self.running:
-            if self.current_data:
-                # Extract data into specific categories
-                currentTemperatures = {}
-                currentHumidities = {}
-                currentHumiditiesTemperature = {}
-
-                for item in self.current_data:
-                    for key, value in item.items():
-                        if key.startswith("TMP"):
-                            currentTemperatures[key] = value
-                        elif key.startswith("HUM"):
-                            currentHumidities[key] = value
-                        elif key.startswith("HTP"):
-                            currentHumiditiesTemperature[key] = value
-
-                # Example: Emit temperatures to update GUI
-                self.update_temperatures.emit(list(currentTemperatures.values()))
-                print(list(currentTemperatures.values()))
-
-                # Clear the data after processing
-                self.current_data = []
-
-            self.msleep(150)  # Adjust the delay as needed
-
-    def stop(self):
-        self.running = False
-
-    def receive_data(self, new_data):
-        self.current_data = new_data
 
 class SerialThread(QtCore.QThread):
-    # Signal to send decoded data to the TemperatureThread
     data_received = QtCore.pyqtSignal(list)
 
-    def __init__(self, port = portSetup, baudrate = baudrateSetup):
+    def __init__(self, port=portSetup, baudrate=baudrateSetup):
         super().__init__()
         self.port = port
         self.baudrate = baudrate
         self.running = True
+        self.serial_port = None  # To store the serial port object
 
     def run(self):
         try:
-            with serial.Serial(self.port, self.baudrate, timeout=1) as ser:
-                print("Serial port opened successfully")
-                buffer = ''
-                startTransmission = False
-                saving = False
-                identifiers_data_list = []
+            self.serial_port = serial.Serial(self.port, self.baudrate, timeout=1)
+            print("Serial port opened successfully")
+            buffer = ''
+            startTransmission = False
+            saving = False
+            identifiers_data_list = []
 
-                while self.running:
-                    if ser.in_waiting > 0:
-                        dataRead = ser.read().decode('utf-8')
-                        if dataRead == '@':
-                            startTransmission = True
-                        if startTransmission:
-                            if dataRead == '<':
-                                saving = True
-                            if saving:
-                                buffer += dataRead
-                            if dataRead == '>':
-                                saving = False
-                                self.decode_message(buffer, identifiers_data_list)
-                                buffer = ''
-                            if dataRead == '#':
-                                startTransmission = False
-                                if identifiers_data_list:
-                                    self.data_received.emit(identifiers_data_list)
-                                    #print(identifiers_data_list)
-                                    identifiers_data_list.clear()
+            while self.running:
+                if self.serial_port.in_waiting > 0:
+                    dataRead = self.serial_port.read().decode('utf-8')
+                    if dataRead == '@':
+                        startTransmission = True
+                    if startTransmission:
+                        if dataRead == '<':
+                            saving = True
+                        if saving:
+                            buffer += dataRead
+                        if dataRead == '>':
+                            saving = False
+                            self.decode_message(buffer, identifiers_data_list)
+                            buffer = ''
+                        if dataRead == '#':
+                            startTransmission = False
+                            if identifiers_data_list:
+                                self.data_received.emit(identifiers_data_list)
+                                identifiers_data_list.clear()
         except serial.SerialException as e:
             print(f"Failed to open serial port: {e}")
+        finally:
+            self.close_serial_port()
 
     def stop(self):
         self.running = False
+        self.wait()  # Ensure the thread finishes before returning
+        self.close_serial_port()
+        
+    def close_serial_port(self):
+        if self.serial_port and self.serial_port.is_open:
+            try:
+                self.serial_port.close()
+                print("Serial port closed successfully")
+            except Exception as e:
+                print(f"Error closing serial port: {e}")
 
     @staticmethod
     def decode_message(buffer, identifiers_data_list):
@@ -108,13 +82,7 @@ class SerialThread(QtCore.QThread):
             infoData_part = match.group(2)
 
             if SerialThread.is_number(infoData_part):
-                # Convert to float or int
-                if '.' in infoData_part:
-                    number = float(infoData_part)
-                else:
-                    number = int(infoData_part)
-
-                # Add to identifiers_data_list if matches identifiers
+                number = float(infoData_part) if '.' in infoData_part else int(infoData_part)
                 for identifier in identifiers:
                     if infoName_part.startswith(identifier):
                         identifiers_data_list.append({infoName_part: number})
@@ -127,26 +95,126 @@ class SerialThread(QtCore.QThread):
     @staticmethod
     def is_number(s):
         try:
-            float(s)  # Try to convert to float
+            float(s)
             return True
         except ValueError:
             return False
 
-class MainWindow(QtWidgets.QMainWindow):
+
+class MainSoftwareThread(QtCore.QThread):
+    update_view = QtCore.pyqtSignal(list)  # Signal to update the view (MainWindow)
+
     def __init__(self):
+        super().__init__()
+        self.running = True
+        self.serial_thread = SerialThread()
+        self.serial_thread.data_received.connect(self.process_serial_data)
+        self.current_data = []  # Holds the most recent data received from SerialThread
+        
+        self.saving_interval = 1 # default: every minute
+        self.last_saving_time = datetime.now()
+        
+        #--- Create Machine_Statistic folder ---#
+        machine_statistics_folder_path = "Machine_Statistics"
+        if not os.path.exists(machine_statistics_folder_path):
+                os.makedirs(machine_statistics_folder_path)
+
+        # --- Create Images folder ---#
+        temperatures_folder_path = os.path.join(machine_statistics_folder_path, 'Temperatures')
+        if not os.path.exists(temperatures_folder_path):
+            os.makedirs(temperatures_folder_path)
+
+        humidity_folder_path = os.path.join(machine_statistics_folder_path, 'Humidity')
+        if not os.path.exists(humidity_folder_path):
+            os.makedirs(humidity_folder_path)
+
+    def run(self):
+        # Start the SerialThread
+        self.serial_thread.start()
+
+    def stop(self):
+        self.running = False
+        self.serial_thread.stop()
+        self.serial_thread.wait()
+
+    def process_serial_data(self, new_data):
+        self.current_data = new_data
+        # print(new_data)
+        # Extract data into specific categories
+        current_temperatures = {k: v for d in new_data for k, v in d.items() if k.startswith("TMP")} # dictionary: <class 'dict'> dict_values([23.7, 21.1, 20.4, 21.7]) 
+        current_humidities = {k: v for d in new_data for k, v in d.items() if k.startswith("HUM")}
+        current_humidities_temperatures = {k: v for d in new_data for k, v in d.items() if k.startswith("HTP")}
+        # Emit the data to update the view
+        # OLD self.update_view.emit(list(current_temperatures.values()))
+        
+        # Collecting all values into a single list
+        all_values = list(current_temperatures.values()) + \
+                    list(current_humidities.values()) + \
+                    list(current_humidities_temperatures.values())
+        self.update_view.emit(all_values)
+             
+        
+        # SAVING DATA IN FILES
+        if ((datetime.now() - self.last_saving_time) >= timedelta(minutes = self.saving_interval)):
+                start_time = time.perf_counter()
+                
+                self.save_data_to_files('Temperatures', current_temperatures) #{'TMP01': 23.1, 'TMP02': 23.1, 'TMP03': 23.1}
+                self.save_data_to_files('Humidity', current_humidities) #{'HUM01': 52.5}
+                self.last_saving_time = datetime.now()
+                print(f"Saved data! {self.last_saving_time}")
+                
+                end_time = time.perf_counter()
+                print(f"Time requested for saving data [milli-seconds]: {(end_time - start_time)*1000}")
+                
+        
+    def save_data_to_files(self, data_type, data_dictionary): #passo un dictionary di temperature/humidities, dimensione variabile per gestire più o meno sensori dinamicamente
+        now = datetime.now()
+        current_date = now.strftime('%Y-%m-%d')
+        
+        machine_statistics_folder_path = "Machine_Statistics"
+        # faccio selezione del folder da cui pescare i dati.
+        if data_type == 'Temperatures':
+            folder_path = os.path.join(machine_statistics_folder_path, 'Temperatures')
+        elif data_type == 'Humidity':
+            folder_path = os.path.join(machine_statistics_folder_path, 'Humidity')
+        else:
+            raise ValueError("Invalid path configuration")	
+            
+        file_path = os.path.join(folder_path, f"{current_date}.csv")
+
+        # Initialize the CSV file with headers if it doesn't exist
+        if not os.path.exists(file_path):
+            with open(file_path, mode='w', newline='') as file: # write mode
+                writer = csv.writer(file)
+
+                # Initialize the list with 'Timestamp' as the first element
+                result_list = ['Timestamp']
+
+                # Append the keys from the dictionary to the list
+                result_list.extend(data_dictionary.keys())
+
+                writer.writerow(result_list)
+
+        timestamp = now.strftime('%Y-%m-%d %H:%M:%S')
+
+        with open(file_path, mode='a', newline='') as file: # append mode
+            writer = csv.writer(file)
+
+            # Initialize the list with the timestamp as the first element
+            values_list = [timestamp]
+
+            # Append the values from the dictionary to the list
+            values_list.extend(data_dictionary.values())
+            writer.writerow(values_list)
+
+
+class MainWindow(QtWidgets.QMainWindow):
+    def __init__(self, main_software_thread):
         super().__init__()
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
-
-        # Set up the main software thread
-        self.mainSoftware_thread = mainSoftwareThread()
-        self.mainSoftware_thread.update_temperatures.connect(self.update_temperature_display)
-        self.mainSoftware_thread.start()
-
-        # Set up the serial thread
-        self.serial_thread = SerialThread(port = portSetup, baudrate = baudrateSetup)
-        self.serial_thread.data_received.connect(self.mainSoftware_thread.receive_data)
-        self.serial_thread.start()
+        self.main_software_thread = main_software_thread
+        self.main_software_thread.update_view.connect(self.update_display_data)
 
         # Connect buttons to example handlers
         self.ui.move_CW_btn.clicked.connect(self.handle_move_cw)
@@ -159,12 +227,15 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui.minValueTempControl_radioBtn.toggled.connect(self.handle_radio_button)
         self.ui.speedRPM_spinBox.valueChanged.connect(self.handle_spinbox)
 
-    def update_temperature_display(self, temperatures):
+    def update_display_data(self, all_data):
         # Update the temperature labels in the GUI
-        self.ui.temperature1_4.setText(f"{temperatures[0]} °C")
-        self.ui.temperature2_4.setText(f"{temperatures[1]} °C")
-        self.ui.temperature3_5.setText(f"{temperatures[2]} °C")
-        self.ui.temperature4_2.setText(f"{temperatures[3]} °C")
+        if len(all_data) >= 6: # perché il numero??
+            self.ui.temperature1_4.setText(f"{all_data[0]} °C")
+            self.ui.temperature2_4.setText(f"{all_data[1]} °C")
+            self.ui.temperature3_5.setText(f"{all_data[2]} °C")
+            self.ui.temperature4_2.setText(f"{all_data[3]} °C")
+            self.ui.humidity1.setText(f"{all_data[4]} %")
+            #self.ui.temperature4_2.setText(f"{all_data[3]} °C") PER TEMPERATURA DA UMIDITA
 
     def handle_radio_button(self):
         sender = self.sender()
@@ -186,15 +257,22 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def closeEvent(self, event):
         # Ensure the threads are stopped when the window is closed
-        self.mainSoftware_thread.stop()
-        self.mainSoftware_thread.wait()
-        self.serial_thread.stop()
-        self.serial_thread.wait()
+        self.main_software_thread.stop()
+        self.main_software_thread.wait()
         super().closeEvent(event)
 
 
 if __name__ == "__main__":
     app = QtWidgets.QApplication(sys.argv)
-    window = MainWindow()
+
+    # Initialize the main software thread
+    main_software_thread = MainSoftwareThread()
+
+    # Initialize and show the main window
+    window = MainWindow(main_software_thread)
     window.show()
+
+    # Start the main software thread
+    main_software_thread.start()
+
     sys.exit(app.exec_())
