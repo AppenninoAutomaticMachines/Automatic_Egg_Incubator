@@ -225,18 +225,18 @@ void loop() {
     listofDataToSend_numberOfData++;
 
     strcpy(bufferChar, "<TMP04,");
-    dtostrf( (temperatures[2] + temperatures[1]) / 2, 1, 1, fbuffChar); 
+    dtostrf( (temperatures[0] + temperatures[1] + temperatures[2]) / 3, 1, 1, fbuffChar); 
     listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(bufferChar, fbuffChar), ">");
     listofDataToSend_numberOfData++;
 
-    float humidityDHT22 = random(150, 850) / 10.0;
+    float humidityDHT22 = temperatures[0];
     strcpy(bufferChar, "<HUM01,");
     dtostrf( humidityDHT22, 1, 1, fbuffChar); 
     listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(bufferChar, fbuffChar), ">");
     listofDataToSend_numberOfData++;
 
     strcpy(bufferChar, "<HTP01,"); // temperatura che viene letta dal sensore di umidità
-    dtostrf( (temperatures[2] + temperatures[1]+ temperatures[0]) / 3, 1, 1, fbuffChar); 
+    dtostrf( (temperatures[0] + temperatures[1] + temperatures[2]) / 3, 1, 1, fbuffChar); 
     listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(bufferChar, fbuffChar), ">");
     listofDataToSend_numberOfData++;
 
