@@ -21,22 +21,41 @@ identifiers = ["TMP", "HUM", "HTP"]  # Global variable
 class SerialThread(QtCore.QThread):
     data_received = QtCore.pyqtSignal(list)
 
-    def __init__(self, port=portSetup, baudrate=baudrateSetup):
+    def __init__(self, port = portSetup, baudrate = baudrateSetup):
         super().__init__()
         self.port = port
         self.baudrate = baudrate
+        self.retry_interval = 1 #sleeping time in seconds
+        self.max_retries = 5
         self.running = True
         self.serial_port = None  # To store the serial port object
 
+    def open_serial_port(self):
+        retries = 0
+        while retries < self.max_retries:
+            try:
+                self.serial_port = serial.Serial(self.port, self.baudrate, timeout=1)
+                print("Serial port opened successfully")
+                # Discard any initial data to avoid decode errors
+                self.serial_port.reset_input_buffer()
+                return True
+            except serial.SerialException as e:
+                print(f"Failed to open serial port: {e}. Retrying in {self.retry_interval} seconds...")
+                time.sleep(self.retry_interval)
+                retries += 1
+        return False
+    
     def run(self):
-        try:
-            self.serial_port = serial.Serial(self.port, self.baudrate, timeout=1)
-            print("Serial port opened successfully")
-            buffer = ''
-            startTransmission = False
-            saving = False
-            identifiers_data_list = []
+        if not self.open_serial_port():
+            print("Unable to open serial port after multiple attempts.")
+            return
 
+        buffer = ''
+        startTransmission = False
+        saving = False
+        identifiers_data_list = []
+        
+        try: 
             while self.running:
                 if self.serial_port.in_waiting > 0:
                     dataRead = self.serial_port.read().decode('utf-8')
@@ -114,6 +133,12 @@ class MainSoftwareThread(QtCore.QThread):
         self.saving_interval = 1 # default: every minute
         self.last_saving_time = datetime.now()
         
+        # State variables to handle inputs from MainWindow
+        self.current_button = None
+        self.current_speedRPM_spinBox_value = None
+        self.current_maxHysteresisValue_spinBox_value = None
+        self.current_minHysteresisValue_spinBox_value = None
+        
         #--- Create Machine_Statistic folder ---#
         machine_statistics_folder_path = "Machine_Statistics"
         if not os.path.exists(machine_statistics_folder_path):
@@ -131,11 +156,52 @@ class MainSoftwareThread(QtCore.QThread):
     def run(self):
         # Start the SerialThread
         self.serial_thread.start()
+        
+        
+        while self.running:
+            # Example of using the button and spinbox values in the main loop
+            if self.current_button is not None:
+                print(f"Processing button: {self.current_button}")
+                self.current_button = None  # Reset after processing
+
+            if self.current_speedRPM_spinBox_value is not None:
+                print(f"[MainSoftwareThread] Processing spinbox value: {self.current_speedRPM_spinBox_value} ({type(self.current_speedRPM_spinBox_value)})")
+                self.current_speedRPM_spinBox_value = None  # Reset after processing
+
+            if self.current_maxHysteresisValue_spinBox_value is not None:
+                print(f"[MainSoftwareThread] Processing spinbox value: {self.current_maxHysteresisValue_spinBox_value} ({type(self.current_maxHysteresisValue_spinBox_value)})")
+                self.current_maxHysteresisValue_spinBox_value = None  # Reset after processing
+                
+            if self.current_minHysteresisValue_spinBox_value is not None:
+                print(f"[MainSoftwareThread] Processing spinbox value: {self.current_minHysteresisValue_spinBox_value} ({type(self.current_minHysteresisValue_spinBox_value)})")
+                self.current_minHysteresisValue_spinBox_value = None  # Reset after processing
+                
+            self.msleep(100)
 
     def stop(self):
         self.running = False
         self.serial_thread.stop()
         self.serial_thread.wait()
+        
+    def handle_button_click(self, button_name):
+        """Handle button click signals from MainWindow."""
+        print(f"Received button click: {button_name}")
+        self.current_button = button_name
+
+    def handle_speedRPM_spinBox_value(self, spinbox_name, value):
+        """Handle spinbox value change signals from MainWindow."""
+        #print(f"[MainSoftwareThread] {spinbox_name} value changed to {value}")
+        self.current_speedRPM_spinBox_value = value
+        
+    def handle_maxHysteresisValue_spinBox_value(self, spinbox_name, value):
+        """Handle spinbox value change signals from MainWindow."""
+        #print(f"[MainSoftwareThread] {spinbox_name} value changed to {value}")
+        self.current_maxHysteresisValue_spinBox_value = value
+        
+    def handle_minHysteresisValue_spinBox_value(self, spinbox_name, value):
+        """Handle spinbox value change signals from MainWindow."""
+        #print(f"[MainSoftwareThread] {spinbox_name} value changed to {value}")
+        self.current_minHysteresisValue_spinBox_value = value
 
     def process_serial_data(self, new_data):
         self.current_data = new_data
@@ -209,23 +275,54 @@ class MainSoftwareThread(QtCore.QThread):
 
 
 class MainWindow(QtWidgets.QMainWindow):
+    # Define custom signals - this is done to send button/spinBox and other custom signals to other thread MainSoftwareThread: use Qt Signals
+    button_clicked = QtCore.pyqtSignal(str)  # Emits button name
+    speedRPM_spinBox_value_changed = QtCore.pyqtSignal(str, float)  # Emits spinbox value  // METTI INT se intero
+    maxHysteresisValue_spinBox_value_changed = QtCore.pyqtSignal(str, float) 
+    minHysteresisValue_spinBox_value_changed = QtCore.pyqtSignal(str, float) 
+    
     def __init__(self, main_software_thread):
         super().__init__()
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
         self.main_software_thread = main_software_thread
         self.main_software_thread.update_view.connect(self.update_display_data)
+        
+        # Connect signals to main software thread slots
+        self.button_clicked.connect(self.main_software_thread.handle_button_click)
+        self.speedRPM_spinBox_value_changed.connect(self.main_software_thread.handle_speedRPM_spinBox_value)
+        self.maxHysteresisValue_spinBox_value_changed.connect(self.main_software_thread.handle_maxHysteresisValue_spinBox_value)
+        self.minHysteresisValue_spinBox_value_changed.connect(self.main_software_thread.handle_minHysteresisValue_spinBox_value)
 
-        # Connect buttons to example handlers
-        self.ui.move_CW_btn.clicked.connect(self.handle_move_cw)
-        self.ui.move_CCW_btn.clicked.connect(self.handle_move_ccw)
-        self.ui.reset_btn.clicked.connect(self.handle_reset)
 
-        # Connect radio buttons and spinBox to handlers
+        # Connect buttons to handlers that emit signals
+        self.ui.move_CW_btn.clicked.connect(lambda: self.emit_button_signal("Move CW"))
+        self.ui.move_CCW_btn.clicked.connect(lambda: self.emit_button_signal("Move CCW"))
+        self.ui.reset_btn.clicked.connect(lambda: self.emit_button_signal("Reset"))
+
+        # Connect radio buttons and spinBox to emit its values
         self.ui.maxValueTempControl_radioBtn.toggled.connect(self.handle_radio_button)
         self.ui.meanValueTempControl_radioBtn.toggled.connect(self.handle_radio_button)
         self.ui.minValueTempControl_radioBtn.toggled.connect(self.handle_radio_button)
-        self.ui.speedRPM_spinBox.valueChanged.connect(self.handle_spinbox)
+        self.ui.speedRPM_spinBox.valueChanged.connect(lambda value: self.emit_spinbox_signal("speedRPM_spinBox", value))
+        self.ui.maxHysteresisValue_spinBox.valueChanged.connect(lambda value: self.emit_spinbox_signal("maxHysteresisValue_spinBox", value))
+        self.ui.minHysteresisValue_spinBox.valueChanged.connect(lambda value: self.emit_spinbox_signal("minHysteresisValue_spinBox", value))
+        
+    def emit_button_signal(self, button_name):
+        """Emit signal with the name of the button clicked."""
+        self.button_clicked.emit(button_name)
+        print(f"Button clicked: {button_name}")
+
+    def emit_spinbox_signal(self, spinbox_name, value):
+        """Emit signal with the name of the spinbox and its value."""
+        value = float(value)  # Cast value to float explicitly
+        print(f"[MainWindow] Emitting signal from {spinbox_name} with value: {value}")
+        if spinbox_name == "speedRPM_spinBox":
+            self.speedRPM_spinBox_value_changed.emit(spinbox_name, value)
+        elif spinbox_name == "maxHysteresisValue_spinBox":
+            self.maxHysteresisValue_spinBox_value_changed.emit(spinbox_name, value)
+        elif spinbox_name == "minHysteresisValue_spinBox":
+            self.minHysteresisValue_spinBox_value_changed.emit(spinbox_name, value)
 
     def update_display_data(self, all_data):
         # Update the temperature labels in the GUI
@@ -242,9 +339,17 @@ class MainWindow(QtWidgets.QMainWindow):
         if sender.isChecked():
             print(f"Radio button '{sender.text()}' selected")
 
-    def handle_spinbox(self):
+    def handle_speedRPM_spinBox(self):
         value = self.ui.speedRPM_spinBox.value()
-        print(f"SpinBox value changed to: {value}")
+        print(f"speedRPM_spinBox value changed to: {value}")
+
+    def handle_maxHysteresisValue_spinBox(self):
+        value = self.ui.maxHysteresisValue_spinBox.value()
+        print(f"maxHysteresisValue_spinBox value changed to: {value}")
+        
+    def handle_minHysteresisValue_spinBox(self):
+        value = self.ui.minHysteresisValue_spinBox.value()
+        print(f"minHysteresisValue_spinBox value changed to: {value}")
 
     def handle_move_cw(self):
         print("Move clockwise button clicked")
