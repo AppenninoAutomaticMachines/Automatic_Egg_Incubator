@@ -9,6 +9,7 @@ import os
 from datetime import datetime, timedelta
 import csv
 import time
+import queue
 
 # ARDUINO serial communication - setup #
 portSetup = "/dev/ttyACM0"
@@ -25,6 +26,7 @@ class SerialThread(QtCore.QThread):
         super().__init__()
         self.port = port
         self.baudrate = baudrate
+        self.command_queue = queue.Queue()  # Queue for outgoing commands
         self.retry_interval = 1 #sleeping time in seconds
         self.max_retries = 5
         self.running = True
@@ -51,17 +53,18 @@ class SerialThread(QtCore.QThread):
             return
 
         buffer = ''
-        startTransmission = False
+        startRx = False
         saving = False
         identifiers_data_list = []
         
         try: 
             while self.running:
+                # Reading serial data
                 if self.serial_port.in_waiting > 0:
                     dataRead = self.serial_port.read().decode('utf-8')
                     if dataRead == '@':
-                        startTransmission = True
-                    if startTransmission:
+                        startRx = True
+                    if startRx:
                         if dataRead == '<':
                             saving = True
                         if saving:
@@ -71,14 +74,25 @@ class SerialThread(QtCore.QThread):
                             self.decode_message(buffer, identifiers_data_list)
                             buffer = ''
                         if dataRead == '#':
-                            startTransmission = False
+                            startRx = False
                             if identifiers_data_list:
                                 self.data_received.emit(identifiers_data_list)
                                 identifiers_data_list.clear()
+                
+                # Sending serial data
+                while not self.command_queue.empty():
+                    command = self.command_queue.get()
+                    self.serial_port.write(command.encode('utf-8'))
+                    print(f"Sent to Arduino: {command}")
+                        
         except serial.SerialException as e:
             print(f"Failed to open serial port: {e}")
         finally:
             self.close_serial_port()
+            
+    def add_command(self, cmd, value):
+        formatted_command = f"@<{cmd}, {value}>#"
+        self.command_queue.put(formatted_command)
 
     def stop(self):
         self.running = False
@@ -133,6 +147,8 @@ class MainSoftwareThread(QtCore.QThread):
         self.saving_interval = 1 # default: every minute
         self.last_saving_time = datetime.now()
         
+        self.command_list = [] # List to hold the pending commands
+        
         # State variables to handle inputs from MainWindow
         self.current_button = None
         self.current_speedRPM_spinBox_value = None
@@ -159,9 +175,23 @@ class MainSoftwareThread(QtCore.QThread):
         
         
         while self.running:
+            if self.command_list:
+                for cmd, value in self.command_list:
+                    self.serial_thread.add_command(cmd, value)
+                    print(f"{cmd}, {value}")
+                self.command_list.clear()
+                
             # Example of using the button and spinbox values in the main loop
             if self.current_button is not None:
                 print(f"Processing button: {self.current_button}")
+                
+                if self.current_button == "move_CW_btn":
+                    self.queue_command("CMD01", 1)
+                if self.current_button == "move_CCW_btn":
+                    self.queue_command("CMD02", 0)
+                if self.current_button == "reset_btn":
+                    self.queue_command("CMD03", 0)
+                    
                 self.current_button = None  # Reset after processing
 
             if self.current_speedRPM_spinBox_value is not None:
@@ -177,6 +207,10 @@ class MainSoftwareThread(QtCore.QThread):
                 self.current_minHysteresisValue_spinBox_value = None  # Reset after processing
                 
             self.msleep(100)
+            
+    def queue_command(self, cmd, value):
+        self.command_list.append((cmd, value))
+        print(self.command_list)
 
     def stop(self):
         self.running = False
@@ -296,14 +330,18 @@ class MainWindow(QtWidgets.QMainWindow):
 
 
         # Connect buttons to handlers that emit signals
-        self.ui.move_CW_btn.clicked.connect(lambda: self.emit_button_signal("Move CW"))
-        self.ui.move_CCW_btn.clicked.connect(lambda: self.emit_button_signal("Move CCW"))
-        self.ui.reset_btn.clicked.connect(lambda: self.emit_button_signal("Reset"))
+        self.ui.move_CW_btn.clicked.connect(lambda: self.emit_button_signal("move_CW_btn"))
+        self.ui.move_CCW_btn.clicked.connect(lambda: self.emit_button_signal("move_CCW_btn"))
+        self.ui.layHorizontal_btn.clicked.connect(lambda: self.emit_button_signal("layHorizontal_btn"))
+        self.ui.forceEggsTurn_btn.clicked.connect(lambda: self.emit_button_signal("forceEggsTurn_btn"))
+        self.ui.reset_btn.clicked.connect(lambda: self.emit_button_signal("reset_btn"))
 
-        # Connect radio buttons and spinBox to emit its values
+        # Connect radio buttons to emit its values
         self.ui.maxValueTempControl_radioBtn.toggled.connect(self.handle_radio_button)
         self.ui.meanValueTempControl_radioBtn.toggled.connect(self.handle_radio_button)
         self.ui.minValueTempControl_radioBtn.toggled.connect(self.handle_radio_button)
+        
+        # Connect spinBox to emit its values
         self.ui.speedRPM_spinBox.valueChanged.connect(lambda value: self.emit_spinbox_signal("speedRPM_spinBox", value))
         self.ui.maxHysteresisValue_spinBox.valueChanged.connect(lambda value: self.emit_spinbox_signal("maxHysteresisValue_spinBox", value))
         self.ui.minHysteresisValue_spinBox.valueChanged.connect(lambda value: self.emit_spinbox_signal("minHysteresisValue_spinBox", value))
@@ -316,7 +354,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def emit_spinbox_signal(self, spinbox_name, value):
         """Emit signal with the name of the spinbox and its value."""
         value = float(value)  # Cast value to float explicitly
-        print(f"[MainWindow] Emitting signal from {spinbox_name} with value: {value}")
+        #print(f"[MainWindow] Emitting signal from {spinbox_name} with value: {value}")
         if spinbox_name == "speedRPM_spinBox":
             self.speedRPM_spinBox_value_changed.emit(spinbox_name, value)
         elif spinbox_name == "maxHysteresisValue_spinBox":
