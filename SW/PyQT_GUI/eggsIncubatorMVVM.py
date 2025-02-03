@@ -155,6 +155,9 @@ class MainSoftwareThread(QtCore.QThread):
         self.current_maxHysteresisValue_spinBox_value = None
         self.current_minHysteresisValue_spinBox_value = None
         
+        self.thc = self.HysteresisController(lower_limit = 37.5, upper_limit = 35.8)
+        
+        
         #--- Create Machine_Statistic folder ---#
         machine_statistics_folder_path = "Machine_Statistics"
         if not os.path.exists(machine_statistics_folder_path):
@@ -174,7 +177,7 @@ class MainSoftwareThread(QtCore.QThread):
         self.serial_thread.start()
         
         
-        while self.running:
+        while self.running:            
             if self.command_list:
                 for cmd, value in self.command_list:
                     self.serial_thread.add_command(cmd, value)
@@ -244,6 +247,11 @@ class MainSoftwareThread(QtCore.QThread):
                     list(current_humidities.values()) + \
                     list(current_humidities_temperatures.values())
         self.update_view.emit(all_values)
+        
+        # TEMPERATURE CONTROLLER SECTION
+        # faccio l'update qui: ogni votla che arrivano dati nuovi li elaboro, anche nel controllore
+        self.thc.update(list(current_temperatures.values()))
+        print(f"{self.thc.get_mean_value()}")
              
         
         # SAVING DATA IN FILES
@@ -298,6 +306,121 @@ class MainSoftwareThread(QtCore.QThread):
             # Append the values from the dictionary to the list
             values_list.extend(data_dictionary.values())
             writer.writerow(values_list)
+            
+    class HysteresisController:
+        def __init__(self, lower_limit, upper_limit):
+            self.lower_limit = lower_limit
+            self.upper_limit = upper_limit
+            self._min_value = float('inf')  # Track the minimum value observed
+            self._max_value = float('-inf') # Track the maximum value observed
+            self._mean_value = None         # Mean value of the monitored inputs
+            self._output_control = False    # False = OFF, True = ON
+            
+            # Statistics tracking
+            self.on_count = 0
+            self.off_count = 0
+            self.time_on = 0.0
+            self.time_off = 0.0
+            self._last_switch_time = time.time()
+        
+        # Method to set the lower limit
+        def set_lower_limit(self, lower_limit):
+            self.lower_limit = lower_limit
+        
+        # Method to get the lower limit
+        def get_lower_limit(self):
+            return self.lower_limit
+        
+        # Method to set the upper limit
+        def set_upper_limit(self, upper_limit):
+            self.upper_limit = upper_limit
+        
+        # Method to get the upper limit
+        def get_upper_limit(self):
+            return self.upper_limit
+
+        # Update method to process input values and apply hysteresis logic
+        def update(self, values):
+            # Ensure values is a list for consistency
+            if not isinstance(values, list):
+                values = [values]
+            
+            # Calculate the mean of the values
+            self._mean_value = sum(values) / len(values)
+            
+            # Update the max and min values reached
+            for value in values:
+                self._max_value = max(self._max_value, value)
+                self._min_value = min(self._min_value, value)
+            
+            # Check if output state changes
+            new_output = self._output_control
+            if self._mean_value > self.upper_limit:
+                new_output = False  # Turn OFF if mean is above upper limit
+            elif self._mean_value < self.lower_limit:
+                new_output = True   # Turn ON if mean is below lower limit
+            
+            # If state changed, update time tracking and count transitions
+            if new_output != self._output_control:
+                elapsed_time = time.time() - self._last_switch_time
+                if self._output_control:
+                    self.time_on += elapsed_time
+                    self.off_count += 1
+                else:
+                    self.time_off += elapsed_time
+                    self.on_count += 1
+                
+                self._output_control = new_output
+                self._last_switch_time = time.time()
+        
+        # Method to get the output control (True or False)
+        def get_output_control(self):
+            return self._output_control
+        
+        # Method to get the maximum value reached
+        def get_max_value(self):
+            return self._max_value
+        
+        # Method to get the minimum value reached
+        def get_min_value(self):
+            return self._min_value
+
+        # Method to get the mean value of the last monitored inputs
+        def get_mean_value(self):
+            return self._mean_value
+
+        # Method to reset min/max values
+        def reset_max_value(self):
+            self._max_value = float('-inf')
+        
+        def reset_min_value(self):
+            self._min_value = float('inf')
+
+        def reset_all_values(self):
+            self._min_value = float('inf')
+            self._max_value = float('-inf')
+
+        # Method to get the number of ON/OFF transitions
+        def get_on_count(self):
+            return self.on_count
+
+        def get_off_count(self):
+            return self.off_count
+
+        # Method to get the total time spent ON/OFF
+        def get_time_on(self):
+            return self.time_on
+
+        def get_time_off(self):
+            return self.time_off
+
+        # Method to reset statistics
+        def reset_statistics(self):
+            self.on_count = 0
+            self.off_count = 0
+            self.time_on = 0.0
+            self.time_off = 0.0
+            self._last_switch_time = time.time()
 
 
 class MainWindow(QtWidgets.QMainWindow):
