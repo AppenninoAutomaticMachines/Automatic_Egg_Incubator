@@ -18,7 +18,7 @@
 /* PIN ARDUINO */
 #define ONE_WIRE_BUS_2 2
 #define TEMPERATURE_PRECISION 9 // DS18B20 digital termometer provides 9-bit to 12-bit Celsius temperature measurements
-
+#define LED_12 12
 /* TEMPERATURES SECTION */
 // NO STAR/RING connection, only ONE SINGLE WIRE UTP cabme (unshielded twisted pair)
 OneWire oneWire(ONE_WIRE_BUS_2);
@@ -78,6 +78,7 @@ unsigned long switch1_lastDebounceTime, switch1_filterDebounceTime = 50; //ms
 
 // SENDING TO RPY
 #define MAX_NUMBER_OF_COMMANDS_TO_BOARD 20
+bool receivingDataFromBoard = false;
 String listofDataToSend[MAX_NUMBER_OF_COMMANDS_TO_BOARD];
 byte listofDataToSend_numberOfData = 0;
 
@@ -86,20 +87,23 @@ char bufferCharArray[25]; // buffer lo metto qui
 char bufferChar[35];
 char fbuffChar[10];
 
+String receivedCommands[20];
+
 
 void setup() {
   pinMode(switch1_pin, INPUT);
+  pinMode(LED_12, OUTPUT);
   Serial.begin(SERIAL_SPEED);
-  Serial.println("Starting");
+  //Serial.println("Starting");
 
   sensors.begin();
 
   // locate devices on the bus
-  Serial.print("Locating devices...");
-  Serial.print("Found ");
+  //Serial.print("Locating devices...");
+  //Serial.print("Found ");
 
   numberOfDevices = sensors.getDeviceCount();
-
+  /*
   if(numberOfDevices != NUMBER_OF_TEMPERATURES_SENSORS_ON_ONE_WIRE_BUS_2){
     Serial.println("Not found the correct number of devices on the bus.");
     Serial.print("Expected: ");
@@ -107,14 +111,17 @@ void setup() {
     Serial.print("  Found: ");
     Serial.println(numberOfDevices);
   }
+  */
 
-  Serial.print(numberOfDevices, DEC);
-  Serial.println(" devices.");
+  //Serial.print(numberOfDevices, DEC);
+  //Serial.println(" devices.");
 
   // report parasite power requirements
+  /*
   Serial.print("Parasite power is: ");
   if (sensors.isParasitePowerMode()) Serial.println("ON");
   else Serial.println("OFF");
+  */
 
   sensors.setWaitForConversion(false); // quando richiedi le temperature requestTemperatures() la libreria NON aspetta il delay adeguato, quidni devi aspettarlo tu.
   sensors.requestTemperatures(); // send command to all the sensors for temperature conversion.
@@ -156,7 +163,7 @@ void setup() {
     }
   }
 
-  Serial.println("Setup finished");
+  //Serial.println("Setup finished");
 }
 
 void loop() {    
@@ -248,6 +255,7 @@ void loop() {
     gotTemperatures = false;
   }
   
+  // SENDING TO RPY
   if(listofDataToSend_numberOfData > 0){
     Serial.print('@'); // SYMBOL TO START BOARDS TRANSMISSION
     for(byte i = 0; i < listofDataToSend_numberOfData; i++){
@@ -255,8 +263,29 @@ void loop() {
     }
     Serial.println('#'); // SYMBOL TO END BOARDS TRANSMISSION
   }
-  delay(150);
-  
+  delay(50);
+
+  // RECEIVING FROM RPI
+  if(Serial.available() > 0){ 
+    int numberOfCommandsFromBoard = readFromBoard(); // from ESP8266. It has @ as terminator character
+    // Guardiamo che comandi ci sono arrivati
+    for(byte j = 0; j < numberOfCommandsFromBoard; j++){
+      String tempReceivedCommand = receivedCommands[j];
+      Serial.println(tempReceivedCommand);
+      if(tempReceivedCommand.indexOf("CMD01") >= 0){ //stepperMotorForwardOn
+        digitalWrite(LED_12, HIGH);
+        //Serial.println("ON");
+      }
+      if(tempReceivedCommand.indexOf("CMD02") >= 0){ //stepperMotorForwardOff
+        digitalWrite(LED_12, LOW);
+        //Serial.println("OFF");
+      }
+      if(tempReceivedCommand.indexOf("CMD03") >= 0){ //stepperMotorBackwardOn
+        digitalWrite(LED_12, LOW);
+        //Serial.println("OFF");
+      }
+    }
+  }
 }
 
 
@@ -275,4 +304,58 @@ void addressToCharArray(DeviceAddress deviceAddress, char *charArray) {
   }
   // Add null terminator at the end of the char array
   charArray[16] = '\0';
+}
+
+int readFromBoard(){ // returns the number of commands received
+  receivingDataFromBoard = true;
+  byte rcIndex = 0;
+  char bufferChar[30];
+  bool saving = false;
+  bool enableReading = false;
+  byte receivedCommandsIndex = 0;
+
+  unsigned long  startReceiving; // mi ricordo appena entro in while loop
+
+  while(receivingDataFromBoard){
+    // qui è bloccante...assumo che prima o poi arduino pubblichi
+    if(Serial.available() > 0){ // no while, perché potrei avere un attimo il buffer vuoto...senza aver ancora ricevuto il terminatore
+      startReceiving = millis(); // ogni volta in cui leggo resetto il timer
+      char rc = Serial.read(); 
+
+      if(rc == '@'){ // // SYMBOL TO START TRANSMISSION (tutto quello che c'era prima era roba spuria che ho pulito)
+        enableReading = true;
+      }
+
+      if(enableReading){
+        if(rc == '<'){ // SYMBOL TO START MESSAGE
+          saving = true;
+        }
+        else if(rc == '>'){ // SYMBOL TO END MESSAGE
+          bufferChar[rcIndex] = '\0';
+          receivedCommands[receivedCommandsIndex] = bufferChar;
+          receivedCommandsIndex ++;
+          rcIndex = 0;
+          saving = false;// starting char
+        }
+        else if(rc == '#'){ // SYMBOL TO END BOARDS TRANSMISSION
+          receivingDataFromBoard = false; // buffer vuoto, vado avanti
+          //enableReading = false
+        }
+        else{
+          if(saving){
+            bufferChar[rcIndex] = rc;
+            rcIndex ++;
+          }
+        }
+      }
+    }
+    else{
+      // timer che conta perché non riceviamo più e mi fa uscire??
+      // se sono qui è perché sto aspettando, ma non ricevendo
+      if((millis() - startReceiving) > 150){ // se passo in attesa più di 750ms, allora intervengo e mando fuori
+        receivingDataFromBoard = false;
+      }
+    }
+  }
+  return receivedCommandsIndex;
 }
