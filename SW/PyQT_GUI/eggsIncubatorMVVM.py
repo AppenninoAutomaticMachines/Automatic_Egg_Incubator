@@ -36,7 +36,9 @@ class SerialThread(QtCore.QThread):
         retries = 0
         while retries < self.max_retries:
             try:
+                print("Estabilishing serial connection....")
                 self.serial_port = serial.Serial(self.port, self.baudrate, timeout=1)
+                time.sleep(3)
                 print("Serial port opened successfully")
                 # Discard any initial data to avoid decode errors
                 self.serial_port.reset_input_buffer()
@@ -150,12 +152,11 @@ class MainSoftwareThread(QtCore.QThread):
         self.command_list = [] # List to hold the pending commands
         
         # State variables to handle inputs from MainWindow
-        self.current_button = None
-        self.current_speedRPM_spinBox_value = None
-        self.current_maxHysteresisValue_spinBox_value = None
-        self.current_minHysteresisValue_spinBox_value = None
+        self.current_button = None # notifica del pulsante premuto
+        self.spinbox_values = {} # notifica dello spinbox cambiato
         
-        self.thc = self.HysteresisController(lower_limit = 37.5, upper_limit = 35.8)
+        self.thc = self.HysteresisController(lower_limit = 37.5, upper_limit = 37.8)
+        self.current_temperature_output_control = False # variabile che mi ricorda lo stato attuale dell'heater
         
         
         #--- Create Machine_Statistic folder ---#
@@ -184,36 +185,10 @@ class MainSoftwareThread(QtCore.QThread):
                     print(f"{cmd}, {value}")
                 self.command_list.clear()
                 
-            # Example of using the button and spinbox values in the main loop
-            if self.current_button is not None:
-                print(f"Processing button: {self.current_button}")
-                
-                if self.current_button == "move_CW_btn":
-                    self.queue_command("CMD01", 1)
-                if self.current_button == "move_CCW_btn":
-                    self.queue_command("CMD02", 0)
-                if self.current_button == "reset_btn":
-                    self.queue_command("CMD03", 0)
-                    
-                self.current_button = None  # Reset after processing
-
-            if self.current_speedRPM_spinBox_value is not None:
-                print(f"[MainSoftwareThread] Processing spinbox value: {self.current_speedRPM_spinBox_value} ({type(self.current_speedRPM_spinBox_value)})")
-                self.current_speedRPM_spinBox_value = None  # Reset after processing
-
-            if self.current_maxHysteresisValue_spinBox_value is not None:
-                print(f"[MainSoftwareThread] Processing spinbox value: {self.current_maxHysteresisValue_spinBox_value} ({type(self.current_maxHysteresisValue_spinBox_value)})")
-                self.current_maxHysteresisValue_spinBox_value = None  # Reset after processing
-                
-            if self.current_minHysteresisValue_spinBox_value is not None:
-                print(f"[MainSoftwareThread] Processing spinbox value: {self.current_minHysteresisValue_spinBox_value} ({type(self.current_minHysteresisValue_spinBox_value)})")
-                self.current_minHysteresisValue_spinBox_value = None  # Reset after processing
-                
             self.msleep(100)
             
     def queue_command(self, cmd, value):
         self.command_list.append((cmd, value))
-        print(self.command_list)
 
     def stop(self):
         self.running = False
@@ -221,16 +196,34 @@ class MainSoftwareThread(QtCore.QThread):
         self.serial_thread.wait()
         
     def handle_button_click(self, button_name):
-        print(f"Received button click: {button_name}")
+        print(f"[MainSoftwareThread] Processing button {button_name}")
         self.current_button = button_name
         
+        if self.current_button == "move_CW_btn":
+            self.queue_command("CMD01", 1)
+        if self.current_button == "move_CCW_btn":
+            self.queue_command("CMD02", 0)
+        if self.current_button == "reset_btn":
+            self.queue_command("CMD03", 0)
+        
     def handle_float_spinBox_value(self, spinbox_name, value):
+        rounded_value = round(value, 2)
+        print(f"[MainSoftwareThread] Processing spinbox {spinbox_name} of value: {rounded_value} ({type(rounded_value)})")
+        self.spinbox_values[spinbox_name] = rounded_value       
+        
         if spinbox_name == "speedRPM_spinBox":
-            self.current_speedRPM_spinBox_value = value
+            self.current_speedRPM_spinBox_value = rounded_value
         elif spinbox_name == "maxHysteresisValue_spinBox":
-            self.current_maxHysteresisValue_spinBox_value = value
+            self.thc.set_upper_limit(rounded_value)
         elif spinbox_name == "minHysteresisValue_spinBox":
-            self.current_minHysteresisValue_spinBox_value = value
+            self.thc.set_lower_limit(rounded_value)
+            
+    def handle_intialization_step(self, value_name, value):
+        rounded_value = round(value, 2)
+        if value_name == "maxHysteresisValue_spinBox":
+            self.thc.set_upper_limit(rounded_value)
+        if value_name == "minHysteresisValue_spinBox":
+            self.thc.set_lower_limit(rounded_value)
 
     def process_serial_data(self, new_data):
         self.current_data = new_data
@@ -251,7 +244,10 @@ class MainSoftwareThread(QtCore.QThread):
         # TEMPERATURE CONTROLLER SECTION
         # faccio l'update qui: ogni votla che arrivano dati nuovi li elaboro, anche nel controllore
         self.thc.update(list(current_temperatures.values()))
-        print(f"{self.thc.get_mean_value()}")
+        if self.current_temperature_output_control != self.thc.get_output_control():
+            # appena cambia il comando logico all'heater, allora invio il comando ad Arduino
+            self.current_temperature_output_control = self.thc.get_output_control()
+            self.queue_command("HTR01", self.current_temperature_output_control)
              
         
         # SAVING DATA IN FILES
@@ -427,6 +423,7 @@ class MainWindow(QtWidgets.QMainWindow):
     # Define custom signals - this is done to send button/spinBox and other custom signals to other thread MainSoftwareThread: use Qt Signals
     button_clicked = QtCore.pyqtSignal(str)  # Emits button name
     float_spinBox_value_changed = QtCore.pyqtSignal(str, float)  # Emits spinbox value  // METTI INT se intero
+    initialization_step = QtCore.pyqtSignal(str, float)
     
     def __init__(self, main_software_thread):
         super().__init__()
@@ -438,6 +435,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # Connect signals to main software thread slots
         self.button_clicked.connect(self.main_software_thread.handle_button_click)
         self.float_spinBox_value_changed.connect(self.main_software_thread.handle_float_spinBox_value)
+        self.initialization_step.connect(self.main_software_thread.handle_intialization_step)
 
 
         # Connect buttons to handlers that emit signals
@@ -456,6 +454,14 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui.speedRPM_spinBox.valueChanged.connect(lambda value: self.emit_float_spinbox_signal("speedRPM_spinBox", value))
         self.ui.maxHysteresisValue_spinBox.valueChanged.connect(lambda value: self.emit_float_spinbox_signal("maxHysteresisValue_spinBox", value))
         self.ui.minHysteresisValue_spinBox.valueChanged.connect(lambda value: self.emit_float_spinbox_signal("minHysteresisValue_spinBox", value))
+        
+        # Connect to sen initialization values to the mainSoftwareThread
+        self.emit_initialization_values("maxHysteresisValue_spinBox", self.ui.maxHysteresisValue_spinBox.value())
+        self.emit_initialization_values("minHysteresisValue_spinBox", self.ui.minHysteresisValue_spinBox.value())
+        
+    def emit_initialization_values(self, spinbox_name, value):
+        self.initialization_step.emit(spinbox_name, value)
+        
         
     def emit_button_signal(self, button_name):
         self.button_clicked.emit(button_name)
