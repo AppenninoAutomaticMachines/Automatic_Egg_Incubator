@@ -272,11 +272,11 @@ void loop() {
     for(byte j = 0; j < numberOfCommandsFromBoard; j++){
       String tempReceivedCommand = receivedCommands[j];
       Serial.println(tempReceivedCommand);
-      if(tempReceivedCommand.indexOf("CMD01") >= 0){ //stepperMotorForwardOn
+      if(tempReceivedCommand.indexOf("HTR01") >= 0  &&  tempReceivedCommand.indexOf("True") >= 0 ){ //stepperMotorForwardOn
         digitalWrite(LED_12, HIGH);
         //Serial.println("ON");
       }
-      if(tempReceivedCommand.indexOf("CMD02") >= 0){ //stepperMotorForwardOff
+      if(tempReceivedCommand.indexOf("HTR01") >= 0 && tempReceivedCommand.indexOf("False") >= 0 ){ //stepperMotorForwardOff
         digitalWrite(LED_12, LOW);
         //Serial.println("OFF");
       }
