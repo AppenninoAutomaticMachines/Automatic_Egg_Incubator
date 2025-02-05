@@ -155,8 +155,11 @@ class MainSoftwareThread(QtCore.QThread):
         self.current_button = None # notifica del pulsante premuto
         self.spinbox_values = {} # notifica dello spinbox cambiato
         
-        self.thc = self.HysteresisController(lower_limit = 37.5, upper_limit = 37.8)
-        self.current_temperature_output_control = False # variabile che mi ricorda lo stato attuale dell'heater
+        self.thc = self.HysteresisController(lower_limit = 37.5, upper_limit = 37.8) # temperature hysteresis controller
+        self.current_heater_output_control = False # variabile che mi ricorda lo stato attuale dell'heater
+        
+        self.hhc = self.HysteresisController(lower_limit = 20.0, upper_limit = 50.0) # humidity hysteresis controller
+        self.current_humidifier_output_control = False # variabile che mi ricorda lo stato attuale dell'heater
         
         
         #--- Create Machine_Statistic folder ---#
@@ -199,31 +202,39 @@ class MainSoftwareThread(QtCore.QThread):
         print(f"[MainSoftwareThread] Processing button {button_name}")
         self.current_button = button_name
         
-        if self.current_button == "move_CW_btn":
+        if self.current_button == "move_CW__motor_btn":
             self.queue_command("CMD01", 1)
-        if self.current_button == "move_CCW_btn":
+        if self.current_button == "move_CCW_motor_btn":
             self.queue_command("CMD02", 0)
-        if self.current_button == "reset_btn":
+        if self.current_button == "reset_motor_btn":
             self.queue_command("CMD03", 0)
         
     def handle_float_spinBox_value(self, spinbox_name, value):
-        rounded_value = round(value, 2)
+        rounded_value = round(value, 1)
         print(f"[MainSoftwareThread] Processing spinbox {spinbox_name} of value: {rounded_value} ({type(rounded_value)})")
         self.spinbox_values[spinbox_name] = rounded_value       
         
-        if spinbox_name == "speedRPM_spinBox":
+        if spinbox_name == "speedRPM_motor_spinBox":
             self.current_speedRPM_spinBox_value = rounded_value
-        elif spinbox_name == "maxHysteresisValue_spinBox":
+        elif spinbox_name == "maxHysteresisValue_temperature_spinBox":
             self.thc.set_upper_limit(rounded_value)
-        elif spinbox_name == "minHysteresisValue_spinBox":
+        elif spinbox_name == "minHysteresisValue_temperature_spinBox":
             self.thc.set_lower_limit(rounded_value)
+        elif spinbox_name == "maxHysteresisValue_humidity_spinBox":
+            self.hhc.set_upper_limit(rounded_value)
+        elif spinbox_name == "minHysteresisValue_humidity_spinBox":
+            self.hhc.set_lower_limit(rounded_value)
             
     def handle_intialization_step(self, value_name, value):
-        rounded_value = round(value, 2)
-        if value_name == "maxHysteresisValue_spinBox":
+        rounded_value = round(value, 1)
+        if value_name == "maxHysteresisValue_temperature_spinBox":
             self.thc.set_upper_limit(rounded_value)
-        if value_name == "minHysteresisValue_spinBox":
+        elif value_name == "minHysteresisValue_temperature_spinBox":
             self.thc.set_lower_limit(rounded_value)
+        elif value_name == "maxHysteresisValue_humidity_spinBox":
+            self.hhc.set_upper_limit(rounded_value)
+        elif value_name == "minHysteresisValue_humidity_spinBox":
+            self.hhc.set_lower_limit(rounded_value)
 
     def process_serial_data(self, new_data):
         self.current_data = new_data
@@ -244,10 +255,15 @@ class MainSoftwareThread(QtCore.QThread):
         # TEMPERATURE CONTROLLER SECTION
         # faccio l'update qui: ogni votla che arrivano dati nuovi li elaboro, anche nel controllore
         self.thc.update(list(current_temperatures.values()))
-        if self.current_temperature_output_control != self.thc.get_output_control():
-            # appena cambia il comando logico all'heater, allora invio il comando ad Arduino
-            self.current_temperature_output_control = self.thc.get_output_control()
-            self.queue_command("HTR01", self.current_temperature_output_control)
+        if self.current_heater_output_control != self.thc.get_output_control(): # appena cambia il comando logico all'heater, allora invio il comando ad Arduino            
+            self.current_heater_output_control = self.thc.get_output_control()
+            self.queue_command("HTR01", self.current_heater_output_control)
+            
+        # HUMIDITY CONTROLLER SECTION
+        self.hhc.update(list(current_humidities.values()))
+        if self.current_humidifier_output_control != self.hhc.get_output_control():
+            self.current_humidifier_output_control = self.hhc.get_output_control()
+            self.queue_command("HUMER01", self.current_humidifier_output_control)
              
         
         # SAVING DATA IN FILES
@@ -454,14 +470,27 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui.heaterAUTO_radioBtn.toggled.connect(self.handle_radio_button)
         self.ui.heaterON_radioBtn.toggled.connect(self.handle_radio_button)
         
+        self.ui.humidifierOFF_radioBtn.toggled.connect(self.handle_radio_button)
+        self.ui.humidifierAUTO_radioBtn.toggled.connect(self.handle_radio_button)
+        self.ui.humidifierON_radioBtn.toggled.connect(self.handle_radio_button)
+        
         # Connect spinBox to emit its values
         self.ui.speedRPM_motor_spinBox.valueChanged.connect(lambda value: self.emit_float_spinbox_signal(self.ui.speedRPM_motor_spinBox.objectName(), value))
+        
+        # Temperature Hysteresis
         self.ui.maxHysteresisValue_temperature_spinBox.valueChanged.connect(lambda value: self.emit_float_spinbox_signal(self.ui.maxHysteresisValue_temperature_spinBox.objectName(), value))
         self.ui.minHysteresisValue_temperature_spinBox.valueChanged.connect(lambda value: self.emit_float_spinbox_signal(self.ui.minHysteresisValue_temperature_spinBox.objectName(), value))
+        
+        # Humidity Hysteresis
+        self.ui.maxHysteresisValue_humidity_spinBox.valueChanged.connect(lambda value: self.emit_float_spinbox_signal(self.ui.maxHysteresisValue_humidity_spinBox.objectName(), value))
+        self.ui.minHysteresisValue_humidity_spinBox.valueChanged.connect(lambda value: self.emit_float_spinbox_signal(self.ui.minHysteresisValue_humidity_spinBox.objectName(), value))
         
         # Connect to sen initialization values to the mainSoftwareThread
         self.emit_initialization_values(self.ui.maxHysteresisValue_temperature_spinBox.objectName(), self.ui.maxHysteresisValue_temperature_spinBox.value())
         self.emit_initialization_values(self.ui.minHysteresisValue_temperature_spinBox.objectName(), self.ui.minHysteresisValue_temperature_spinBox.value())
+        
+        self.emit_initialization_values(self.ui.maxHysteresisValue_humidity_spinBox.objectName(), self.ui.maxHysteresisValue_humidity_spinBox.value())
+        self.emit_initialization_values(self.ui.minHysteresisValue_humidity_spinBox.objectName(), self.ui.minHysteresisValue_humidity_spinBox.value())
         
     def emit_initialization_values(self, spinbox_name, value):
         self.initialization_step.emit(spinbox_name, value)
