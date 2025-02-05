@@ -411,12 +411,16 @@ class MainSoftwareThread(QtCore.QThread):
             return self.time_off
 
         # Method to reset statistics
-        def reset_statistics(self):
+        def reset_time_statistics(self):
             self.on_count = 0
             self.off_count = 0
             self.time_on = 0.0
             self.time_off = 0.0
             self._last_switch_time = time.time()
+        
+        def reset_absolute_temperatures_statistics(self):
+            self._max_value = float('-inf')
+            self._min_value = float('inf')
 
 
 class MainWindow(QtWidgets.QMainWindow):
@@ -439,25 +443,25 @@ class MainWindow(QtWidgets.QMainWindow):
 
 
         # Connect buttons to handlers that emit signals
-        self.ui.move_CW_btn.clicked.connect(lambda: self.emit_button_signal("move_CW_btn"))
-        self.ui.move_CCW_btn.clicked.connect(lambda: self.emit_button_signal("move_CCW_btn"))
-        self.ui.layHorizontal_btn.clicked.connect(lambda: self.emit_button_signal("layHorizontal_btn"))
-        self.ui.forceEggsTurn_btn.clicked.connect(lambda: self.emit_button_signal("forceEggsTurn_btn"))
-        self.ui.reset_btn.clicked.connect(lambda: self.emit_button_signal("reset_btn"))
+        self.ui.move_CW_motor_btn.clicked.connect(lambda: self.emit_button_signal(self.ui.move_CW_motor_btn.objectName()))
+        self.ui.move_CCW_motor_btn.clicked.connect(lambda: self.emit_button_signal(self.ui.move_CCW_motor_btn.objectName()))
+        self.ui.layHorizontal_motor_btn.clicked.connect(lambda: self.emit_button_signal(self.ui.layHorizontal_motor_btn.objectName()))
+        self.ui.forceEggsTurn_motor_btn.clicked.connect(lambda: self.emit_button_signal(self.ui.forceEggsTurn_motor_btn.objectName()))
+        self.ui.reset_motor_btn.clicked.connect(lambda: self.emit_button_signal(self.ui.reset_motor_btn.objectName()))
 
         # Connect radio buttons to emit its values
-        self.ui.maxValueTempControl_radioBtn.toggled.connect(self.handle_radio_button)
-        self.ui.meanValueTempControl_radioBtn.toggled.connect(self.handle_radio_button)
-        self.ui.minValueTempControl_radioBtn.toggled.connect(self.handle_radio_button)
+        self.ui.heaterOFF_radioBtn.toggled.connect(self.handle_radio_button)
+        self.ui.heaterAUTO_radioBtn.toggled.connect(self.handle_radio_button)
+        self.ui.heaterON_radioBtn.toggled.connect(self.handle_radio_button)
         
         # Connect spinBox to emit its values
-        self.ui.speedRPM_spinBox.valueChanged.connect(lambda value: self.emit_float_spinbox_signal("speedRPM_spinBox", value))
-        self.ui.maxHysteresisValue_spinBox.valueChanged.connect(lambda value: self.emit_float_spinbox_signal("maxHysteresisValue_spinBox", value))
-        self.ui.minHysteresisValue_spinBox.valueChanged.connect(lambda value: self.emit_float_spinbox_signal("minHysteresisValue_spinBox", value))
+        self.ui.speedRPM_motor_spinBox.valueChanged.connect(lambda value: self.emit_float_spinbox_signal(self.ui.speedRPM_motor_spinBox.objectName(), value))
+        self.ui.maxHysteresisValue_temperature_spinBox.valueChanged.connect(lambda value: self.emit_float_spinbox_signal(self.ui.maxHysteresisValue_temperature_spinBox.objectName(), value))
+        self.ui.minHysteresisValue_temperature_spinBox.valueChanged.connect(lambda value: self.emit_float_spinbox_signal(self.ui.minHysteresisValue_temperature_spinBox.objectName(), value))
         
         # Connect to sen initialization values to the mainSoftwareThread
-        self.emit_initialization_values("maxHysteresisValue_spinBox", self.ui.maxHysteresisValue_spinBox.value())
-        self.emit_initialization_values("minHysteresisValue_spinBox", self.ui.minHysteresisValue_spinBox.value())
+        self.emit_initialization_values(self.ui.maxHysteresisValue_temperature_spinBox.objectName(), self.ui.maxHysteresisValue_temperature_spinBox.value())
+        self.emit_initialization_values(self.ui.minHysteresisValue_temperature_spinBox.objectName(), self.ui.minHysteresisValue_temperature_spinBox.value())
         
     def emit_initialization_values(self, spinbox_name, value):
         self.initialization_step.emit(spinbox_name, value)
@@ -475,38 +479,17 @@ class MainWindow(QtWidgets.QMainWindow):
     def update_display_data(self, all_data):
         # Update the temperature labels in the GUI
         if len(all_data) >= 6: # perché il numero??
-            self.ui.temperature1_4.setText(f"{all_data[0]} °C")
-            self.ui.temperature2_4.setText(f"{all_data[1]} °C")
-            self.ui.temperature3_5.setText(f"{all_data[2]} °C")
-            self.ui.temperature4_2.setText(f"{all_data[3]} °C")
-            self.ui.humidity1.setText(f"{all_data[4]} %")
+            self.ui.temperature1_T.setText(f"{all_data[0]} °C")
+            self.ui.temperature2_T.setText(f"{all_data[1]} °C")
+            self.ui.temperature3_T.setText(f"{all_data[2]} °C")
+            self.ui.temperature4_T.setText(f"{all_data[3]} °C")
+            self.ui.humidity1_H.setText(f"{all_data[4]} %")
             #self.ui.temperature4_2.setText(f"{all_data[3]} °C") PER TEMPERATURA DA UMIDITA
 
     def handle_radio_button(self):
         sender = self.sender()
         if sender.isChecked():
             print(f"Radio button '{sender.text()}' selected")
-
-    def handle_speedRPM_spinBox(self):
-        value = self.ui.speedRPM_spinBox.value()
-        print(f"speedRPM_spinBox value changed to: {value}")
-
-    def handle_maxHysteresisValue_spinBox(self):
-        value = self.ui.maxHysteresisValue_spinBox.value()
-        print(f"maxHysteresisValue_spinBox value changed to: {value}")
-        
-    def handle_minHysteresisValue_spinBox(self):
-        value = self.ui.minHysteresisValue_spinBox.value()
-        print(f"minHysteresisValue_spinBox value changed to: {value}")
-
-    def handle_move_cw(self):
-        print("Move clockwise button clicked")
-
-    def handle_move_ccw(self):
-        print("Move counter-clockwise button clicked")
-
-    def handle_reset(self):
-        print("Reset button clicked")
 
     def closeEvent(self, event):
         # Ensure the threads are stopped when the window is closed
