@@ -11,6 +11,11 @@ import csv
 import time
 import queue
 
+'''
+    @<HTR01, True>#   heater 
+    @<HUMER01, True># humidifier
+'''
+
 # ARDUINO serial communication - setup #
 portSetup = "/dev/ttyACM0"
 baudrateSetup = 19200
@@ -138,7 +143,8 @@ class SerialThread(QtCore.QThread):
 
 class MainSoftwareThread(QtCore.QThread):
     update_view = QtCore.pyqtSignal(list)  # Signal to update the view (MainWindow)
-
+    update_spinbox_value = QtCore.pyqtSignal(str, float)  # Signal to update spinbox (name, value)
+    
     def __init__(self):
         super().__init__()
         self.running = True
@@ -217,13 +223,36 @@ class MainSoftwareThread(QtCore.QThread):
         if spinbox_name == "speedRPM_motor_spinBox":
             self.current_speedRPM_spinBox_value = rounded_value
         elif spinbox_name == "maxHysteresisValue_temperature_spinBox":
-            self.thc.set_upper_limit(rounded_value)
+            if rounded_value <= self.thc.get_lower_limit():
+                self.thc.set_upper_limit(rounded_value)
+                self.thc.set_lower_limit(rounded_value)
+                self.update_spinbox_value.emit("minHysteresisValue_temperature_spinBox", rounded_value)
+            else:
+                self.thc.set_upper_limit(rounded_value)
+                
         elif spinbox_name == "minHysteresisValue_temperature_spinBox":
-            self.thc.set_lower_limit(rounded_value)
+            if rounded_value >= self.thc.get_upper_limit():
+                self.thc.set_upper_limit(rounded_value)
+                self.thc.set_lower_limit(rounded_value)
+                self.update_spinbox_value.emit("maxHysteresisValue_temperature_spinBox", rounded_value)
+            else:
+                self.thc.set_lower_limit(rounded_value)
+                
         elif spinbox_name == "maxHysteresisValue_humidity_spinBox":
-            self.hhc.set_upper_limit(rounded_value)
+            if rounded_value <= self.hhc.get_lower_limit():
+                self.hhc.set_upper_limit(rounded_value)
+                self.hhc.set_lower_limit(rounded_value)
+                self.update_spinbox_value.emit("minHysteresisValue_humidity_spinBox", rounded_value)
+            else:
+                self.hhc.set_upper_limit(rounded_value)
+                
         elif spinbox_name == "minHysteresisValue_humidity_spinBox":
-            self.hhc.set_lower_limit(rounded_value)
+            if rounded_value >= self.hhc.get_upper_limit():
+                self.hhc.set_upper_limit(rounded_value)
+                self.hhc.set_lower_limit(rounded_value)
+                self.update_spinbox_value.emit("maxHysteresisValue_humidity_spinBox", rounded_value)
+            else:
+                self.hhc.set_lower_limit(rounded_value)
             
     def handle_intialization_step(self, value_name, value):
         rounded_value = round(value, 1)
@@ -257,13 +286,13 @@ class MainSoftwareThread(QtCore.QThread):
         self.thc.update(list(current_temperatures.values()))
         if self.current_heater_output_control != self.thc.get_output_control(): # appena cambia il comando logico all'heater, allora invio il comando ad Arduino            
             self.current_heater_output_control = self.thc.get_output_control()
-            self.queue_command("HTR01", self.current_heater_output_control)
+            self.queue_command("HTR01", self.current_heater_output_control)  # @<HTR01, True># @<HTR01, False>#
             
         # HUMIDITY CONTROLLER SECTION
         self.hhc.update(list(current_humidities.values()))
         if self.current_humidifier_output_control != self.hhc.get_output_control():
             self.current_humidifier_output_control = self.hhc.get_output_control()
-            self.queue_command("HUMER01", self.current_humidifier_output_control)
+            self.queue_command("HUMER01", self.current_humidifier_output_control) # @<HUMER01, True># @<HUMER01, False>#
              
         
         # SAVING DATA IN FILES
@@ -338,6 +367,8 @@ class MainSoftwareThread(QtCore.QThread):
         # Method to set the lower limit
         def set_lower_limit(self, lower_limit):
             self.lower_limit = lower_limit
+            if self.lower_limit == self.upper_limit:
+                self._output_control = False  # Safety enforcement
         
         # Method to get the lower limit
         def get_lower_limit(self):
@@ -346,6 +377,8 @@ class MainSoftwareThread(QtCore.QThread):
         # Method to set the upper limit
         def set_upper_limit(self, upper_limit):
             self.upper_limit = upper_limit
+            if self.lower_limit == self.upper_limit:
+                self._output_control = False  # Safety enforcement
         
         # Method to get the upper limit
         def get_upper_limit(self):
@@ -353,6 +386,11 @@ class MainSoftwareThread(QtCore.QThread):
 
         # Update method to process input values and apply hysteresis logic
         def update(self, values):
+            # Safety check: If limits are equal, force OFF state
+            if self.lower_limit == self.upper_limit:
+                self._output_control = False
+                return
+        
             # Ensure values is a list for consistency
             if not isinstance(values, list):
                 values = [values]
@@ -456,6 +494,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.button_clicked.connect(self.main_software_thread.handle_button_click)
         self.float_spinBox_value_changed.connect(self.main_software_thread.handle_float_spinBox_value)
         self.initialization_step.connect(self.main_software_thread.handle_intialization_step)
+        self.main_software_thread.update_spinbox_value.connect(self.update_spinbox)
 
 
         # Connect buttons to handlers that emit signals
@@ -515,6 +554,13 @@ class MainWindow(QtWidgets.QMainWindow):
             self.ui.humidity1_H.setText(f"{all_data[4]} %")
             #self.ui.temperature4_2.setText(f"{all_data[3]} °C") PER TEMPERATURA DA UMIDITA
 
+    def update_spinbox(self, spinbox_name, value):
+        """ Update the spinbox in the GUI safely from another thread """
+        spinbox = getattr(self.ui, spinbox_name, None)  # Get the spinbox dynamically
+
+        if spinbox:  # Ensure the spinbox exists
+            spinbox.setValue(value)  # Set the new value safely in the GUI thread
+            
     def handle_radio_button(self):
         sender = self.sender()
         if sender.isChecked():
