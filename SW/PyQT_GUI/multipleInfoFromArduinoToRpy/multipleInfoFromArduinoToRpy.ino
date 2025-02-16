@@ -19,6 +19,7 @@
 #define ONE_WIRE_BUS_2 2
 #define TEMPERATURE_PRECISION 9 // DS18B20 digital termometer provides 9-bit to 12-bit Celsius temperature measurements
 #define LED_12 12
+#define LED_11 11
 /* TEMPERATURES SECTION */
 // NO STAR/RING connection, only ONE SINGLE WIRE UTP cabme (unshielded twisted pair)
 OneWire oneWire(ONE_WIRE_BUS_2);
@@ -93,6 +94,7 @@ String receivedCommands[20];
 void setup() {
   pinMode(switch1_pin, INPUT);
   pinMode(LED_12, OUTPUT);
+  pinMode(LED_11, OUTPUT);
   Serial.begin(SERIAL_SPEED);
   //Serial.println("Starting");
 
@@ -280,8 +282,12 @@ void loop() {
         digitalWrite(LED_12, LOW);
         //Serial.println("OFF");
       }
-      if(tempReceivedCommand.indexOf("CMD03") >= 0){ //stepperMotorBackwardOn
-        digitalWrite(LED_12, LOW);
+      if(tempReceivedCommand.indexOf("HUMER01") >= 0  &&  tempReceivedCommand.indexOf("True") >= 0 ){ //stepperMotorForwardOn
+        digitalWrite(LED_11, HIGH);
+        //Serial.println("ON");
+      }
+      if(tempReceivedCommand.indexOf("HUMER01") >= 0 && tempReceivedCommand.indexOf("False") >= 0 ){ //stepperMotorForwardOff
+        digitalWrite(LED_11, LOW);
         //Serial.println("OFF");
       }
     }
