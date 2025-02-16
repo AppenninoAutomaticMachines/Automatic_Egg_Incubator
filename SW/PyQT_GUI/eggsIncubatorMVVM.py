@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 import csv
 import time
 import queue
+import subprocess
 
 '''
     @<HTR01, True>#   heater 
@@ -210,10 +211,32 @@ class MainSoftwareThread(QtCore.QThread):
         
         if self.current_button == "move_CW__motor_btn":
             self.queue_command("CMD01", 1)
+            
         if self.current_button == "move_CCW_motor_btn":
             self.queue_command("CMD02", 0)
+            
         if self.current_button == "reset_motor_btn":
             self.queue_command("CMD03", 0)
+            
+        if self.current_button == "plotAllDays_temp_T_btn":
+            command = ['python3', 'appInteractivePlots.py', 'PLOT_ALL_DAYS_DATA_TEMPERATURES']
+            process = subprocess.Popen(command)
+            print("Subprocess started and main program continues...")
+            
+        if self.current_button == "plotToday_temp_T_btn":
+            command = ['python3', 'appInteractivePlots.py', 'PLOT_CURRENT_DAY_DATA_TEMPERATURES']
+            process = subprocess.Popen(command)
+            print("Subprocess started and main program continues...")
+            
+        if self.current_button == "plotAllDays_humidity_H_btn":
+            command = ['python3', 'appInteractivePlots.py', 'PLOT_ALL_DAYS_DATA_HUMIDITY']
+            process = subprocess.Popen(command)
+            print("Subprocess started and main program continues...")
+            
+        if self.current_button == "plotToday_humidity_H_btn":
+            command = ['python3', 'appInteractivePlots.py', 'PLOT_CURRENT_DAY_DATA_HUMIDITY']
+            process = subprocess.Popen(command)
+            print("Subprocess started and main program continues...")
         
     def handle_float_spinBox_value(self, spinbox_name, value):
         rounded_value = round(value, 1)
@@ -511,6 +534,11 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui.layHorizontal_motor_btn.clicked.connect(lambda: self.emit_button_signal(self.ui.layHorizontal_motor_btn.objectName()))
         self.ui.forceEggsTurn_motor_btn.clicked.connect(lambda: self.emit_button_signal(self.ui.forceEggsTurn_motor_btn.objectName()))
         self.ui.reset_motor_btn.clicked.connect(lambda: self.emit_button_signal(self.ui.reset_motor_btn.objectName()))
+        
+        self.ui.plotAllDays_temp_T_btn.clicked.connect(lambda: self.emit_button_signal(self.ui.plotAllDays_temp_T_btn.objectName()))
+        self.ui.plotToday_temp_T_btn.clicked.connect(lambda: self.emit_button_signal(self.ui.plotToday_temp_T_btn.objectName()))
+        self.ui.plotAllDays_humidity_H_btn.clicked.connect(lambda: self.emit_button_signal(self.ui.plotAllDays_humidity_H_btn.objectName()))
+        self.ui.plotToday_humidity_H_btn.clicked.connect(lambda: self.emit_button_signal(self.ui.plotToday_humidity_H_btn.objectName()))
 
         # Connect radio buttons to emit its values
         self.ui.heaterOFF_radioBtn.toggled.connect(self.handle_radio_button)
