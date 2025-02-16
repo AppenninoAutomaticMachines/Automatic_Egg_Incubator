@@ -272,14 +272,6 @@ class MainSoftwareThread(QtCore.QThread):
         current_temperatures = {k: v for d in new_data for k, v in d.items() if k.startswith("TMP")} # dictionary: <class 'dict'> dict_values([23.7, 21.1, 20.4, 21.7]) 
         current_humidities = {k: v for d in new_data for k, v in d.items() if k.startswith("HUM")}
         current_humidities_temperatures = {k: v for d in new_data for k, v in d.items() if k.startswith("HTP")}
-        # Emit the data to update the view
-        # OLD self.update_view.emit(list(current_temperatures.values()))
-        
-        # Collecting all values into a single list
-        all_values = list(current_temperatures.values()) + \
-                    list(current_humidities.values()) + \
-                    list(current_humidities_temperatures.values())
-        self.update_view.emit(all_values)
         
         # TEMPERATURE CONTROLLER SECTION
         # faccio l'update qui: ogni votla che arrivano dati nuovi li elaboro, anche nel controllore
@@ -293,6 +285,22 @@ class MainSoftwareThread(QtCore.QThread):
         if self.current_humidifier_output_control != self.hhc.get_output_control():
             self.current_humidifier_output_control = self.hhc.get_output_control()
             self.queue_command("HUMER01", self.current_humidifier_output_control) # @<HUMER01, True># @<HUMER01, False>#
+            
+            
+        # Emit the data to update the view        
+        # Collecting all values into a single list
+        # questo all_values è semplicemente una lista [17.8, 17.9, 18.0, 17.9, 17.8, 17.9] dove SO IO ad ogni posto cosa è associato...passiamo solo i valori (non bellissimo...)
+        # i mean value servono per pubblicare il valore che il controllore usa per fare effettivamente il controllo e lo metto nella sezione di isteresi
+        # list() se passi un dizionario, mentre [] se vuoi aggiugnere alla lista elementi singoli
+        all_values = list(current_temperatures.values()) + \
+                    list(current_humidities.values()) + \
+                    list(current_humidities_temperatures.values()) + \
+                    [self.thc.get_mean_value()] + \
+                    [self.hhc.get_mean_value()]
+                    
+        self.update_view.emit(all_values)
+        
+        
              
         
         # SAVING DATA IN FILES
@@ -396,7 +404,7 @@ class MainSoftwareThread(QtCore.QThread):
                 values = [values]
             
             # Calculate the mean of the values
-            self._mean_value = sum(values) / len(values)
+            self._mean_value = round(sum(values) / len(values), 1)
             
             # Update the max and min values reached
             for value in values:
@@ -552,6 +560,8 @@ class MainWindow(QtWidgets.QMainWindow):
             self.ui.temperature3_T.setText(f"{all_data[2]} °C")
             self.ui.temperature4_T.setText(f"{all_data[3]} °C")
             self.ui.humidity1_H.setText(f"{all_data[4]} %")
+            self.ui.heatCtrlVal.setText(f"{all_data[5]} °C")
+            self.ui.humCtrlVal.setText(f"{all_data[6]} °C")
             #self.ui.temperature4_2.setText(f"{all_data[3]} °C") PER TEMPERATURA DA UMIDITA
 
     def update_spinbox(self, spinbox_name, value):
