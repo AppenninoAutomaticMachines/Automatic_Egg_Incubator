@@ -13,13 +13,16 @@
 /* General CONSTANTS */
 #define SERIAL_SPEED 19200
 #define ENABLE_DEVICE_ORDERING false // se true devi mettere gli indirizzi nell'ordine che vuoi, se false il vettore delle temperature non è ordinato in base agli indirizzi
-#define NUMBER_OF_TEMPERATURES_SENSORS_ON_ONE_WIRE_BUS_2 3 // 4 sensori di temperatura
+#define NUMBER_OF_TEMPERATURES_SENSORS_ON_ONE_WIRE_BUS_2 4 //sensori di temperatura
 
 /* PIN ARDUINO */
 #define ONE_WIRE_BUS_2 2
 #define TEMPERATURE_PRECISION 9 // DS18B20 digital termometer provides 9-bit to 12-bit Celsius temperature measurements
 #define LED_12 12
 #define LED_11 11
+#define CCW_LS_10 10 // induttore finecorsa SINISTRO (vista posteriore)
+#define CW_LS_9 9 // induttore finecorsa DESTRO (vista posteriore)
+
 /* TEMPERATURES SECTION */
 // NO STAR/RING connection, only ONE SINGLE WIRE UTP cabme (unshielded twisted pair)
 OneWire oneWire(ONE_WIRE_BUS_2);
@@ -70,12 +73,23 @@ float temp_sensor1, temp_sensor2, temp_sensor3;
 
 unsigned long startGetTemperatures, endGetTemperatures;
 
-/* SWITCH 1 */
-byte switch1_pin = 8;
-bool switch1_currentReading;
-bool switch1_previousState = 0;
-bool switch1_state = 0;
-unsigned long switch1_lastDebounceTime, switch1_filterDebounceTime = 50; //ms
+/* CCW_LS 1 */
+byte ccw_ls_pin = CCW_LS_10;
+bool ccw_ls_currentReading;
+bool ccw_ls_previousState = 0;
+bool ccw_ls_state = 0;
+unsigned long ccw_ls_lastDebounceTime, ccw_ls_filterDebounceTime = 50; //ms
+bool ccw_ls_risingEdge = 0;
+bool ccw_ls_fallingEdge = 0;
+
+/* CW_LS 1 */
+byte cw_ls_pin = CW_LS_9;
+bool cw_ls_currentReading;
+bool cw_ls_previousState = 0;
+bool cw_ls_state = 0;
+unsigned long cw_ls_lastDebounceTime, cw_ls_filterDebounceTime = 50; //ms
+bool cw_ls_risingEdge = 0;
+bool cw_ls_fallingEdge = 0;
 
 // SENDING TO RPY
 #define MAX_NUMBER_OF_COMMANDS_TO_BOARD 20
@@ -92,9 +106,11 @@ String receivedCommands[20];
 
 
 void setup() {
-  pinMode(switch1_pin, INPUT);
   pinMode(LED_12, OUTPUT);
   pinMode(LED_11, OUTPUT);
+  pinMode(CCW_LS_10, INPUT);
+  pinMode(CW_LS_9, INPUT);
+
   Serial.begin(SERIAL_SPEED);
   //Serial.println("Starting");
 
@@ -169,6 +185,7 @@ void setup() {
 }
 
 void loop() {    
+  listofDataToSend_numberOfData = 0;
   /* TEMPERATURES SECTION */
   /*
     - Attesa di un delay sufficiente per la conversione di temperatura fatta simultaneamente da tutti i sensori di temperatura.
@@ -198,26 +215,74 @@ void loop() {
   }   
   /* END TEMPERATURES SECTION */
 
-  /* SWITCH 1 DEBOUNCED */
-  switch1_currentReading = digitalRead(switch1_pin);
-  if(switch1_currentReading != switch1_previousState){
+  /* CCW_LS_10 DEBOUNCED */
+  ccw_ls_risingEdge = 0;
+  ccw_ls_fallingEdge = 0;
+  ccw_ls_currentReading = digitalRead(ccw_ls_pin);
+  if(ccw_ls_currentReading != ccw_ls_previousState){
     // mi ricordo quando ho premuto
-    switch1_lastDebounceTime = millis();    
+    ccw_ls_lastDebounceTime = millis();    
   }
 
-  if((millis() - switch1_lastDebounceTime) > switch1_filterDebounceTime){
-    if(switch1_currentReading != switch1_state){
+  if((millis() - ccw_ls_lastDebounceTime) > ccw_ls_filterDebounceTime){
+    if(ccw_ls_currentReading != ccw_ls_state){
       // se è ancora diverso, allora il press è stabile
-      switch1_state = switch1_currentReading;
+      ccw_ls_state = ccw_ls_currentReading;
+
+      // Rising edge detection (LOW to HIGH transition, button pressed)
+      if (ccw_ls_state == HIGH) { 
+        ccw_ls_risingEdge = 1;
+      }
+      
+      // Falling edge detection (HIGH to LOW transition, button released)
+      if (ccw_ls_state == LOW) {
+        ccw_ls_fallingEdge = 1;
+      }
     }    
   }  
-  switch1_previousState = switch1_currentReading;
+  ccw_ls_previousState = ccw_ls_currentReading;
 
-  /* END SWITCH 1 DEBOUNCED */
+  if(ccw_ls_risingEdge){
+    listofDataToSend[listofDataToSend_numberOfData] = "<IND_CCW, 1>"; // converting bool to string - "<IND_CW, 0>"
+    listofDataToSend_numberOfData++;
+  }
+  /* END DEBOUNCED */
+
+  /* CW_LS_10 DEBOUNCED */
+  cw_ls_risingEdge = 0;
+  cw_ls_fallingEdge = 0;
+  cw_ls_currentReading = digitalRead(cw_ls_pin);
+  if(cw_ls_currentReading != cw_ls_previousState){
+    // mi ricordo quando ho premuto
+    cw_ls_lastDebounceTime = millis();    
+  }
+
+  if((millis() - cw_ls_lastDebounceTime) > cw_ls_filterDebounceTime){
+    if(cw_ls_currentReading != cw_ls_state){
+      // se è ancora diverso, allora il press è stabile
+      cw_ls_state = cw_ls_currentReading;
+
+      // Rising edge detection (LOW to HIGH transition, button pressed)
+      if (cw_ls_state == HIGH) { 
+        cw_ls_risingEdge = 1;
+      }
+      
+      // Falling edge detection (HIGH to LOW transition, button released)
+      if (cw_ls_state == LOW) {
+        cw_ls_fallingEdge = 1;
+      }
+    }    
+  }  
+  cw_ls_previousState = cw_ls_currentReading;
+
+  if(cw_ls_risingEdge){
+    listofDataToSend[listofDataToSend_numberOfData] = "<IND_CW, 1>"; // converting bool to string - "<IND_CW, 0>"
+    listofDataToSend_numberOfData++;
+  }
+  /* END DEBOUNCED */
   
-  listofDataToSend_numberOfData = 0;
-  if(gotTemperatures){
-        
+  
+  if(gotTemperatures){        
     strcpy(bufferChar, "<TMP01,");
     dtostrf( temperatures[0], 1, 1, fbuffChar); 
     listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(bufferChar, fbuffChar), ">");
@@ -234,7 +299,7 @@ void loop() {
     listofDataToSend_numberOfData++;
 
     strcpy(bufferChar, "<TMP04,");
-    dtostrf( (temperatures[0] + temperatures[1] + temperatures[2]) / 3, 1, 1, fbuffChar); 
+    dtostrf( temperatures[3], 1, 1, fbuffChar); 
     listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(bufferChar, fbuffChar), ">");
     listofDataToSend_numberOfData++;
 
@@ -258,6 +323,7 @@ void loop() {
   }
   
   // SENDING TO RPY
+  
   if(listofDataToSend_numberOfData > 0){
     Serial.print('@'); // SYMBOL TO START BOARDS TRANSMISSION
     for(byte i = 0; i < listofDataToSend_numberOfData; i++){
@@ -265,6 +331,7 @@ void loop() {
     }
     Serial.println('#'); // SYMBOL TO END BOARDS TRANSMISSION
   }
+  
   delay(50);
 
   // RECEIVING FROM RPI
