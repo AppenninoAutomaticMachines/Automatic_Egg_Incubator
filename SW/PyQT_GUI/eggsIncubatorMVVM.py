@@ -25,7 +25,7 @@ portSetup = "/dev/ttyACM0"
 baudrateSetup = 19200
 timeout = 0.1
 
-identifiers = ["TMP", "HUM", "HTP"]  # Global variable
+identifiers = ["TMP", "HUM", "HTP", "IND"]  # Global variable
 
 
 class SerialThread(QtCore.QThread):
@@ -325,26 +325,33 @@ class MainSoftwareThread(QtCore.QThread):
 
     def process_serial_data(self, new_data):
         self.current_data = new_data
-        # print(new_data)
-        # Extract data into specific categories
+        #print(new_data)
+        # [{'TMP01': 19.5}, {'TMP02': 19.1}, {'TMP03': 19.8}, {'TMP04': 20.1}, {'HUM01': 19.5}, {'HTP01': 19.5}]
+        # Extract data into specific categories - questi che seguono sono tutti dictionaries
         current_temperatures = {k: v for d in new_data for k, v in d.items() if k.startswith("TMP")} # dictionary: <class 'dict'> dict_values([23.7, 21.1, 20.4, 21.7]) 
         current_humidities = {k: v for d in new_data for k, v in d.items() if k.startswith("HUM")}
         current_humidities_temperatures = {k: v for d in new_data for k, v in d.items() if k.startswith("HTP")}
-        current_inductors_feedbacks = {k: v for d in new_data for k, v in d.items() if k.startswith("IND")}
+        current_inductors_feedbacks = {k: v for d in new_data for k, v in d.items() if k.startswith("IND")} #{'IND_CCW': 1, 'IND_CW': 1}
+        
+        if current_inductors_feedbacks: # that is checking if the dictionary is not empty
+            print(current_inductors_feedbacks)
+        
         
         # TEMPERATURE CONTROLLER SECTION
         # faccio l'update qui: ogni votla che arrivano dati nuovi li elaboro, anche nel controllore
-        self.thc.update(list(current_temperatures.values()))
-        #print(list(current_temperatures.values()))
-        if self.current_heater_output_control != self.thc.get_output_control(): # appena cambia il comando logico all'heater, allora invio il comando ad Arduino            
-            self.current_heater_output_control = self.thc.get_output_control()
-            self.queue_command("HTR01", self.current_heater_output_control)  # @<HTR01, True># @<HTR01, False>#
+        if current_temperatures:
+            self.thc.update(list(current_temperatures.values()))
+            #print(list(current_temperatures.values()))
+            if self.current_heater_output_control != self.thc.get_output_control(): # appena cambia il comando logico all'heater, allora invio il comando ad Arduino            
+                self.current_heater_output_control = self.thc.get_output_control()
+                self.queue_command("HTR01", self.current_heater_output_control)  # @<HTR01, True># @<HTR01, False>#
             
         # HUMIDITY CONTROLLER SECTION
-        self.hhc.update(list(current_humidities.values()))
-        if self.current_humidifier_output_control != self.hhc.get_output_control():
-            self.current_humidifier_output_control = self.hhc.get_output_control()
-            self.queue_command("HUMER01", self.current_humidifier_output_control) # @<HUMER01, True># @<HUMER01, False>#
+        if current_humidities:
+            self.hhc.update(list(current_humidities.values()))
+            if self.current_humidifier_output_control != self.hhc.get_output_control():
+                self.current_humidifier_output_control = self.hhc.get_output_control()
+                self.queue_command("HUMER01", self.current_humidifier_output_control) # @<HUMER01, True># @<HUMER01, False>#
             
             
         # Emit the data to update the view        
