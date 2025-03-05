@@ -1,0 +1,3 @@
+05/03/2025
+Usare arduinoEggINcubator perché è il sw di arduino che comincia a gestire anche lo stepper,mentre quello di prima di base dava indietro solo le temperature e i feedback degli induttori, ma poca roba, prendeva pochi comandi.
+Comincio a sviluppare per bene questo codice.
