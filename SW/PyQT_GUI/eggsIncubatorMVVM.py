@@ -14,10 +14,12 @@ import subprocess
 
 
 '''
+    i comandi devono essere quanto più univoci possibile! perhé ho visto che se metto CW e CCW alla domanda indexof() arduino non li sa distinguere
     self.queue_command("HTR01", self.current_heater_output_control)  # @<HTR01, True># @<HTR01, False>#
     self.queue_command("HUMER01", self.current_humidifier_output_control) # @<HUMER01, True># @<HUMER01, False>#
-    self.queue_command("STPR01", CW) # full_turn_clock_wise 
-    self.queue_command("STPR01", CCW) # full_turn_counter_clock_wise    
+    self.queue_command("STPR01", "FTCCW") # full_turn_counter_clock_wise 
+    self.queue_command("STPR01", "FTCW") # full_turn_clock_wise    
+    self.queue_command("STPR01", "STOP") # stop motor   
 '''
 
 # ARDUINO serial communication - setup #
@@ -208,11 +210,15 @@ class MainSoftwareThread(QtCore.QThread):
             
             if self.eggTurnerMotor.getNewCommand() is not None: # checking if there's a command
                 print(f"Processing command: {self.eggTurnerMotor.getNewCommand()}") 
+                
                 if self.eggTurnerMotor.getNewCommand() == "full_turn_counter_clock_wise":
-                    self.queue_command("STPR01", "CCW") # full_turn_counter_clock_wise
+                    self.queue_command("STPR01", "FTCCW") # full_turn_counter_clock_wise
                     
                 if self.eggTurnerMotor.getNewCommand() == "full_turn_clock_wise":
-                    self.queue_command("STPR01", "CW") # full_turn_clock_wise             
+                    self.queue_command("STPR01", "FTCW") # full_turn_clock_wise             
+                    
+                if self.eggTurnerMotor.getNewCommand() == "stop":
+                    self.queue_command("STPR01", "STOP") # stop motor 
                 
                 self.eggTurnerMotor.resetNewCommand()
             
@@ -333,9 +339,6 @@ class MainSoftwareThread(QtCore.QThread):
         current_humidities_temperatures = {k: v for d in new_data for k, v in d.items() if k.startswith("HTP")}
         current_inductors_feedbacks = {k: v for d in new_data for k, v in d.items() if k.startswith("IND")} #{'IND_CCW': 1, 'IND_CW': 1}
         
-        if current_inductors_feedbacks: # that is checking if the dictionary is not empty
-            print(current_inductors_feedbacks)
-        
         
         # TEMPERATURE CONTROLLER SECTION
         # faccio l'update qui: ogni votla che arrivano dati nuovi li elaboro, anche nel controllore
@@ -359,22 +362,33 @@ class MainSoftwareThread(QtCore.QThread):
         # questo all_values è semplicemente una lista [17.8, 17.9, 18.0, 17.9, 17.8, 17.9] dove SO IO ad ogni posto cosa è associato...passiamo solo i valori (non bellissimo...)
         # i mean value servono per pubblicare il valore che il controllore usa per fare effettivamente il controllo e lo metto nella sezione di isteresi
         # list() se passi un dizionario, mentre [] se vuoi aggiugnere alla lista elementi singoli
-        all_values = []
-        all_values = list(current_temperatures.values()) + \
-                    list(current_humidities.values()) + \
-                    list(current_humidities_temperatures.values()) + \
-                    [self.thc.get_mean_value()] + \
-                    [self.hhc.get_mean_value()]
-                    
-        self.update_view.emit(all_values)
+        if current_temperatures and current_humidities:
+            all_values = []
+            all_values = list(current_temperatures.values()) + \
+                        list(current_humidities.values()) + \
+                        list(current_humidities_temperatures.values()) + \
+                        [self.thc.get_mean_value()] + \
+                        [self.hhc.get_mean_value()]
+                        
+            self.update_view.emit(all_values)
         
         # INDUCTOR SECTION
         """
             IND_CCW - IND_CW induttori posizioni limite counterClockWise - clockWise
             IND_HOR induttore posizionamento orizzontale
-            IND_DR (apertura/chiusura della porta)
+            IND_DR door (apertura/chiusura della porta)
         """
-        
+        if current_inductors_feedbacks: # that is checking if the dictionary is not empty
+            #print(current_inductors_feedbacks)
+            
+            value = current_inductors_feedbacks.get("IND_CCW") # to handle cases where the key might not exist safely, you can use .get() - questa funzione tira fuori il valore, non la key!
+            if value is not None and value == 1:
+                # perché nella mia convenzione value == 1 significa rising edge della posizione ragginuta
+                self.eggTurnerMotor.acknowledgeFromExternal("IND_CCW")
+                
+            value = current_inductors_feedbacks.get("IND_CW") # to handle cases where the key might not exist safely, you can use .get()
+            if value is not None and value == 1:
+                self.eggTurnerMotor.acknowledgeFromExternal("IND_CW")
         
         
         
@@ -581,6 +595,8 @@ class MainSoftwareThread(QtCore.QThread):
             
             self.force_change_rotation_flag = False
             
+            self.rotation_in_progress = False # bit che uso epr ricordarmi che ho inviato un comando di rotazione (automatico) e con questo faccio debug
+            self.rotation_in_progress_timeout_sec = 120 # 2min timeout
             # TIMING
             self.last_motor_data_update_sec = time.time()
             self.motor_data_update_interval_sec = 15 # indica ogni quanti secondi viene fatto l'update dei dati relativi al motore
@@ -627,7 +643,8 @@ class MainSoftwareThread(QtCore.QThread):
         
         def acknowledgeFromExternal(self, ack):
             self.last_ack_time = time.time()
-            self.acknowledge_from_external = ack            
+            self.acknowledge_from_external = ack  
+            print(f"Acknowledge received from external:{ack}")          
             
         def resetNewCommand(self):
             self.new_command = None
@@ -661,12 +678,17 @@ class MainSoftwareThread(QtCore.QThread):
             
             if self.homing_procedure_in_progress:
                 if self.acknowledge_from_external is not None:                    
-                    if self.acknowledge_from_external == "CCW_LSW": 
+                    if self.acknowledge_from_external == "IND_CCW": 
                         self.homing_procedure_in_progress = False
+                        self.rotation_direction = "counter_clock_wise" # nel senso che ho fatto il giro in senso antiorario (serve per dopo, dove andrò al contrario)
                         print("Homing done. Reached the Counter Clock Wise limit switch")
-                    if self.acknowledge_from_external == "CW_LSW":
+                        self.acknowledge_from_external = None # reset
+                        
+                    if self.acknowledge_from_external == "IND_CW":
                         self.homing_procedure_in_progress = False
-                        print("Homing done. Reached the Clock Wise limit switch")
+                        self.rotation_direction = "clock_wise" 
+                        print("Homing done. Reached the Clock Wise limit switch")                        
+                        self.acknowledge_from_external = None # reset
                 else:
                     return
             
@@ -674,9 +696,12 @@ class MainSoftwareThread(QtCore.QThread):
                 if (current_time - self.last_execution_time >= self.auto_function_interval_sec or self.force_change_rotation_flag):
                     self.rotation_direction = "counter_clock_wise" if self.rotation_direction == "clock_wise" else "clock_wise"
                     print(f"{self.name}: Changing rotation direction to {self.rotation_direction}.")
+                    
                     self.last_execution_time = current_time
                     self.turnsCounter += 1
                     self.new_command = "full_turn_" + self.rotation_direction
+                    self.rotation_in_progress = True
+                    print(f"{'Activating' if self.rotation_in_progress else 'Deactivating'} diagnostics")
                     
                 # ogni tot diciamo che è passato il tempo per fare un update dei dati del motore: il programma, da fuori, riceve il segnale e prende i dati
                 #print(time.time() - self.last_motor_data_update_sec)
@@ -692,6 +717,28 @@ class MainSoftwareThread(QtCore.QThread):
                     
                 if self.force_change_rotation_flag:
                     self.force_change_rotation_flag = False # resetting
+                    
+                    
+                if self.rotation_in_progress:
+                    # diagnostic: attesa del feedback
+                    if (time.time() - self.last_execution_time) >= self.rotation_in_progress_timeout_sec:
+                        # manda comando di STOP
+                        self.new_command = "stop"
+                        
+                    if self.acknowledge_from_external is not None:         
+                        if self.acknowledge_from_external == "IND_CCW" and self.rotation_direction == "counter_clock_wise":
+                            self.rotation_in_progress = False
+                            print(f"{'Activating' if self.rotation_in_progress else 'Deactivating'} diagnostics")
+                            print("Reached the IND_CCW limit switch")
+                            self.acknowledge_from_external = None # reset
+                            
+                        if self.acknowledge_from_external == "IND_CW" and self.rotation_direction == "clock_wise":
+                            self.rotation_in_progress = False
+                            print(f"{'Activating' if self.rotation_in_progress else 'Deactivating'} diagnostics")
+                            print("Reached the IND_CW limit switch")
+                            self.acknowledge_from_external = None # reset
+                            
+                        
                     
                 
                 
