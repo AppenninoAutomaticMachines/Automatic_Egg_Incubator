@@ -11,6 +11,7 @@ import csv
 import time
 import queue
 import subprocess
+from collections import deque
 
 
 '''
@@ -20,6 +21,8 @@ import subprocess
     self.queue_command("STPR01", "FTCCW") # full_turn_counter_clock_wise 
     self.queue_command("STPR01", "FTCW") # full_turn_clock_wise    
     self.queue_command("STPR01", "STOP") # stop motor   
+    self.queue_command("STPR01", "MCCCW") # move_continuous_clock_wise
+    self.queue_command("STPR01", "MCCCW") # move_continuous_counter_clock_wise
 '''
 
 # ARDUINO serial communication - setup #
@@ -161,6 +164,7 @@ class MainSoftwareThread(QtCore.QThread):
         
         self.saving_interval = 1 # default: every minute
         self.last_saving_time = datetime.now()
+        self.arduino_readings_timestamp  = time.time() # per ricordarmi l'istante di tempo in cui arduino manda i dati
         
         self.command_list = [] # List to hold the pending commands
         
@@ -168,6 +172,19 @@ class MainSoftwareThread(QtCore.QThread):
         self.current_button = None # notifica del pulsante premuto
         self.spinbox_values = {} # notifica dello spinbox cambiato
         
+        # TEMPERATURE CONTROLLER
+        # Constants
+        self.INVALID_VALUES = [-127.0, 85.0]  # Known error values
+        self.THRESHOLD = 0.5  # Acceptable variation from the valid range
+        self.VALID_RANGE = (5.0, 45.0)  # Expected temperature range
+        
+        # Error tracking
+        self.ERROR_TIME_LIMIT = 10  # Tempo in secondi oltre il quale generare un warning
+        # Stato del sistema
+        self.error_counter = 0  # Conta tutti gli errori mai verificati
+        self.error_timestamps = {}  # Memorizza il primo timestamp di errore per ogni sensore
+        self.warned_sensors = set()  # Tiene traccia dei sensori già segnalati con un warning
+
         self.thc = self.HysteresisController(lower_limit = 37.5, upper_limit = 37.8) # temperature hysteresis controller
         self.current_heater_output_control = False # variabile che mi ricorda lo stato attuale dell'heater
         
@@ -178,6 +195,9 @@ class MainSoftwareThread(QtCore.QThread):
         self.eggTurnerMotor.setFunction1()
         self.eggTurnerMotor.setFunctionInterval(30) # Set default interval to 3600s 
         
+        # BUTTON HANDLING
+        self.move_CW_motor_btn = False # = not pressed
+        self.move_CCW_motor_btn = False # = not pressed
         
         #--- Create Machine_Statistic folder ---#
         machine_statistics_folder_path = "Machine_Statistics"
@@ -219,6 +239,12 @@ class MainSoftwareThread(QtCore.QThread):
                     
                 if self.eggTurnerMotor.getNewCommand() == "stop":
                     self.queue_command("STPR01", "STOP") # stop motor 
+                    
+                if self.eggTurnerMotor.getNewCommand() == "move_continuous_clock_wise":
+                    self.queue_command("STPR01", "MCCW") # move_continuous_clock_wise
+                    
+                if self.eggTurnerMotor.getNewCommand() == "move_continuous_counter_clock_wise":
+                    self.queue_command("STPR01", "MCCCW") # move_continuous_counter_clock_wise
                 
                 self.eggTurnerMotor.resetNewCommand()
             
@@ -236,6 +262,48 @@ class MainSoftwareThread(QtCore.QThread):
                 
             self.msleep(100)
             
+    def check_errors(self,sensor_data):
+        """Verifica errori, aggiorna il contatore e traccia il tempo degli errori persistenti."""
+
+        current_time = time.time()
+        new_errors = []  # Sensori che entrano in errore ora
+        resolved_errors = []  # Sensori che sono tornati normali
+
+        # Analizza il dizionario ricevuto
+        #print(sensor_data)
+        for sensor, value in sensor_data.items():
+            # Verifica se il valore è un errore
+            if any(abs(value - iv) < self.THRESHOLD for iv in self.INVALID_VALUES) or not (self.VALID_RANGE[0] <= value <= self.VALID_RANGE[1]):
+                # Se è un nuovo errore, aggiorna il contatore e salva il timestamp
+                if sensor not in self.error_timestamps:
+                    self.error_timestamps[sensor] = current_time
+                    self.error_counter += 1
+                    new_errors.append(sensor)  # Sensore appena entrato in errore
+            else:
+                # Se il sensore era in errore ma ora non lo è più, lo rimuoviamo dal tracking
+                if sensor in self.error_timestamps:
+                    del self.error_timestamps[sensor]
+                    self.warned_sensors.discard(sensor)  # Resetta anche il warning
+                    resolved_errors.append(sensor)
+
+        # Stampa solo se ci sono nuovi errori o warning per errori persistenti
+        if new_errors:
+            print(f"⚠ ERRORE: Sensori appena entrati in errore: {new_errors}")
+            print(f"Totale errori rilevati finora: {self.error_counter}")
+
+        for sensor, start_time in self.error_timestamps.items():
+            if current_time - start_time > self.ERROR_TIME_LIMIT and sensor not in self.warned_sensors:
+                print(f"⚠ WARNING: Il sensore '{sensor}' è in errore da più di {self.ERROR_TIME_LIMIT} secondi!")
+                self.warned_sensors.add(sensor)  # Segnala il warning solo una volta
+            
+    def filter_temperatures(self, temperatures):
+        """Remove outliers and keep only valid temperature values."""
+        return [
+            temp for temp in temperatures
+            if not any(abs(temp - iv) < self.THRESHOLD for iv in self.INVALID_VALUES)
+            and self.VALID_RANGE[0] <= temp <= self.VALID_RANGE[1]
+        ]
+            
     def queue_command(self, cmd, value):
         self.command_list.append((cmd, value))
 
@@ -252,12 +320,20 @@ class MainSoftwareThread(QtCore.QThread):
             self.eggTurnerMotor.forceEggsRotation()
         
         if self.current_button == "move_CW_motor_btn":
-            print(self.current_button)
-            #self.queue_command("CMD01", 1)
+            self.move_CW_motor_btn = not self.move_CW_motor_btn # ogni volta in cui lo premo, toggle dello stato
+            
+            if self.move_CW_motor_btn:
+                self.eggTurnerMotor.moveCWContinuous()
+            elif not self.move_CW_motor_btn:
+                self.eggTurnerMotor.stop()
             
         if self.current_button == "move_CCW_motor_btn":
-            print(self.current_button)
-            #self.queue_command("CMD02", 0)
+            self.move_CCW_motor_btn = not self.move_CCW_motor_btn
+            
+            if self.move_CCW_motor_btn:
+                self.eggTurnerMotor.moveCCWContinuous()
+            elif not self.move_CCW_motor_btn:
+                self.eggTurnerMotor.stop()
             
         if self.current_button == "plotAllDays_temp_T_btn":
             command = ['python3', 'appInteractivePlots.py', 'PLOT_ALL_DAYS_DATA_TEMPERATURES']
@@ -330,11 +406,12 @@ class MainSoftwareThread(QtCore.QThread):
             self.hhc.set_lower_limit(rounded_value)
 
     def process_serial_data(self, new_data):
+        self.arduino_readings_timestamp = time.time()
         self.current_data = new_data
         #print(new_data)
         # [{'TMP01': 19.5}, {'TMP02': 19.1}, {'TMP03': 19.8}, {'TMP04': 20.1}, {'HUM01': 19.5}, {'HTP01': 19.5}]
         # Extract data into specific categories - questi che seguono sono tutti dictionaries
-        current_temperatures = {k: v for d in new_data for k, v in d.items() if k.startswith("TMP")} # dictionary: <class 'dict'> dict_values([23.7, 21.1, 20.4, 21.7]) 
+        current_temperatures = {k: v for d in new_data for k, v in d.items() if k.startswith("TMP")} # {'TMP01': 22.3, 'TMP02': 22.2, 'TMP03': 22.3, 'TMP04': 22.4}
         current_humidities = {k: v for d in new_data for k, v in d.items() if k.startswith("HUM")}
         current_humidities_temperatures = {k: v for d in new_data for k, v in d.items() if k.startswith("HTP")}
         current_inductors_feedbacks = {k: v for d in new_data for k, v in d.items() if k.startswith("IND")} #{'IND_CCW': 1, 'IND_CW': 1}
@@ -342,12 +419,20 @@ class MainSoftwareThread(QtCore.QThread):
         
         # TEMPERATURE CONTROLLER SECTION
         # faccio l'update qui: ogni votla che arrivano dati nuovi li elaboro, anche nel controllore
-        if current_temperatures:
-            self.thc.update(list(current_temperatures.values()))
+        # al controllore di temperatura passo solo temperature filtrate, ovvero i valori dentro il range di temperatura corretto
+        
+        filtered_temperatures = self.filter_temperatures(list(current_temperatures.values()))
+        if filtered_temperatures:            
+            self.thc.update(filtered_temperatures)
             #print(list(current_temperatures.values()))
             if self.current_heater_output_control != self.thc.get_output_control(): # appena cambia il comando logico all'heater, allora invio il comando ad Arduino            
                 self.current_heater_output_control = self.thc.get_output_control()
                 self.queue_command("HTR01", self.current_heater_output_control)  # @<HTR01, True># @<HTR01, False>#
+        # Check for persistent errors
+        #print(current_temperatures)
+        self.check_errors(current_temperatures)
+                
+            
             
         # HUMIDITY CONTROLLER SECTION
         if current_humidities:
@@ -582,12 +667,16 @@ class MainSoftwareThread(QtCore.QThread):
             self.name = name
             self.running = False
             self.auto_function = False
+            self.manual_function = False
             self.last_execution_time = time.time()
             self.auto_function_interval_sec = 3600  # Default to 1 hour
             self.rotation_direction = "clockWise"
             self.last_ack_time = None
             self.alarm_triggered = False
             self.turnsCounter = 0
+            
+            self.move_cw_continuous = False
+            self.move_ccw_continuous = False
             
             self.new_command = None
             self.update_motor_data = False
@@ -597,6 +686,7 @@ class MainSoftwareThread(QtCore.QThread):
             
             self.rotation_in_progress = False # bit che uso epr ricordarmi che ho inviato un comando di rotazione (automatico) e con questo faccio debug
             self.rotation_in_progress_timeout_sec = 120 # 2min timeout
+            
             # TIMING
             self.last_motor_data_update_sec = time.time()
             self.motor_data_update_interval_sec = 15 # indica ogni quanti secondi viene fatto l'update dei dati relativi al motore
@@ -609,19 +699,17 @@ class MainSoftwareThread(QtCore.QThread):
             """
             self.homing_procedure_in_progress = True 
 
-        def moveForwardOneStep(self):
-            print(f"{self.name}: Moving forward one step.")
+        def moveCWContinuous(self):
+            self.auto_function = False
+            self.manual_function = True
+            self.move_cw_continuous = True
+            print(f"{self.name}: Moving cw continuously.")
 
-        def moveBackwardOneStep(self):
-            print(f"{self.name}: Moving backward one step.")
-
-        def moveForwardContinuous(self):
-            self.running = True
-            print(f"{self.name}: Moving forward continuously.")
-
-        def moveBackwardContinuous(self):
-            self.running = True
-            print(f"{self.name}: Moving backward continuously.")
+        def moveCCWContinuous(self):
+            self.auto_function = False
+            self.manual_function = True
+            self.move_ccw_continuous = True
+            print(f"{self.name}: Moving ccw continuously.")
 
         def stop(self):
             self.running = False
@@ -629,6 +717,7 @@ class MainSoftwareThread(QtCore.QThread):
         
         def setFunction1(self):
             self.auto_function = True
+            self.manual_function = False
             self.last_ack_time = time.time()
             self.alarm_triggered = False
             print(f"{self.name}: Automatic function 1 enabled.")
@@ -672,6 +761,8 @@ class MainSoftwareThread(QtCore.QThread):
         
         def forceEggsRotation(self):
             self.force_change_rotation_flag = True
+            self.auto_function = True
+            self.manual_function = False
         
         def update(self):
             current_time = time.time()
@@ -689,10 +780,12 @@ class MainSoftwareThread(QtCore.QThread):
                         self.rotation_direction = "clock_wise" 
                         print("Homing done. Reached the Clock Wise limit switch")                        
                         self.acknowledge_from_external = None # reset
+                        
+                    self.last_execution_time = current_time # salvo il tempo, perché così la prossima FULL TURN avviene contando il tempo da quando ho finito l'homing
                 else:
                     return
             
-            if self.auto_function:                                
+            elif self.auto_function:                                
                 if (current_time - self.last_execution_time >= self.auto_function_interval_sec or self.force_change_rotation_flag):
                     self.rotation_direction = "counter_clock_wise" if self.rotation_direction == "clock_wise" else "clock_wise"
                     print(f"{self.name}: Changing rotation direction to {self.rotation_direction}.")
@@ -737,6 +830,19 @@ class MainSoftwareThread(QtCore.QThread):
                             print(f"{'Activating' if self.rotation_in_progress else 'Deactivating'} diagnostics")
                             print("Reached the IND_CW limit switch")
                             self.acknowledge_from_external = None # reset
+                            
+                elif self.manual_function:  
+                    if self.move_cw_continuous:
+                        self.move_cw_continuous = False # reset
+                        self.new_command = "move_continuous_clock_wise"
+                        
+                    elif self.move_ccw_continuous:
+                        self.move_ccw_continuous = False # reset
+                        self.new_command = "move_continuous_counter_clock_wise"
+                        
+                    # AGGIUGNERE I LIMITI DEI FINECORSA
+                else:
+                    print("Do Nothing")
                             
                         
                     
