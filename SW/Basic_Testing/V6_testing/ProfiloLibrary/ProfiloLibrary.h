@@ -99,6 +99,8 @@ class stepperMotor{
     //void setMicroSteppingConfiguration(bool MS1, bool MS2, bool MS3);
     float get_actualRPMSpeed(void);
 	bool get_stepCommand(void); // funzione che mi dice se è attiva la richiesta di step per il motore o no.
+	bool isMovingForward(void);
+	bool isMovingBackward(void);
 
   private:
     byte _stepPin;
