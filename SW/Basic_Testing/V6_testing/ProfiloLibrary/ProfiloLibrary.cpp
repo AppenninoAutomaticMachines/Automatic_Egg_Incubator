@@ -399,6 +399,24 @@ bool stepperMotor::get_stepCommand(void){
   return _stepCommand;
 }
 
+bool stepperMotor::isMovingForward(void){
+  if(_workingState == 1){
+    return true;
+  }
+  else{
+    return false;
+  }
+}
+
+bool stepperMotor::isMovingBackward(void){
+  if(_workingState == 2){
+    return true;
+  }
+  else{
+    return false;
+  }
+}
+
 
 /* FILTERED INPUT - anti debounce */
 antiDebounceInput::antiDebounceInput(byte pin, int debounceDelay){
