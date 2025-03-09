@@ -100,13 +100,21 @@ stepperMotor eggsTurnerStepperMotor(STEPPPER_MOTOR_STEP_PIN, STEPPPER_MOTOR_DIRE
 bool move = false;
 bool direction = false; 
 
-// variabile per manual control
 bool stepperMotor_moveCCW_automatic_var = false;
 bool stepperMotor_moveCW_automatic_var = false;
 bool stepperMotor_stop_automatic_var = false;
 
+bool stepperMotor_moveCCW_cmd = false;
+trigger stepperMotor_moveCCW_cmd_trigger;
+
+bool stepperMotor_moveCW_cmd = false;
+trigger stepperMotor_moveCW_cmd_trigger;
+
+bool stepperMotor_stop_cmd = false;
+trigger stepperMotor_stop_cmd_trigger;
+
 byte eggsTurnerState = 0;
-bool stepperAutomaticControl_var = true;
+bool stepperAutomaticControl_var = false;
 
 /* END MOTORS SECTION */
 
@@ -245,14 +253,17 @@ void loop() {
         digitalWrite(LED_11, LOW);
         //Serial.println("OFF");
       }
-      if(tempReceivedCommand.indexOf("STPR01") >= 0 && tempReceivedCommand.indexOf("FTCCW") >= 0 ){ //full_turn_counter_clock_wise 
+      if(tempReceivedCommand.indexOf("STPR01") >= 0 && tempReceivedCommand.indexOf("MCCW") >= 0 ){ //move_counter_clock_wise 
         stepperMotor_moveCCW_automatic_var = true;
+        stepperMotor_moveCCW_cmd = true;
       }
-      if(tempReceivedCommand.indexOf("STPR01") >= 0 && tempReceivedCommand.indexOf("FTCW") >= 0 ){ //full_turn_clock_wise 
+      if(tempReceivedCommand.indexOf("STPR01") >= 0 && tempReceivedCommand.indexOf("MCW") >= 0 ){ //move_clock_wise 
         stepperMotor_moveCW_automatic_var = true;
+        stepperMotor_moveCW_cmd = true;
       }
       if(tempReceivedCommand.indexOf("STPR01") >= 0 && tempReceivedCommand.indexOf("STOP") >= 0 ){ //stop
         stepperMotor_stop_automatic_var = true;
+        stepperMotor_stop_cmd = true;
       }
     }
   }
@@ -311,87 +322,113 @@ void loop() {
   /* STEPPER MOTOR CONTROL SECTION */
   eggsTurnerStepperMotor.periodicRun();
 
-  if(stepperAutomaticControl_var){
-    // direzione oraria = forward = clock wise rotation direction (vista posteriore incubatrice)
-    switch(eggsTurnerState){
-      case 0: // ZEROING
-        // lascio stato aperto per eventuale abilitazione della procedura di azzeramento da parte dell'operatore.
-        if(ccw_inductor_input.getInputState()){ // se leggo già induttore, inutile comandare un bw. Sono già azzerato.  Devo però notificarlo a RPI!
-          // home position is reached - full left
-          listofDataToSend[listofDataToSend_numberOfData] = "<IND_CCW, 1>"; // converting bool to string - "<IND_CW, 0>"
-          listofDataToSend_numberOfData++;
+  
+  // direzione oraria = forward = clock wise rotation direction (vista posteriore incubatrice)
+  switch(eggsTurnerState){
+    case 0: // waiting: prima di iniziare la procedura, voglio aspettare un po' che le comunicazioni siano partite e tutto...
+      if(millis() >= 5000){
+        // apena passano 5secondi, fai muovere il motore per azzerare
+        eggsTurnerState = 9;        
+      }
+      
+      break;
+    case 9: // ZEROING
+      // lascio stato aperto per eventuale abilitazione della procedura di azzeramento da parte dell'operatore.
+      if(ccw_inductor_input.getInputState()){ // se leggo già induttore, inutile comandare un bw. Sono già azzerato.  Devo però notificarlo a RPI!
+        // home position is reached - full left
+        listofDataToSend[listofDataToSend_numberOfData] = "<IND_CCW, 1>"; // converting bool to string - "<IND_CW, 0>"
+        listofDataToSend_numberOfData++;
 
-          eggsTurnerStepperMotor.stopMotor();       
-          eggsTurnerState = 2;
-        }
-        else if(cw_inductor_input.getInputState()){ // se leggo già induttore. Sono già azzerato.  Devo però notificarlo a RPI!
-          // home position is reached - full right
-          listofDataToSend[listofDataToSend_numberOfData] = "<IND_CW, 1>"; // converting bool to string - "<IND_CW, 0>"
-          listofDataToSend_numberOfData++;
-          
-          eggsTurnerStepperMotor.stopMotor();       
-          eggsTurnerState = 2;
-        }
-        else{
-          eggsTurnerStepperMotor.moveBackward(STEPPER_MOTOR_SPEED_DEFAULT);
-          eggsTurnerState = 1;
-        }        
-        break;
-      case 1: // WAIT_TO_REACH_LEFT_SIDE_INDUCTOR
-        if(ccw_inductor_input.getInputState()){
-          // home position is reached - full left
-          eggsTurnerStepperMotor.stopMotor();
-          eggsTurnerState = 2;
-        }
-        break;
-      case 2: // WAIT_FOR_TURN_EGGS_COMMAND_STATE --> wait for RPI command
+        eggsTurnerStepperMotor.stopMotor();       
+        eggsTurnerState = 20;
+      }
+      else if(cw_inductor_input.getInputState()){ // se leggo già induttore. Sono già azzerato.  Devo però notificarlo a RPI!
+        // home position is reached - full right
+        listofDataToSend[listofDataToSend_numberOfData] = "<IND_CW, 1>"; // converting bool to string - "<IND_CW, 0>"
+        listofDataToSend_numberOfData++;
+        
+        eggsTurnerStepperMotor.stopMotor();       
+        eggsTurnerState = 20;
+      }
+      else{
+        eggsTurnerStepperMotor.moveBackward(STEPPER_MOTOR_SPEED_DEFAULT);
+        eggsTurnerState = 10;
+      }        
+      break;
+    case 10: // WAIT_TO_REACH_LEFT_SIDE_INDUCTOR
+      if(ccw_inductor_input.getInputState()){
+        // home position is reached - full left
+        eggsTurnerStepperMotor.stopMotor();
+        eggsTurnerState = 20;
+      }
+      break;
+    case 20: 
+      if(stepperAutomaticControl_var){
+        /* FULLY AUTOMATIC MODE in arduino side*/
+        // WAIT_FOR_TURN_EGGS_COMMAND_STATE --> wait for RPI command
         if(stepperMotor_moveCCW_automatic_var){
           eggsTurnerStepperMotor.moveBackward(STEPPER_MOTOR_SPEED_DEFAULT);
-          eggsTurnerState = 5;
+          eggsTurnerState = 50;
         }
         if(stepperMotor_moveCW_automatic_var){
           eggsTurnerStepperMotor.moveForward(STEPPER_MOTOR_SPEED_DEFAULT);
-          eggsTurnerState = 3;
+          eggsTurnerState = 30;
         }
         if(stepperMotor_stop_automatic_var){
           eggsTurnerStepperMotor.stopMotor();
         }
-        break;
-      case 3: // WAIT_TO_REACH_RIGHT_SIDE_INDUCTOR
-          if(cw_inductor_input.getInputState()){
-            eggsTurnerStepperMotor.stopMotor();
-            eggsTurnerState = 2;
-          }
-        break;
-      case 5: // WAIT_TO_REACH_LEFT_SIDE_INDUCTOR
-          if(ccw_inductor_input.getInputState()){
-            eggsTurnerStepperMotor.stopMotor();
-            eggsTurnerState = 2;
-          }
-        break;
-      default:
-        break;
-    }
-  }
-  else{
-    ;
-    /*
-    if(stepperAutomaticControl_trigger.catchFallingEdge()){ // catch della rimozione del controllo automatico: chiamo lo stop del motore.
-      eggsTurnerStepperMotor.stopMotor();
-      eggsTurnerState = 0; 
-    }
+      }
+      else{
+        /* MANUAL MODE - tutti i comandi vengono da RPI */
+        eggsTurnerState = 100;
+      }
+      break;
+    case 30: // WAIT_TO_REACH_RIGHT_SIDE_INDUCTOR
+        if(cw_inductor_input.getInputState()){
+          eggsTurnerStepperMotor.stopMotor();
+          eggsTurnerState = 20;
+        }
+      break;
+    case 50: // WAIT_TO_REACH_LEFT_SIDE_INDUCTOR
+        if(ccw_inductor_input.getInputState()){
+          eggsTurnerStepperMotor.stopMotor();
+          eggsTurnerState = 20;
+        }
+      break;
+    case 100:
+      stepperMotor_moveCCW_cmd_trigger.periodicRun(stepperMotor_moveCCW_cmd);
+      stepperMotor_moveCW_cmd_trigger.periodicRun(stepperMotor_moveCW_cmd);
+      stepperMotor_stop_cmd_trigger.periodicRun(stepperMotor_stop_cmd);
 
-    if(stepperMotor_moveForward_var){
-      eggsTurnerStepperMotor.moveForward(STEPPER_MOTOR_SPEED_DEFAULT);
-    }
-    else if(stepperMotor_moveBackward_var){
-      eggsTurnerStepperMotor.moveBackward(STEPPER_MOTOR_SPEED_DEFAULT);
-    }
-    else if(stepperMotor_stop_var){
-      eggsTurnerStepperMotor.stopMotor();
-    }
-    */
-  }  
+      if(stepperMotor_moveCCW_cmd_trigger.catchRisingEdge()){
+        if(!ccw_inductor_input.getInputState()){
+          /* MECHANICAL SAFETY */
+          eggsTurnerStepperMotor.moveBackward(STEPPER_MOTOR_SPEED_DEFAULT);
+        }
+      }
+      else if(stepperMotor_moveCW_cmd_trigger.catchRisingEdge()){
+        if(!cw_inductor_input.getInputState()){
+          /* MECHANICAL SAFETY */
+          eggsTurnerStepperMotor.moveForward(STEPPER_MOTOR_SPEED_DEFAULT);
+        }
+      }
+      else if(stepperMotor_stop_cmd_trigger.catchRisingEdge()){
+        eggsTurnerStepperMotor.stopMotor();
+      }
+
+      /* MECHANICAL SAFETY */
+      
+      if(ccw_inductor_input.getInputState() and eggsTurnerStepperMotor.isMovingBackward()){
+        eggsTurnerStepperMotor.stopMotor();
+      }
+      if(cw_inductor_input.getInputState() and eggsTurnerStepperMotor.isMovingForward()){
+        eggsTurnerStepperMotor.stopMotor();
+      }
+      
+      break;
+    default:
+      break;
+  }
   /* END STEPPER MOTOR CONTROL SECTION */
 
   
@@ -452,6 +489,10 @@ void loop() {
   stepperMotor_moveCCW_automatic_var = false;
   stepperMotor_moveCW_automatic_var = false;
   stepperMotor_stop_automatic_var = false;
+
+  stepperMotor_moveCCW_cmd = false;
+  stepperMotor_moveCW_cmd = false;
+  stepperMotor_stop_cmd = false;
 }
 
 
