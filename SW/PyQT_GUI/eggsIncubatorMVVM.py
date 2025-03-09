@@ -18,11 +18,9 @@ from collections import deque
     i comandi devono essere quanto più univoci possibile! perhé ho visto che se metto CW e CCW alla domanda indexof() arduino non li sa distinguere
     self.queue_command("HTR01", self.current_heater_output_control)  # @<HTR01, True># @<HTR01, False>#
     self.queue_command("HUMER01", self.current_humidifier_output_control) # @<HUMER01, True># @<HUMER01, False>#
-    self.queue_command("STPR01", "FTCCW") # full_turn_counter_clock_wise 
-    self.queue_command("STPR01", "FTCW") # full_turn_clock_wise    
+    self.queue_command("STPR01", "MCCW") # move_counter_clock_wise
+    self.queue_command("STPR01", "MCW") # move_clock_wise 
     self.queue_command("STPR01", "STOP") # stop motor   
-    self.queue_command("STPR01", "MCCCW") # move_continuous_clock_wise
-    self.queue_command("STPR01", "MCCCW") # move_continuous_counter_clock_wise
 '''
 
 # ARDUINO serial communication - setup #
@@ -192,7 +190,6 @@ class MainSoftwareThread(QtCore.QThread):
         self.current_humidifier_output_control = False # variabile che mi ricorda lo stato attuale dell'heater
         
         self.eggTurnerMotor = self.StepperMotor("Egg_Turner_Stepper_Motor")
-        self.eggTurnerMotor.setFunction1()
         self.eggTurnerMotor.setFunctionInterval(30) # Set default interval to 3600s 
         
         # BUTTON HANDLING
@@ -231,20 +228,18 @@ class MainSoftwareThread(QtCore.QThread):
             if self.eggTurnerMotor.getNewCommand() is not None: # checking if there's a command
                 print(f"Processing command: {self.eggTurnerMotor.getNewCommand()}") 
                 
-                if self.eggTurnerMotor.getNewCommand() == "full_turn_counter_clock_wise":
-                    self.queue_command("STPR01", "FTCCW") # full_turn_counter_clock_wise
+                if (self.eggTurnerMotor.getNewCommand() == "automatic_CCW_rotation_direction"
+                    or
+                    self.eggTurnerMotor.getNewCommand() == "manual_CCW_rotation_direction"):
+                    self.queue_command("STPR01", "MCCW") # move_counter_clock_wise
                     
-                if self.eggTurnerMotor.getNewCommand() == "full_turn_clock_wise":
-                    self.queue_command("STPR01", "FTCW") # full_turn_clock_wise             
+                if (self.eggTurnerMotor.getNewCommand() == "automatic_CW_rotation_direction"
+                    or
+                    self.eggTurnerMotor.getNewCommand() == "manual_CW_rotation_direction"):
+                    self.queue_command("STPR01", "MCW") # move_clock_wise           
                     
                 if self.eggTurnerMotor.getNewCommand() == "stop":
                     self.queue_command("STPR01", "STOP") # stop motor 
-                    
-                if self.eggTurnerMotor.getNewCommand() == "move_continuous_clock_wise":
-                    self.queue_command("STPR01", "MCCW") # move_continuous_clock_wise
-                    
-                if self.eggTurnerMotor.getNewCommand() == "move_continuous_counter_clock_wise":
-                    self.queue_command("STPR01", "MCCCW") # move_continuous_counter_clock_wise
                 
                 self.eggTurnerMotor.resetNewCommand()
             
@@ -666,17 +661,46 @@ class MainSoftwareThread(QtCore.QThread):
         def __init__(self, name="Stepper1"):
             self.name = name
             self.running = False
-            self.auto_function = False
-            self.manual_function = False
+            
+            """
+                self.main_state:
+                1 = INITIALIZATION
+                10 MANUAL   _MODE
+                30 AUTOMATIC_MODE
+            
+            """
+            self.main_state = 1
+            
+            self.automatic_state = 1
+            
+            self.manual_state = 1
+            
+            '''
+                Vogio gestire tutto con una variabile...anziché avere direzione e movimento, ne ho una sola
+                Il tribolo è lo stop. Not moving, ma in che direzione? allora faccio due valori della variabile, che sono loro che si ricordano
+                da dove mi stavo fermando
+                stopped_from_CCW_rotation_direction
+                stopped_from_CW_rotation_direction
+                
+                self.rotation_state 
+                not_defined
+                CCW_reached
+                CW_reached
+                CCW_rotation_direction
+                CW_rotation_direction
+                laying_horizontal_position
+                
+            '''
+            self.rotation_state = "not_defined"
+            
+            
             self.last_execution_time = time.time()
             self.auto_function_interval_sec = 3600  # Default to 1 hour
-            self.rotation_direction = "clockWise"
             self.last_ack_time = None
             self.alarm_triggered = False
             self.turnsCounter = 0
             
-            self.move_cw_continuous = False
-            self.move_ccw_continuous = False
+            self.stop_command = False
             
             self.new_command = None
             self.update_motor_data = False
@@ -684,46 +708,34 @@ class MainSoftwareThread(QtCore.QThread):
             
             self.force_change_rotation_flag = False
             
-            self.rotation_in_progress = False # bit che uso epr ricordarmi che ho inviato un comando di rotazione (automatico) e con questo faccio debug
             self.rotation_in_progress_timeout_sec = 120 # 2min timeout
             
             # TIMING
             self.last_motor_data_update_sec = time.time()
             self.motor_data_update_interval_sec = 15 # indica ogni quanti secondi viene fatto l'update dei dati relativi al motore
-            
-            # HOMING PROCEDURE
-            """
-                La procedura di home inibisce le modalità automatiche. 
-                Se abilitata, parto di default con homing_procedure_in_progress che inibisce tutto e si mette in attesa del primo feedback induttore.
-                Lo riceve, lo registra e da qui avvia la procedura automatica (che imposterà in automatico il giro in direzione opposta).
-            """
-            self.homing_procedure_in_progress = True 
 
         def moveCWContinuous(self):
-            self.auto_function = False
-            self.manual_function = True
-            self.move_cw_continuous = True
+            self.main_state = 10
+            self.manual_state = 20
             print(f"{self.name}: Moving cw continuously.")
 
         def moveCCWContinuous(self):
-            self.auto_function = False
-            self.manual_function = True
-            self.move_ccw_continuous = True
+            self.main_state = 10
+            self.manual_state = 30
             print(f"{self.name}: Moving ccw continuously.")
 
         def stop(self):
-            self.running = False
+            self.stop_command = True
             print(f"{self.name}: Stopping motor.")
         
         def setFunction1(self):
-            self.auto_function = True
-            self.manual_function = False
+            self.main_state = 30
             self.last_ack_time = time.time()
             self.alarm_triggered = False
             print(f"{self.name}: Automatic function 1 enabled.")
         
         def stopFunction1(self):
-            self.auto_function = False
+            self.main_state = 0
             print(f"{self.name}: Stopping automatic function 1.")
         
         def setFunctionInterval(self, interval):
@@ -761,40 +773,87 @@ class MainSoftwareThread(QtCore.QThread):
         
         def forceEggsRotation(self):
             self.force_change_rotation_flag = True
-            self.auto_function = True
-            self.manual_function = False
+            self.main_state = 30 # go back in automatic, if you were in manual
         
         def update(self):
             current_time = time.time()
             
-            if self.homing_procedure_in_progress:
+            if self.main_state == 1: # INITIALIZATION
                 if self.acknowledge_from_external is not None:                    
                     if self.acknowledge_from_external == "IND_CCW": 
-                        self.homing_procedure_in_progress = False
-                        self.rotation_direction = "counter_clock_wise" # nel senso che ho fatto il giro in senso antiorario (serve per dopo, dove andrò al contrario)
+                        self.rotation_state = "CCW_reached"
                         print("Homing done. Reached the Counter Clock Wise limit switch")
                         self.acknowledge_from_external = None # reset
                         
                     if self.acknowledge_from_external == "IND_CW":
-                        self.homing_procedure_in_progress = False
-                        self.rotation_direction = "clock_wise" 
+                        self.rotation_state = "CW_reached"
                         print("Homing done. Reached the Clock Wise limit switch")                        
                         self.acknowledge_from_external = None # reset
                         
                     self.last_execution_time = current_time # salvo il tempo, perché così la prossima FULL TURN avviene contando il tempo da quando ho finito l'homing
+                    self.main_state = 30 # di default andiamo in modalità automatica
                 else:
-                    return
+                    pass
+                
+            elif self.main_state == 10: # MANUAL MODE
+                    if self.manual_state == 1: #waiting for command
+                        pass
+                        
+                    if self.manual_state == 20: # CW continuous moving
+                        self.rotation_state = "CW_rotation_direction"
+                        self.new_command = "manual_" + self.rotation_state
+                        self.manual_state = 50 
+                        
+                    if self.manual_state == 30: # CCW continuous moving
+                        self.rotation_state = "CCW_rotation_direction"
+                        self.new_command = "manual_" + self.rotation_state
+                        self.manual_state = 50 
+                        
+                    if self.manual_state == 50: # rotation in progress
+                        # IF ack from limit switch --> comunica che è arrivato ack, ma di fatto si ferma da solo per Arduino
+                        if self.acknowledge_from_external is not None:         
+                            if self.acknowledge_from_external == "IND_CCW" and self.rotation_state == "CCW_rotation_direction":
+                                self.rotation_state = "CCW_reached"
+                                print("Reached the IND_CCW limit switch")
+                                self.acknowledge_from_external = None # reset
+                                self.manual_state = 1
+                                
+                            if self.acknowledge_from_external == "IND_CW" and self.rotation_state == "CW_rotation_direction":
+                                self.rotation_state = "CW_reached"
+                                print("Reached the IND_CW limit switch")
+                                self.acknowledge_from_external = None # reset
+                                self.manual_state = 1
+                        
+                        # IF stop command, then stop
+                        if self.stop_command:
+                            self.manual_state = 60
+                            self.stop_command = False
+                        
+                    if self.manual_state == 60: # STOPPING
+                        self.new_command = "stop"
+                        
+                        if self.rotation_state == "CCW_rotation_direction":
+                            self.rotation_state = "stopped_from_CCW_rotation_direction"
+                            
+                        if self.rotation_state == "CW_rotation_direction":
+                            self.rotation_state = "stopped_from_CW_rotation_direction"
+                            
+                        self.manual_state = 1
             
-            elif self.auto_function:                                
+            elif self.main_state == 30: # AUTOMATIC MODE                          
                 if (current_time - self.last_execution_time >= self.auto_function_interval_sec or self.force_change_rotation_flag):
-                    self.rotation_direction = "counter_clock_wise" if self.rotation_direction == "clock_wise" else "clock_wise"
-                    print(f"{self.name}: Changing rotation direction to {self.rotation_direction}.")
                     
+                    if self.rotation_state == "CCW_reached" or self.rotation_state == "CCW_rotation_direction" or self.rotation_state == "stopped_from_CCW_rotation_direction":
+                        self.rotation_state = "CW_rotation_direction"
+                        
+                    elif self.rotation_state == "CW_reached" or self.rotation_state == "CW_rotation_direction" or self.rotation_state == "stopped_from_CW_rotation_direction":
+                        self.rotation_state = "CCW_rotation_direction"
+                        
+                    print(f"{self.name}: Changing rotation direction to {self.rotation_state}.")                    
                     self.last_execution_time = current_time
                     self.turnsCounter += 1
-                    self.new_command = "full_turn_" + self.rotation_direction
-                    self.rotation_in_progress = True
-                    print(f"{'Activating' if self.rotation_in_progress else 'Deactivating'} diagnostics")
+                    self.new_command = "automatic_" + self.rotation_state
+                    print(f"{'Activating' if (self.rotation_state == "CW_rotation_direction" or self.rotation_state == "CCW_rotation_direction") else 'Deactivating'} diagnostics")
                     
                 # ogni tot diciamo che è passato il tempo per fare un update dei dati del motore: il programma, da fuori, riceve il segnale e prende i dati
                 #print(time.time() - self.last_motor_data_update_sec)
@@ -802,7 +861,7 @@ class MainSoftwareThread(QtCore.QThread):
                     or 
                     self.force_change_rotation_flag # forzatura dell'update quando forzo un giro a mano
                     or
-                    (self.new_command is not None and "full_turns_" in self.new_command) # forzatura dell'update se non è scaduto il tempo ma se è scattato il comando di turn
+                    (self.new_command is not None and "automatic_" in self.new_command) # forzatura dell'update se non è scaduto il tempo ma se è scattato il comando di turn
                     ):
                     self.update_motor_data = True
                     self.last_motor_data_update_sec = time.time()
@@ -812,50 +871,50 @@ class MainSoftwareThread(QtCore.QThread):
                     self.force_change_rotation_flag = False # resetting
                     
                     
-                if self.rotation_in_progress:
+                if (self.rotation_state == "CCW_rotation_direction" or self.rotation_state == "CW_rotation_direction"):
                     # diagnostic: attesa del feedback
                     if (time.time() - self.last_execution_time) >= self.rotation_in_progress_timeout_sec:
                         # manda comando di STOP
                         self.new_command = "stop"
                         
                     if self.acknowledge_from_external is not None:         
-                        if self.acknowledge_from_external == "IND_CCW" and self.rotation_direction == "counter_clock_wise":
-                            self.rotation_in_progress = False
-                            print(f"{'Activating' if self.rotation_in_progress else 'Deactivating'} diagnostics")
+                        if self.acknowledge_from_external == "IND_CCW" and self.rotation_state == "CCW_rotation_direction":
+                            self.rotation_state = "CCW_reached"
+                            print(f"{'Activating' if (self.rotation_state == "CW_rotation_direction" or self.rotation_state == "CCW_rotation_direction") else 'Deactivating'} diagnostics")
                             print("Reached the IND_CCW limit switch")
                             self.acknowledge_from_external = None # reset
                             
-                        if self.acknowledge_from_external == "IND_CW" and self.rotation_direction == "clock_wise":
-                            self.rotation_in_progress = False
-                            print(f"{'Activating' if self.rotation_in_progress else 'Deactivating'} diagnostics")
+                        if self.acknowledge_from_external == "IND_CW" and self.rotation_state == "CW_rotation_direction":
+                            self.rotation_state = "CW_reached"
+                            print(f"{'Activating' if (self.rotation_state == "CW_rotation_direction" or self.rotation_state == "CCW_rotation_direction") else 'Deactivating'} diagnostics")
                             print("Reached the IND_CW limit switch")
                             self.acknowledge_from_external = None # reset
                             
-                elif self.manual_function:  
-                    if self.move_cw_continuous:
-                        self.move_cw_continuous = False # reset
-                        self.new_command = "move_continuous_clock_wise"
-                        
-                    elif self.move_ccw_continuous:
-                        self.move_ccw_continuous = False # reset
-                        self.new_command = "move_continuous_counter_clock_wise"
-                        
-                    # AGGIUGNERE I LIMITI DEI FINECORSA
                 else:
-                    print("Do Nothing")
+                    pass
+                
+            print(f"{self.main_state} {self.manual_state} {self.rotation_state}")
                             
                         
                     
                 
                 
+            '''
+            if self.last_ack_time and (current_time - self.last_ack_time > 180):  # 3 minutes timeout
+                if not self.alarm_triggered:
+                    self.stop()
+                    print(f"{self.name}: ERROR! No acknowledgment received for 2 minutes. Stopping motor and raising alarm!")
+                    self.alarm_triggered = True
+            '''
+            
+            if self.acknowledge_from_external is not None:   
                 '''
-                if self.last_ack_time and (current_time - self.last_ack_time > 180):  # 3 minutes timeout
-                    if not self.alarm_triggered:
-                        self.stop()
-                        print(f"{self.name}: ERROR! No acknowledgment received for 2 minutes. Stopping motor and raising alarm!")
-                        self.alarm_triggered = True
-                '''
-
+                    I feedback degli induttori sono msi asincroni dal process serial data dentro qusta variabile. Se arriva per qualche motivo mentre
+                    sono in uno stato dove non me lo aspetto, allora non viene resettato, rimane in variabile e dopo apena entro in modalità automatica
+                    la variabile l'ha ancora in pancia e quindi dà una falsa lettura. Allora, alla fine del ciclo, se non l'ho usato, lo resetto.
+                '''                  
+                self.acknowledge_from_external = None # reset
+           
 
 class MainWindow(QtWidgets.QMainWindow):
     # Define custom signals - this is done to send button/spinBox and other custom signals to other thread MainSoftwareThread: use Qt Signals
