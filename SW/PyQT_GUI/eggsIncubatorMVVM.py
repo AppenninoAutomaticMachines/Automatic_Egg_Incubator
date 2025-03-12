@@ -16,6 +16,7 @@ from collections import deque
 
 '''
     i comandi devono essere quanto più univoci possibile! perhé ho visto che se metto CW e CCW alla domanda indexof() arduino non li sa distinguere
+    self.queue_command("ACK", "1") - self.queue_command("ACK", "1")
     self.queue_command("HTR01", self.current_heater_output_control)  # @<HTR01, True># @<HTR01, False>#
     self.queue_command("HUMER01", self.current_humidifier_output_control) # @<HUMER01, True># @<HUMER01, False>#
     self.queue_command("STPR01", "MCCW") # move_counter_clock_wise
@@ -25,6 +26,7 @@ from collections import deque
 
 # ARDUINO serial communication - setup #
 portSetup = "/dev/ttyACM0"
+portSetup = "/dev/ttyUSB0"
 baudrateSetup = 19200
 timeout = 0.1
 
@@ -150,6 +152,7 @@ class SerialThread(QtCore.QThread):
 
 class MainSoftwareThread(QtCore.QThread):
     update_view = QtCore.pyqtSignal(list)  # Signal to update the view (MainWindow)
+    update_statistics = QtCore.pyqtSignal(list) # Signal to update the Statistics View Window
     update_spinbox_value = QtCore.pyqtSignal(str, float)  # Signal to update spinbox (name, value)
     update_motor = QtCore.pyqtSignal(list) # Signal to update the motor view
     
@@ -159,6 +162,10 @@ class MainSoftwareThread(QtCore.QThread):
         self.serial_thread = SerialThread()
         self.serial_thread.data_received.connect(self.process_serial_data)
         self.current_data = []  # Holds the most recent data received from SerialThread
+        
+        self.alive_to_arduino_state = False
+        self.alive_to_arduino_time_interval_sec = 1 # invio un ack ad arduino ogni secondo
+        self.last_alive_to_arduino_time = time.time()
         
         self.saving_interval = 1 # default: every minute
         self.last_saving_time = datetime.now()
@@ -244,7 +251,6 @@ class MainSoftwareThread(QtCore.QThread):
                 self.eggTurnerMotor.resetNewCommand()
             
             if self.eggTurnerMotor.getUpdateMotorData():
-                #print("Diocane")
                 all_values = []
                 # [timePassed timeToNextTurn turnsCounter]
                 all_values = [self.eggTurnerMotor.getTimeSinceLastRotation()] + \
@@ -254,7 +260,12 @@ class MainSoftwareThread(QtCore.QThread):
                 
                 self.eggTurnerMotor.resetUpdateMotorData()
             
-                
+            # GESTIONE DELL'ALIVE BIT verso arduino
+            if (time.time() - self.last_alive_to_arduino_time) >= self.alive_to_arduino_time_interval_sec:
+                self.last_alive_to_arduino_time = time.time()
+                self.alive_to_arduino_state = not self.alive_to_arduino_state
+                self.queue_command("ALIVE", self.alive_to_arduino_state)
+              
             self.msleep(100)
             
     def check_errors(self,sensor_data):
@@ -443,6 +454,7 @@ class MainSoftwareThread(QtCore.QThread):
         # i mean value servono per pubblicare il valore che il controllore usa per fare effettivamente il controllo e lo metto nella sezione di isteresi
         # list() se passi un dizionario, mentre [] se vuoi aggiugnere alla lista elementi singoli
         if current_temperatures and current_humidities:
+            # all_values for MAIN VIEW page
             all_values = []
             all_values = list(current_temperatures.values()) + \
                         list(current_humidities.values()) + \
@@ -451,6 +463,26 @@ class MainSoftwareThread(QtCore.QThread):
                         [self.hhc.get_mean_value()]
                         
             self.update_view.emit(all_values)
+            
+            # all_values for STATISTICS page
+            all_values = []
+            all_values.append(self.thc.get_min_value())
+            all_values.append(self.thc.get_mean_value())
+            all_values.append(self.thc.get_max_value())
+            all_values.append(self.thc.get_on_count())
+            all_values.append(self.thc.get_off_count())
+            all_values.append(self.thc.get_time_on())
+            all_values.append(self.thc.get_time_off())
+            
+            all_values.append(self.hhc.get_min_value())
+            all_values.append(self.hhc.get_mean_value())
+            all_values.append(self.hhc.get_max_value())
+            all_values.append(self.hhc.get_on_count())
+            all_values.append(self.hhc.get_off_count())
+            all_values.append(self.hhc.get_time_on())
+            all_values.append(self.hhc.get_time_off())
+            
+            self.update_statistics.emit(all_values)
         
         # INDUCTOR SECTION
         """
@@ -528,7 +560,7 @@ class MainSoftwareThread(QtCore.QThread):
             writer.writerow(values_list)
             
     class HysteresisController:
-        def __init__(self, lower_limit, upper_limit):
+        def __init__(self, lower_limit, upper_limit):            
             self.lower_limit = lower_limit
             self.upper_limit = upper_limit
             self._min_value = float('inf')  # Track the minimum value observed
@@ -539,8 +571,15 @@ class MainSoftwareThread(QtCore.QThread):
             # Statistics tracking
             self.on_count = 0
             self.off_count = 0
+            
+            self.reset_timer_to_do = True
+            self.measuring_time_interval_sec = 1 # ogni n secondi aggiorno i conteggi di tempo on/off dell'attuatore
+            self.last_measuring_time = time.time() # si ricorda appena ho preso il campione precedente
+            self.effective_time_difference = 0.0
+            # questi sono i contatori di timer
             self.time_on = 0.0
             self.time_off = 0.0
+            
             self._last_switch_time = time.time()
         
         # Method to set the lower limit
@@ -565,6 +604,12 @@ class MainSoftwareThread(QtCore.QThread):
 
         # Update method to process input values and apply hysteresis logic
         def update(self, values):
+            # reset timers all'avvio
+            if self.reset_timer_to_do:
+                self.last_measuring_time = time.time()
+                self.reset_timer_to_do = False
+                
+                
             # Safety check: If limits are equal, force OFF state
             if self.lower_limit == self.upper_limit:
                 self._output_control = False
@@ -590,10 +635,19 @@ class MainSoftwareThread(QtCore.QThread):
                 new_output = False  # Turn OFF if mean is above upper limit
             elif self._mean_value < self.lower_limit:
                 new_output = True   # Turn ON if mean is below lower limit
-            
-            # If state changed, update time tracking and count transitions
+                
+            # update time tracking (continuous)
+            elapsed_time = time.time() - self.last_measuring_time
+            if elapsed_time >= self.measuring_time_interval_sec:
+                if self._output_control:
+                    self.time_on += elapsed_time
+                else:
+                    self.time_off += elapsed_time
+                self.last_measuring_time = time.time()
+                
+            # If state changed, update count transitions
             if new_output != self._output_control:
-                elapsed_time = time.time() - self._last_switch_time
+                elapsed_time = time.time() - self.last_measuring_time
                 if self._output_control:
                     self.time_on += elapsed_time
                     self.off_count += 1
@@ -602,7 +656,10 @@ class MainSoftwareThread(QtCore.QThread):
                     self.on_count += 1
                 
                 self._output_control = new_output
-                self._last_switch_time = time.time()
+                self.last_measuring_time = time.time()
+                
+            
+                
         
         # Method to get the output control (True or False)
         def get_output_control(self):
@@ -640,10 +697,10 @@ class MainSoftwareThread(QtCore.QThread):
 
         # Method to get the total time spent ON/OFF
         def get_time_on(self):
-            return self.time_on
+            return round(self.time_on, 0)
 
         def get_time_off(self):
-            return self.time_off
+            return round(self.time_off, 0)
 
         # Method to reset statistics
         def reset_time_statistics(self):
@@ -928,6 +985,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui.setupUi(self)
         self.main_software_thread = main_software_thread
         self.main_software_thread.update_view.connect(self.update_display_data)
+        self.main_software_thread.update_statistics.connect(self.update_statistics_data)
         self.main_software_thread.update_motor.connect(self.update_display_motor_data)
         
         # Connect signals to main software thread slots
@@ -1000,6 +1058,26 @@ class MainWindow(QtWidgets.QMainWindow):
             self.ui.heatCtrlVal.setText(f"{all_data[6]} °C")
             self.ui.humCtrlVal.setText(f"{all_data[7]} °C")
             #self.ui.temperature4_2.setText(f"{all_data[3]} °C") PER TEMPERATURA DA UMIDITA
+            
+    def update_statistics_data(self, all_data):
+        # da implementare la parte di update delle statistiche
+        if len(all_data) > 0:
+            self.ui.minTemp_T.setText(f"{all_data[0]} °C")
+            self.ui.meanTemp_T.setText(f"{all_data[1]} °C")
+            self.ui.maxTemp_T.setText(f"{all_data[2]} °C")
+            self.ui.onCounter_T.setText(f"{all_data[3]}")
+            self.ui.offCounter_T.setText(f"{all_data[4]}")
+            self.ui.timeOn_T.setText(f"{all_data[5]} s")
+            self.ui.timeOFF_T.setText(f"{all_data[6]} s")
+            self.ui.minHum_H.setText(f"{all_data[7]} %")
+            self.ui.meanHum_H.setText(f"{all_data[8]} %")
+            self.ui.maxHum_H.setText(f"{all_data[9]} %")
+            self.ui.onCounter_H.setText(f"{all_data[10]}")
+            self.ui.offCounter_H.setText(f"{all_data[11]}")
+            self.ui.timeOn_H.setText(f"{all_data[12]} s")
+            self.ui.timeOFF_H.setText(f"{all_data[13]} s")
+            
+        pass
             
     def update_display_motor_data(self, all_data):
         if len(all_data) > 0:
