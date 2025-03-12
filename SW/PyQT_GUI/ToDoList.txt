@@ -1,0 +1,24 @@
+05/03/2025
+Usare arduinoEggINcubator perché è il sw di arduino che comincia a gestire anche lo stepper,mentre quello di prima di base dava indietro solo le temperature e i feedback degli induttori, ma poca roba, prendeva pochi comandi.
+Comincio a sviluppare per bene questo codice.
+
+- sistemare spinbox del tempo di rotazione. Step di 5minuti, con min 5min massimo 180min (3h) + conseguente gestione corretta dello spinbox
+- controlli di sicurezza sulle temperature --> gestione dell'errore da fare. DOpo un po' spegni il riscaldatore
+- premi i pulsanti di movimento dei motori e in automatico va in modalità manuale. Per ripristinare la modalità automatica devi cliccare un forceEggTurns, perché così riprendi esattametne da dove eri ripartito prima.
+- inizia a pensare alla torretta luminosa
+
+testing del 12/03/2025
+  scrivere heater status, da GUI devo vedere se sto scaldando o no...
+  outliers fuori dal range di temperatura, toglierli dal grafico
+  se ci sono troppi errori nei sensori, allora allarme e mandare il comando di stop all'heater
+  
+  fare grafico on off, forse devo salvare tutto in un file, non l'ho predisposto...
+  stato del motore così posso pulire un po' il terminale
+  la visualizzazzione di TON e TOFF, convertirli opportunamente in min o h
+  pulsante di reset delle statistiche
+  Luce monofase per far vedere che è acceso riscaldatore
+  circuito parallelo per byoassare temrostato? mmm non mi piace....
+  implementare codice arduino per DHT22
+  radio button per forzature
+  controllo che se vai semre on e la temperatura non aumenta di un tot, allora probabile errore su heater o porta aperta...
+

@@ -1,8 +1,0 @@
-05/03/2025
-Usare arduinoEggINcubator perché è il sw di arduino che comincia a gestire anche lo stepper,mentre quello di prima di base dava indietro solo le temperature e i feedback degli induttori, ma poca roba, prendeva pochi comandi.
-Comincio a sviluppare per bene questo codice.
-
-- sistemare spinbox del tempo di rotazione. Step di 5minuti, con min 5min massimo 180min (3h) + conseguente gestione corretta dello spinbox
-- controlli di sicurezza sulle temperature --> gestione dell'errore da fare. DOpo un po' spegni il riscaldatore
-- premi i pulsanti di movimento dei motori e in automatico va in modalità manuale. Per ripristinare la modalità automatica devi cliccare un forceEggTurns, perché così riprendi esattametne da dove eri ripartito prima.
-- inizia a pensare alla torretta luminosa
