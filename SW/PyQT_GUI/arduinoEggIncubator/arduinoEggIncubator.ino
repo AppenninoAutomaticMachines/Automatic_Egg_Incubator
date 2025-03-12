@@ -13,32 +13,54 @@
 
 /* General CONSTANTS */
 #define SERIAL_SPEED 19200
-#define ENABLE_DEVICE_ORDERING false // se true devi mettere gli indirizzi nell'ordine che vuoi, se false il vettore delle temperature non è ordinato in base agli indirizzi
-#define NUMBER_OF_TEMPERATURES_SENSORS_ON_ONE_WIRE_BUS_2 4 //sensori di temperatura
+#define ENABLE_DEVICE_ORDERING true // se true devi mettere gli indirizzi nell'ordine che vuoi, se false il vettore delle temperature non è ordinato in base agli indirizzi
+#define NUMBER_OF_TEMPERATURES_SENSORS_ON_ONE_WIRE_BUS 4 //sensori di temperatura
 #define DEFAULT_DEBOUNCE_TIME 25 //ms
+#define ENABLE_HEATER true
+#define ENABLE_HUMIDIFIER false
 
 /* PIN ARDUINO */
-#define ONE_WIRE_BUS_2 2
+#define ONE_WIRE_BUS 4
 #define TEMPERATURE_PRECISION 9 // DS18B20 digital termometer provides 9-bit to 12-bit Celsius temperature measurements
-#define LED_12 12
-#define LED_11 11
-#define CCW_INDUCTOR_PIN 10 // induttore finecorsa SINISTRO (vista posteriore)
-#define CW_INDUCTOR_PIN 9 // induttore finecorsa DESTRO (vista posteriore)
+#define HEATER_PIN 12
+#define HUMIDIFIER_PIN 11
+#define CCW_INDUCTOR_PIN 9 // sim 10 // induttore finecorsa SINISTRO (vista posteriore)
+#define CW_INDUCTOR_PIN 8  // sim 9 // induttore finecorsa DESTRO (vista posteriore)
+/*
+#define RED_LED 6
+#define ALIVE 5
+*/
+// pin 7 predisposto per induttore porta
+// 2 not used
+// DHT sul 3
+// not used è per un output...
+#define STEPPER_MOTOR_STEP_PIN 6
+#define STEPPER_MOTOR_DIRECTION_PIN 5
+#define STEPPER_MOTOR_MS1_PIN 2
+#define STEPPER_MOTOR_MS2_PIN 2
+#define STEPPER_MOTOR_MS3_PIN 2
 
-#define STEPPPER_MOTOR_STEP_PIN 8
-#define STEPPPER_MOTOR_DIRECTION_PIN 7
-#define STEPPPER_MOTOR_MS1_PIN 6 
-#define STEPPPER_MOTOR_MS2_PIN 5
-#define STEPPPER_MOTOR_MS3_PIN 4
+/* ALIVE su PIN fisico */
+
+/* ALIVE su SERIALE */
+/* se vedo che per più di 3.5s non ricevo segnale seriale, allora 1) allarme  2) inibisco i controlli degli attuatori.
+  Per mantenere viva la comunicazione, ogni tot mando un comando di alive da python (perché altrimenti se non mando comandi manuali non ho motivo di fare niente)*/
+bool alive_bit = false;
+unsigned long last_serial_alive_time = 0;
+unsigned long serial_alive_timeout_ms = 3500;
+
+/* se avvio il sistema senza però avviare il proramma di rpy, allora attenzione, non posso fare certe cose come muovere il motore.
+  Finché leggo teperature e le mando al nulla ok, ma se si tratta di azionare attuatori devo aspettare l'alivenowledge dal rpy */
+bool serial_communication_is_ok = false; 
 
 /* TEMPERATURES SECTION */
 // NO STAR/RING connection, only ONE SINGLE WIRE UTP cabme (unshielded twisted pair)
-OneWire oneWire(ONE_WIRE_BUS_2);
+OneWire oneWire(ONE_WIRE_BUS);
 
 DallasTemperature sensors(&oneWire);
 
 #define TEMPERATURE_IDENTIFICATION_PROCEDURE true // se a true visualizzazione nel monitor seriale della temperatura e del sensore associato
-DeviceAddress Thermometer[NUMBER_OF_TEMPERATURES_SENSORS_ON_ONE_WIRE_BUS_2];
+DeviceAddress Thermometer[NUMBER_OF_TEMPERATURES_SENSORS_ON_ONE_WIRE_BUS];
 byte numberOfDevices;
 byte Limit;
 unsigned long conversionTime_DS18B20_sensors; // in millis
@@ -58,8 +80,8 @@ char temperatureSensor_address2[] = "28FF640E7F7492C3";
 char temperatureSensor_address3[] = "28FF640E7F489F5E";
 
 /* Temperature Diagnostic */
-unsigned int deviceDisconnected[NUMBER_OF_TEMPERATURES_SENSORS_ON_ONE_WIRE_BUS_2];
-unsigned int deviceError[NUMBER_OF_TEMPERATURES_SENSORS_ON_ONE_WIRE_BUS_2];
+unsigned int deviceDisconnected[NUMBER_OF_TEMPERATURES_SENSORS_ON_ONE_WIRE_BUS];
+unsigned int deviceError[NUMBER_OF_TEMPERATURES_SENSORS_ON_ONE_WIRE_BUS];
 
 
 float temperatures[4]; 
@@ -91,11 +113,11 @@ trigger cw_trigger;
 
 
 /* MOTORS SECTION */
-#define STEPPER_MOTOR_SPEED_DEFAULT 5 //rpm  opportuno stare sotto i 30rpm, perché il tempo ciclo di arduino prende un po' troppo.
+#define STEPPER_MOTOR_SPEED_DEFAULT 10 //rpm  opportuno stare sotto i 30rpm, perché il tempo ciclo di arduino prende un po' troppo.
 
 float stepper_motor_speed = STEPPER_MOTOR_SPEED_DEFAULT;
 
-stepperMotor eggsTurnerStepperMotor(STEPPPER_MOTOR_STEP_PIN, STEPPPER_MOTOR_DIRECTION_PIN, STEPPPER_MOTOR_MS1_PIN, STEPPPER_MOTOR_MS2_PIN, STEPPPER_MOTOR_MS3_PIN, 1.8);
+stepperMotor eggsTurnerStepperMotor(STEPPER_MOTOR_STEP_PIN, STEPPER_MOTOR_DIRECTION_PIN, STEPPER_MOTOR_MS1_PIN, STEPPER_MOTOR_MS2_PIN, STEPPER_MOTOR_MS3_PIN, 1.8);
 
 bool move = false;
 bool direction = false; 
@@ -133,25 +155,29 @@ String receivedCommands[20];
 
 
 void setup() {
-  pinMode(LED_12, OUTPUT);
-  pinMode(LED_11, OUTPUT);
-  pinMode(CCW_INDUCTOR_PIN, INPUT);
-  pinMode(CW_INDUCTOR_PIN, INPUT);
+  pinMode(HEATER_PIN, OUTPUT);
+  digitalWrite(HEATER_PIN, LOW);
 
-  pinMode(STEPPPER_MOTOR_STEP_PIN, OUTPUT);
-  digitalWrite(STEPPPER_MOTOR_STEP_PIN, LOW);
+  pinMode(HUMIDIFIER_PIN, OUTPUT);
+  digitalWrite(HUMIDIFIER_PIN, LOW);
 
-  pinMode(STEPPPER_MOTOR_DIRECTION_PIN, OUTPUT);
-  digitalWrite(STEPPPER_MOTOR_DIRECTION_PIN, LOW);  
+  //pinMode(RED_LED, OUTPUT);
+  //pinMode(ALIVE, OUTPUT);
 
-  pinMode(STEPPPER_MOTOR_MS1_PIN, OUTPUT);
-  digitalWrite(STEPPPER_MOTOR_MS1_PIN, LOW);
+  pinMode(STEPPER_MOTOR_STEP_PIN, OUTPUT);
+  digitalWrite(STEPPER_MOTOR_STEP_PIN, LOW);
 
-  pinMode(STEPPPER_MOTOR_MS2_PIN, OUTPUT);
-  digitalWrite(STEPPPER_MOTOR_MS2_PIN, LOW);
+  pinMode(STEPPER_MOTOR_DIRECTION_PIN, OUTPUT);
+  digitalWrite(STEPPER_MOTOR_DIRECTION_PIN, LOW);  
 
-  pinMode(STEPPPER_MOTOR_MS3_PIN, OUTPUT);
-  digitalWrite(STEPPPER_MOTOR_MS3_PIN, LOW);
+  pinMode(STEPPER_MOTOR_MS1_PIN, OUTPUT);
+  digitalWrite(STEPPER_MOTOR_MS1_PIN, LOW);
+
+  pinMode(STEPPER_MOTOR_MS2_PIN, OUTPUT);
+  digitalWrite(STEPPER_MOTOR_MS2_PIN, LOW);
+
+  pinMode(STEPPER_MOTOR_MS3_PIN, OUTPUT);
+  digitalWrite(STEPPER_MOTOR_MS3_PIN, LOW);
 
   pinMode(CCW_INDUCTOR_PIN, INPUT);
   pinMode(CW_INDUCTOR_PIN, INPUT);
@@ -167,10 +193,10 @@ void setup() {
 
   numberOfDevices = sensors.getDeviceCount();
   /*
-  if(numberOfDevices != NUMBER_OF_TEMPERATURES_SENSORS_ON_ONE_WIRE_BUS_2){
+  if(numberOfDevices != NUMBER_OF_TEMPERATURES_SENSORS_ON_ONE_WIRE_BUS){
     Serial.println("Not found the correct number of devices on the bus.");
     Serial.print("Expected: ");
-    Serial.print(NUMBER_OF_TEMPERATURES_SENSORS_ON_ONE_WIRE_BUS_2);
+    Serial.print(NUMBER_OF_TEMPERATURES_SENSORS_ON_ONE_WIRE_BUS);
     Serial.print("  Found: ");
     Serial.println(numberOfDevices);
   }
@@ -225,7 +251,7 @@ void setup() {
       delay(5);
     }
   }
-
+  last_serial_alive_time = millis();
   //Serial.println("Setup finished");
 }
 
@@ -233,24 +259,32 @@ void loop() {
   // RECEIVING FROM RPI
   if(Serial.available() > 0){ 
     int numberOfCommandsFromBoard = readFromBoard(); // from ESP8266. It has @ as terminator character
+    last_serial_alive_time = millis();
+    serial_communication_is_ok = true;
     // Guardiamo che comandi ci sono arrivati
     for(byte j = 0; j < numberOfCommandsFromBoard; j++){
       String tempReceivedCommand = receivedCommands[j];
       Serial.println(tempReceivedCommand);
-      if(tempReceivedCommand.indexOf("HTR01") >= 0  &&  tempReceivedCommand.indexOf("True") >= 0 ){ //stepperMotorForwardOn
-        digitalWrite(LED_12, HIGH);
-        //Serial.println("ON");
+      if(tempReceivedCommand.indexOf("ALIVE") >= 0  &&  tempReceivedCommand.indexOf("True") >= 0 ){ 
+        alive_bit = true;
       }
-      if(tempReceivedCommand.indexOf("HTR01") >= 0 && tempReceivedCommand.indexOf("False") >= 0 ){ //stepperMotorForwardOff
-        digitalWrite(LED_12, LOW);
+      if(tempReceivedCommand.indexOf("ALIVE") >= 0  &&  tempReceivedCommand.indexOf("False") >= 0 ){ 
+        alive_bit = false;
+      }
+      if(tempReceivedCommand.indexOf("HTR01") >= 0 && tempReceivedCommand.indexOf("True") >= 0 ){ 
+        digitalWrite(HEATER_PIN, HIGH);
         //Serial.println("OFF");
       }
-      if(tempReceivedCommand.indexOf("HUMER01") >= 0  &&  tempReceivedCommand.indexOf("True") >= 0 ){ //stepperMotorForwardOn
-        digitalWrite(LED_11, HIGH);
+      if(tempReceivedCommand.indexOf("HTR01") >= 0 && tempReceivedCommand.indexOf("False") >= 0 ){ 
+        digitalWrite(HEATER_PIN, LOW);
+        //Serial.println("OFF");
+      }
+      if(tempReceivedCommand.indexOf("HUMER01") >= 0  &&  tempReceivedCommand.indexOf("True") >= 0 ){ 
+        digitalWrite(HUMIDIFIER_PIN, HIGH);
         //Serial.println("ON");
       }
-      if(tempReceivedCommand.indexOf("HUMER01") >= 0 && tempReceivedCommand.indexOf("False") >= 0 ){ //stepperMotorForwardOff
-        digitalWrite(LED_11, LOW);
+      if(tempReceivedCommand.indexOf("HUMER01") >= 0 && tempReceivedCommand.indexOf("False") >= 0 ){ 
+        digitalWrite(HUMIDIFIER_PIN, LOW);
         //Serial.println("OFF");
       }
       if(tempReceivedCommand.indexOf("STPR01") >= 0 && tempReceivedCommand.indexOf("MCCW") >= 0 ){ //move_counter_clock_wise 
@@ -267,7 +301,17 @@ void loop() {
       }
     }
   }
-  delay(50);
+  else{
+    if(millis() - last_serial_alive_time > serial_alive_timeout_ms){
+      // se per più di 1secondo non ricevo roba dalla seriale (che significa che non sta arrivando più nemmeno alive), allora inibisci le cose da inibire
+      serial_communication_is_ok = false;
+      eggsTurnerStepperMotor.stopMotor();
+      digitalWrite(HEATER_PIN, LOW);
+      digitalWrite(HUMIDIFIER_PIN, LOW);
+
+    }
+  }
+  delay(2);
 
 
   listofDataToSend_numberOfData = 0;
@@ -325,7 +369,13 @@ void loop() {
   
   // direzione oraria = forward = clock wise rotation direction (vista posteriore incubatrice)
   switch(eggsTurnerState){
-    case 0: // waiting: prima di iniziare la procedura, voglio aspettare un po' che le comunicazioni siano partite e tutto...
+    case 0:
+      // stato in cui dobbiamo aspettare che il pogramma lato python sia partito --> guardiamo la comunicazione seriale
+      if(serial_communication_is_ok){
+        eggsTurnerState = 1;
+      }
+      break;
+    case 1: // waiting: prima di iniziare la procedura, voglio aspettare un po' che le comunicazioni siano partite e tutto...
       if(millis() >= 5000){
         // apena passano 5secondi, fai muovere il motore per azzerare
         eggsTurnerState = 9;        
@@ -336,7 +386,7 @@ void loop() {
       // lascio stato aperto per eventuale abilitazione della procedura di azzeramento da parte dell'operatore.
       if(ccw_inductor_input.getInputState()){ // se leggo già induttore, inutile comandare un bw. Sono già azzerato.  Devo però notificarlo a RPI!
         // home position is reached - full left
-        listofDataToSend[listofDataToSend_numberOfData] = "<IND_CCW, 1>"; // converting bool to string - "<IND_CW, 0>"
+        listofDataToSend[listofDataToSend_numberOfData] = "<IND_CCW, 1>"; 
         listofDataToSend_numberOfData++;
 
         eggsTurnerStepperMotor.stopMotor();       
@@ -344,7 +394,7 @@ void loop() {
       }
       else if(cw_inductor_input.getInputState()){ // se leggo già induttore. Sono già azzerato.  Devo però notificarlo a RPI!
         // home position is reached - full right
-        listofDataToSend[listofDataToSend_numberOfData] = "<IND_CW, 1>"; // converting bool to string - "<IND_CW, 0>"
+        listofDataToSend[listofDataToSend_numberOfData] = "<IND_CW, 1>";
         listofDataToSend_numberOfData++;
         
         eggsTurnerStepperMotor.stopMotor();       
@@ -401,14 +451,26 @@ void loop() {
       stepperMotor_stop_cmd_trigger.periodicRun(stepperMotor_stop_cmd);
 
       if(stepperMotor_moveCCW_cmd_trigger.catchRisingEdge()){
-        if(!ccw_inductor_input.getInputState()){
-          /* MECHANICAL SAFETY */
+        if(ccw_inductor_input.getInputState()){
+          // se leggo già, allora non fare nulla (meccanicamente impossibile..io a mano che ciapino). Devo solo notificarlo a RPY
+          // home position is reached - full CCW
+          listofDataToSend[listofDataToSend_numberOfData] = "<IND_CCW, 1>"; 
+          listofDataToSend_numberOfData++;
+        }
+        else{
+          /* MECHANICAL SAFETY - abilito il movimento solo se NON sto già leggendo */
           eggsTurnerStepperMotor.moveBackward(STEPPER_MOTOR_SPEED_DEFAULT);
         }
       }
       else if(stepperMotor_moveCW_cmd_trigger.catchRisingEdge()){
-        if(!cw_inductor_input.getInputState()){
-          /* MECHANICAL SAFETY */
+        if(cw_inductor_input.getInputState()){
+          // se leggo già, allora non fare nulla (meccanicamente impossibile..io a mano che ciapino). Devo solo notificarlo a RPY
+          // home position is reached - full CW
+          listofDataToSend[listofDataToSend_numberOfData] = "<IND_CW, 1>"; 
+          listofDataToSend_numberOfData++;
+        }
+        else{
+          /* MECHANICAL SAFETY - abilito il movimento solo se NON sto già leggendo */
           eggsTurnerStepperMotor.moveForward(STEPPER_MOTOR_SPEED_DEFAULT);
         }
       }
@@ -483,7 +545,7 @@ void loop() {
     Serial.println('#'); // SYMBOL TO END BOARDS TRANSMISSION
   }
   
-  delay(50);
+  delay(5);
 
   /* reset command section */
   stepperMotor_moveCCW_automatic_var = false;
@@ -493,6 +555,18 @@ void loop() {
   stepperMotor_moveCCW_cmd = false;
   stepperMotor_moveCW_cmd = false;
   stepperMotor_stop_cmd = false;
+
+  /* DEBUG */
+  //digitalWrite(RED_LED, !serial_communication_is_ok);
+  //digitalWrite(ALIVE, alive_bit);
+
+  if(!ENABLE_HEATER){
+    digitalWrite(HEATER_PIN, LOW);
+  }
+
+  if(!ENABLE_HUMIDIFIER){
+    digitalWrite(HUMIDIFIER_PIN, LOW);
+  }
 }
 
 
