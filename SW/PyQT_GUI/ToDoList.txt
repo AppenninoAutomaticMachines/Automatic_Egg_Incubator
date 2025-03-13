@@ -22,3 +22,6 @@ testing del 12/03/2025
   radio button per forzature
   controllo che se vai semre on e la temperatura non aumenta di un tot, allora probabile errore su heater o porta aperta...
 
+
+pensare al discorso dei parametri attuali che si salvano su un file, così se spengo e riaccendo riparto da lì
+
