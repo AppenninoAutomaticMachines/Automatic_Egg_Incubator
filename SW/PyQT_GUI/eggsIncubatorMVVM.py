@@ -440,6 +440,12 @@ class MainSoftwareThread(QtCore.QThread):
             if self.current_heater_output_control != self.thc.get_output_control(): # appena cambia il comando logico all'heater, allora invio il comando ad Arduino            
                 self.current_heater_output_control = self.thc.get_output_control()
                 self.queue_command("HTR01", self.current_heater_output_control)  # @<HTR01, True># @<HTR01, False>#
+		else:
+			# caso in cui non ho NEMMENO UNA temperatura valida, tutti in errore. Allora spengo il riscaldatore.
+			self.queue_command("HTR01", False)  # @<HTR01, True># @<HTR01, False>#
+			# metto un contatore: se questa cosa è vera per più di 20 ccili, allora off
+			# FILTRAGGIO?? NON VORREI CHE CI SINAO DEGLI SPIKE...magari  se sto in questo else per più di un tot di secondi, allora dò il false, significa che l'errore è probabile che sia persistente.
+			
         # Check for persistent errors
         #print(current_temperatures)
         self.check_errors(current_temperatures)
