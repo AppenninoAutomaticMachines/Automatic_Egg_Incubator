@@ -43,6 +43,9 @@ testing del 12/03/2025
   Luce monofase per far vedere che è acceso riscaldatore
   circuito parallelo per byoassare temrostato? mmm non mi piace....
   implementare codice arduino per DHT22
+    MODIFICA: inserito codice DHT22 e già messo in seriale, dovresti vedere tutto correttamente. Verificare
+
+  da fare: inibire le letture mentre si muove il motore?? fra 4 sensori e umidità non vorrei che si rallenti troppo (riguarda bito che avevo già fatto)
   radio button per forzature
   controllo che se vai semre on e la temperatura non aumenta di un tot, allora probabile errore su heater o porta aperta...
 
