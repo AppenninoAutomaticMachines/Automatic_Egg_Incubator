@@ -149,10 +149,6 @@ DHT dht(DHT_PIN, DHT_TYPE); //Inizializza oggetto chiamato "dht", parametri: pin
 int chk;
 float humidity_fromDHT22;  //Variabile in cui verrà inserita la % di umidità
 float temp_fromDHT22; //Variabile in cui verrà inserita la temperatura
-
-float humiditySensor_temperature; // variabile buffer in cui, durante la lettura dei sensori DS18B20, metto quella del bulbo umido
-float temperatureMeanValue; // temperatura media dell'incubatrice calcolata dall'oggetto temperatureController
-float wetTermometer_fromDS18B20; // temperatura = humiditySensor_temperature che uso in sezione umidità del programma
 /* END DHT22 HUMIDITY SENSOR */
 
 // SENDING TO RPY
