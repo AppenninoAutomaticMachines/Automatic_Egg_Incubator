@@ -181,7 +181,7 @@ class MainSoftwareThread(QtCore.QThread):
         # Constants
         self.INVALID_VALUES = [-127.0, 85.0]  # Known error values
         self.THRESHOLD = 0.5  # Acceptable variation from the valid range
-        self.VALID_RANGE = (5.0, 45.0)  # Expected temperature range
+        self.VALID_RANGE_TEMPERATURE = (5.0, 45.0)  # Expected temperature range
         
         # Error tracking
         self.ERROR_TIME_LIMIT = 10  # Tempo in secondi oltre il quale generare un warning
@@ -202,6 +202,9 @@ class MainSoftwareThread(QtCore.QThread):
         # BUTTON HANDLING
         self.move_CW_motor_btn = False # = not pressed
         self.move_CCW_motor_btn = False # = not pressed
+		
+		# PLOT
+		self.remove_erroneous_values_from_plot = True
         
         #--- Create Machine_Statistic folder ---#
         machine_statistics_folder_path = "Machine_Statistics"
@@ -279,7 +282,7 @@ class MainSoftwareThread(QtCore.QThread):
         #print(sensor_data)
         for sensor, value in sensor_data.items():
             # Verifica se il valore è un errore
-            if any(abs(value - iv) < self.THRESHOLD for iv in self.INVALID_VALUES) or not (self.VALID_RANGE[0] <= value <= self.VALID_RANGE[1]):
+            if any(abs(value - iv) < self.THRESHOLD for iv in self.INVALID_VALUES) or not (self.VALID_RANGE_TEMPERATURE[0] <= value <= self.VALID_RANGE_TEMPERATURE[1]):
                 # Se è un nuovo errore, aggiorna il contatore e salva il timestamp
                 if sensor not in self.error_timestamps:
                     self.error_timestamps[sensor] = current_time
@@ -307,7 +310,7 @@ class MainSoftwareThread(QtCore.QThread):
         return [
             temp for temp in temperatures
             if not any(abs(temp - iv) < self.THRESHOLD for iv in self.INVALID_VALUES)
-            and self.VALID_RANGE[0] <= temp <= self.VALID_RANGE[1]
+            and self.VALID_RANGE_TEMPERATURE[0] <= temp <= self.VALID_RANGE_TEMPERATURE[1]
         ]
             
     def queue_command(self, cmd, value):
@@ -340,14 +343,17 @@ class MainSoftwareThread(QtCore.QThread):
                 self.eggTurnerMotor.moveCCWContinuous()
             elif not self.move_CCW_motor_btn:
                 self.eggTurnerMotor.stop()
+				
+		if self.current_button == "reset_statistics_T_btn":
+            self.thc.reset_all_values()
             
         if self.current_button == "plotAllDays_temp_T_btn":
-            command = ['python3', 'appInteractivePlots.py', 'PLOT_ALL_DAYS_DATA_TEMPERATURES']
+            command = ['python3', 'appInteractivePlots.py', 'PLOT_ALL_DAYS_DATA_TEMPERATURES', self.VALID_RANGE_TEMPERATURE[0], self.VALID_RANGE_TEMPERATURE[1], self.remove_erroneous_values_from_plot]
             process = subprocess.Popen(command)
             print("Subprocess started and main program continues...")
             
         if self.current_button == "plotToday_temp_T_btn":
-            command = ['python3', 'appInteractivePlots.py', 'PLOT_CURRENT_DAY_DATA_TEMPERATURES']
+            command = ['python3', 'appInteractivePlots.py', 'PLOT_CURRENT_DAY_DATA_TEMPERATURES', self.VALID_RANGE_TEMPERATURE[0], self.VALID_RANGE_TEMPERATURE[1], self.remove_erroneous_values_from_plot]
             process = subprocess.Popen(command)
             print("Subprocess started and main program continues...")
             
@@ -460,7 +466,8 @@ class MainSoftwareThread(QtCore.QThread):
                         list(current_humidities.values()) + \
                         list(current_humidities_temperatures.values()) + \
                         [self.thc.get_mean_value()] + \
-                        [self.hhc.get_mean_value()]
+                        [self.hhc.get_mean_value()] + \
+						[self.thc.get_output_control()] # pubblico l'heater status
                         
             self.update_view.emit(all_values)
             
@@ -1000,6 +1007,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui.move_CCW_motor_btn.clicked.connect(lambda: self.emit_button_signal(self.ui.move_CCW_motor_btn.objectName()))
         self.ui.layHorizontal_motor_btn.clicked.connect(lambda: self.emit_button_signal(self.ui.layHorizontal_motor_btn.objectName()))
         self.ui.forceEggsTurn_motor_btn.clicked.connect(lambda: self.emit_button_signal(self.ui.forceEggsTurn_motor_btn.objectName()))
+		self.ui.reset_statistics_T_btn.clicked.connect(lambda: self.emit_button_signal(self.ui.reset_statistics_T_btn.objectName()))
         
         self.ui.plotAllDays_temp_T_btn.clicked.connect(lambda: self.emit_button_signal(self.ui.plotAllDays_temp_T_btn.objectName()))
         self.ui.plotToday_temp_T_btn.clicked.connect(lambda: self.emit_button_signal(self.ui.plotToday_temp_T_btn.objectName()))
@@ -1057,6 +1065,10 @@ class MainWindow(QtWidgets.QMainWindow):
             #self.ui.temperature4_2.setText(f"{all_data[5]} °C") PER TEMPERATURA DA UMIDITA
             self.ui.heatCtrlVal.setText(f"{all_data[6]} °C")
             self.ui.humCtrlVal.setText(f"{all_data[7]} °C")
+			if {all_data[8]} == True:
+				self.ui.heaterStatus.setText(f"Heating ON!")
+			else:
+				self.ui.heaterStatus.setText(f"OFF")
             #self.ui.temperature4_2.setText(f"{all_data[3]} °C") PER TEMPERATURA DA UMIDITA
             
     def update_statistics_data(self, all_data):
@@ -1067,8 +1079,9 @@ class MainWindow(QtWidgets.QMainWindow):
             self.ui.maxTemp_T.setText(f"{all_data[2]} °C")
             self.ui.onCounter_T.setText(f"{all_data[3]}")
             self.ui.offCounter_T.setText(f"{all_data[4]}")
-            self.ui.timeOn_T.setText(f"{all_data[5]} s")
-            self.ui.timeOFF_T.setText(f"{all_data[6]} s")
+			# VISUALIZZAZIONE DEI TEMPI: il programma di base mi manda dei secondi. E' qui che stampo la stringa opportunamente in min o h
+            self.ui.timeOn_T.setText(format_time(all_data[5]))
+            self.ui.timeOFF_T.setText(format_time(all_data[6]))
             self.ui.minHum_H.setText(f"{all_data[7]} %")
             self.ui.meanHum_H.setText(f"{all_data[8]} %")
             self.ui.maxHum_H.setText(f"{all_data[9]} %")
@@ -1078,6 +1091,18 @@ class MainWindow(QtWidgets.QMainWindow):
             self.ui.timeOFF_H.setText(f"{all_data[13]} s")
             
         pass
+	
+	def format_time(value):
+		if value < 60:
+			return(f"{value} sec")
+		elif value < 3600:
+			minutes = value // 60
+			seconds = value % 60
+			return(f"{minutes} min {seconds} sec" if seconds else f"{minutes} min")
+		else:
+			hours = value // 3600
+			minutes = (value % 3600) // 60
+			return(f"{hours}h {minutes}min" if minutes else f"{hours}h")
             
     def update_display_motor_data(self, all_data):
         if len(all_data) > 0:
