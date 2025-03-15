@@ -9,6 +9,7 @@
 #include <DallasTemperature.h>
 #include <Wire.h>
 #include <ProfiloLibrary.h>
+#include <DHT.h>
 
 
 /* General CONSTANTS */
@@ -26,6 +27,7 @@
 #define HUMIDIFIER_PIN 11
 #define CCW_INDUCTOR_PIN 9 // sim 10 // induttore finecorsa SINISTRO (vista posteriore)
 #define CW_INDUCTOR_PIN 8  // sim 9 // induttore finecorsa DESTRO (vista posteriore)
+#define DHT_PIN 3   //Pin a cui è connesso il sensore
 /*
 #define RED_LED 6
 #define ALIVE 5
@@ -137,8 +139,21 @@ trigger stepperMotor_stop_cmd_trigger;
 
 byte eggsTurnerState = 0;
 bool stepperAutomaticControl_var = false;
-
 /* END MOTORS SECTION */
+
+/* DHT22 HUMIDITY SENSOR */
+#define DHT_TYPE DHT22   //Tipo di sensore che stiamo utilizzando (DHT22)
+DHT dht(DHT_PIN, DHT_TYPE); //Inizializza oggetto chiamato "dht", parametri: pin a cui è connesso il sensore, tipo di dht 11/22
+
+
+int chk;
+float humidity_fromDHT22;  //Variabile in cui verrà inserita la % di umidità
+float temp_fromDHT22; //Variabile in cui verrà inserita la temperatura
+
+float humiditySensor_temperature; // variabile buffer in cui, durante la lettura dei sensori DS18B20, metto quella del bulbo umido
+float temperatureMeanValue; // temperatura media dell'incubatrice calcolata dall'oggetto temperatureController
+float wetTermometer_fromDS18B20; // temperatura = humiditySensor_temperature che uso in sezione umidità del programma
+/* END DHT22 HUMIDITY SENSOR */
 
 // SENDING TO RPY
 #define MAX_NUMBER_OF_COMMANDS_TO_BOARD 20
@@ -252,6 +267,9 @@ void setup() {
     }
   }
   last_serial_alive_time = millis();
+
+  delay(5);
+  dht.begin();
   //Serial.println("Setup finished");
 }
 
@@ -344,6 +362,12 @@ void loop() {
     endGetTemperatures = millis();
   }   
   /* END TEMPERATURES SECTION */
+
+  /* DHT22 HUMIDITY SENSOR */
+  /* DHT22 sensor */    
+  humidity_fromDHT22 = dht.readHumidity();
+  temp_fromDHT22 = dht.readTemperature();   
+  /* END DHT22 HUMIDITY SENSOR */
 
   /* INDUCTOR INPUT SECTION */
   ccw_inductor_input.periodicRun();
@@ -516,14 +540,13 @@ void loop() {
     listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(bufferChar, fbuffChar), ">");
     listofDataToSend_numberOfData++;
 
-    float humidityDHT22 = temperatures[0];
     strcpy(bufferChar, "<HUM01,");
-    dtostrf( humidityDHT22, 1, 1, fbuffChar); 
+    dtostrf(humidity_fromDHT22, 1, 1, fbuffChar); 
     listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(bufferChar, fbuffChar), ">");
     listofDataToSend_numberOfData++;
 
     strcpy(bufferChar, "<HTP01,"); // temperatura che viene letta dal sensore di umidità
-    dtostrf( (temperatures[0] + temperatures[1] + temperatures[2]) / 3, 1, 1, fbuffChar); 
+    dtostrf(temp_fromDHT22, 1, 1, fbuffChar); 
     listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(bufferChar, fbuffChar), ">");
     listofDataToSend_numberOfData++;
 
