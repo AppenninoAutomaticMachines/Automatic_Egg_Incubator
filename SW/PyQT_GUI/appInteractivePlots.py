@@ -43,7 +43,10 @@ def plot_all_days(data_type):
 
     # Concatenate all data
     concatenated_data = pd.concat(all_data)
-    concatenated_data.sort_values('Timestamp', inplace=True)
+    concatenated_data.sort_values('Timestamp', inplace = True)
+
+	# Filter valid data
+	concatenated_data = filter_valid_data(concatenated_data)
 
     # Plot the data interactively
     fig, ax = plt.subplots(figsize=(10, 6))
@@ -106,6 +109,9 @@ def plot_current_day(data_type):
 
     # Read the current day's data
     current_day_data = pd.read_csv(file_path, parse_dates=['Timestamp'])
+	
+	# Filter valid data
+	current_day_data = filter_valid_data(current_day_data)
 
     # Plot the data interactively
     fig, ax = plt.subplots(figsize=(10, 6))
@@ -144,6 +150,14 @@ def plot_current_day(data_type):
 
     # Show the interactive plot
     plt.show()
+	
+def filter_valid_data(data):
+    """Remove values outside the valid range if filtering is enabled."""
+    if remove_erroneous_values_from_plot:
+        for column in data.columns:
+            if column != 'Timestamp':
+                data = data[(data[column] >= VALID_RANGE[0]) & (data[column] <= VALID_RANGE[1])]
+    return data
 
 
 # Check the number of arguments passed
@@ -153,6 +167,10 @@ if len(sys.argv) < 2:
 
 # Extract arguments
 arg1 = sys.argv[1]
+min_value = float(sys.argv[2])  # Convert argument to float
+max_value = float(sys.argv[3])  # Convert argument to float
+VALID_RANGE = (min_value, max_value)  # Define the range dynamically
+remove_erroneous_values_from_plot = sys.argv[4]
 
 print(f"Argument 1: {arg1}") # arg1 = quale tipo di statistica vogliamo eseguire.
 
