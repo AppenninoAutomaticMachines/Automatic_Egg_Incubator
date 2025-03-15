@@ -9,13 +9,37 @@ Comincio a sviluppare per bene questo codice.
 
 testing del 12/03/2025
   scrivere heater status, da GUI devo vedere se sto scaldando o no...
+    MODIFICA: in all values [self.thc.get_output_control()] # pubblico l'heater status
+              if {all_data[8]} == True:
+        				self.ui.heaterStatus.setText(f"Heating ON!")
+        			else:
+        				self.ui.heaterStatus.setText(f"OFF")
+
+
   outliers fuori dal range di temperatura, toglierli dal grafico
+  MODIFICA: voglio fare una piccola spunta sull'interfaccia grafica, che se la spunti allora ti fa il plot con anche gli errori (li salvo comunque nei file). Di default la spunta non c'è e quindi a video vedi solo il grafico buono.
+           Il range di valori buoni e anche questa spunta (flag true o false) anche questo è un valore che passo nella chiamata al programma, così il programma abilita o no l'esclusione dei valori non buoni dal plot
+          QUindi modifico la chiamata al programma, mettendo altri tre input: min value, max value del range e True/False per abilitare/disabilitare il plot del range.
+          Fatto tutto manca la spunta check box + gestione
+  Aggiungere checkBox + gestione per questa spunta (una globale nella pagina del grafico), non sto a metterla dedicata
+
   se ci sono troppi errori nei sensori, allora allarme e mandare il comando di stop all'heater
   
   fare grafico on off, forse devo salvare tutto in un file, non l'ho predisposto...
+
   stato del motore così posso pulire un po' il terminale
+
   la visualizzazzione di TON e TOFF, convertirli opportunamente in min o h
+    MDIFICA: self.ui.timeOn_T.setText(format_time(all_data[5]))
+              self.ui.timeOFF_T.setText(format_time(all_data[6]))
+              verificare il corretto funzionamento della funzione format_time e verifica che effettivamente si visualizzi per bene nella box della GUI
+
+
   pulsante di reset delle statistiche
+    MODIFICA: if self.current_button == "reset_statistics_T_btn":
+                  self.thc.reset_all_values()
+
+
   Luce monofase per far vedere che è acceso riscaldatore
   circuito parallelo per byoassare temrostato? mmm non mi piace....
   implementare codice arduino per DHT22
