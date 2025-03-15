@@ -49,6 +49,7 @@ testing del 12/03/2025
   radio button per forzature
   controllo che se vai semre on e la temperatura non aumenta di un tot, allora probabile errore su heater o porta aperta...
 
+mettere un po' un filtro sui comandi dei relè...nel senso che se arrivano di fila true false arduino li filtra li tiene in memoria e li ridarta?
 
 pensare al discorso dei parametri attuali che si salvano su un file, così se spengo e riaccendo riparto da lì
 
