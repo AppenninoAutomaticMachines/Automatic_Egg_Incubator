@@ -66,4 +66,5 @@ mettere un po' un filtro sui comandi dei relè...nel senso che se arrivano di fi
 pensare al discorso dei parametri attuali che si salvano su un file, così se spengo e riaccendo riparto da lì
 
 da gestire la temperatura del sensore di umidità
+gestire rotation interval
 
