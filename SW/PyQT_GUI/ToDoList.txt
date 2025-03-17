@@ -5,7 +5,9 @@ Comincio a sviluppare per bene questo codice.
 - sistemare spinbox del tempo di rotazione. Step di 5minuti, con min 5min massimo 180min (3h) + conseguente gestione corretta dello spinbox
 - controlli di sicurezza sulle temperature --> gestione dell'errore da fare. DOpo un po' spegni il riscaldatore
 - premi i pulsanti di movimento dei motori e in automatico va in modalità manuale. Per ripristinare la modalità automatica devi cliccare un forceEggTurns, perché così riprendi esattametne da dove eri ripartito prima.
-- inizia a pensare alla torretta luminosa
+inizia a pensare alla torretta luminosa
+  MODIFICA SW fatta: in attesa del montaggio della torretta luminosa + buzzer.
+DA FARE: circuito con 4 transistor per alimentare i 3led + cicalino 12V (non voglio usare dei relè, ovviamente)
 
 testing del 12/03/2025
   scrivere heater status, da GUI devo vedere se sto scaldando o no...
