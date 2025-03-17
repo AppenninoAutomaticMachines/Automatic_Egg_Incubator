@@ -42,6 +42,12 @@
 #define STEPPER_MOTOR_MS2_PIN 2
 #define STEPPER_MOTOR_MS3_PIN 2
 
+#define NUMBER_OF_LIGHTS 3
+#define PIN_RED_LIGHT A0
+#define PIN_ORANGE_LIGHT A1
+#define PIN_GREEN_LIGHT A2
+#define PIN_BUZZER A3
+
 /* ALIVE su PIN fisico */
 
 /* ALIVE su SERIALE */
@@ -151,6 +157,27 @@ float humidity_fromDHT22;  //Variabile in cui verrà inserita la % di umidità
 float temp_fromDHT22; //Variabile in cui verrà inserita la temperatura
 /* END DHT22 HUMIDITY SENSOR */
 
+
+
+/* MACHINE SINGALING DEVICE - SECTION */
+const int lightPins[NUMBER_OF_LIGHTS] = {PIN_RED_LIGHT, PIN_ORANGE_LIGHT, PIN_GREEN_LIGHT}; // Light pins
+const int buzzerPin = PIN_BUZZER; // Buzzer pin
+
+unsigned long lastUpdate = 0;
+const unsigned long runInterval = 100; // Run every 100ms
+
+enum State { OFF, ON, FLASH_FAST, FLASH_SLOW, BEEP_FAST, BEEP_SLOW };
+
+struct Device {
+    State state;
+    unsigned long lastToggle;
+    bool currentState;
+};
+
+Device lights[NUMBER_OF_LIGHTS];
+Device buzzer;
+/* END MACHINE SINGALING DEVICE - SECTION */
+
 // SENDING TO RPY
 #define MAX_NUMBER_OF_COMMANDS_TO_BOARD 20
 bool receivingDataFromBoard = false;
@@ -192,6 +219,14 @@ void setup() {
 
   pinMode(CCW_INDUCTOR_PIN, INPUT);
   pinMode(CW_INDUCTOR_PIN, INPUT);
+
+  /* MACHINE SINGALING DEVICE - SECTION */
+  for (int i = 0; i < NUMBER_OF_LIGHTS; i++) {
+        pinMode(lightPins[i], OUTPUT);
+        lights[i] = {OFF, 0, LOW};
+    }
+    pinMode(buzzerPin, OUTPUT);
+    buzzer = {OFF, 0, LOW};
 
   Serial.begin(SERIAL_SPEED);
   //Serial.println("Starting");
@@ -312,6 +347,58 @@ void loop() {
       if(tempReceivedCommand.indexOf("STPR01") >= 0 && tempReceivedCommand.indexOf("STOP") >= 0 ){ //stop
         stepperMotor_stop_automatic_var = true;
         stepperMotor_stop_cmd = true;
+      }
+
+      if(tempReceivedCommand.indexOf("RED") >= 0 && tempReceivedCommand.indexOf("ON") >= 0 ){
+        lights[0].state = ON;
+      }
+      if(tempReceivedCommand.indexOf("RED") >= 0 && tempReceivedCommand.indexOf("OFF") >= 0 ){
+        lights[0].state = OFF;
+      }
+      if(tempReceivedCommand.indexOf("RED") >= 0 && tempReceivedCommand.indexOf("FLASH_FAST") >= 0 ){
+        lights[0].state = FLASH_FAST;
+      }
+      if(tempReceivedCommand.indexOf("RED") >= 0 && tempReceivedCommand.indexOf("FLASH_SLOW") >= 0 ){
+        lights[0].state = FLASH_SLOW;
+      }
+
+      if(tempReceivedCommand.indexOf("ORANGE") >= 0 && tempReceivedCommand.indexOf("ON") >= 0 ){
+        lights[1].state = ON;
+      }
+      if(tempReceivedCommand.indexOf("ORANGE") >= 0 && tempReceivedCommand.indexOf("OFF") >= 0 ){
+        lights[1].state = OFF;
+      }
+      if(tempReceivedCommand.indexOf("ORANGE") >= 0 && tempReceivedCommand.indexOf("FLASH_FAST") >= 0 ){
+        lights[1].state = FLASH_FAST;
+      }
+      if(tempReceivedCommand.indexOf("ORANGE") >= 0 && tempReceivedCommand.indexOf("FLASH_SLOW") >= 0 ){
+        lights[1].state = FLASH_SLOW;
+      }
+
+      if(tempReceivedCommand.indexOf("GREEN") >= 0 && tempReceivedCommand.indexOf("ON") >= 0 ){
+        lights[2].state = ON;
+      }
+      if(tempReceivedCommand.indexOf("GREEN") >= 0 && tempReceivedCommand.indexOf("OFF") >= 0 ){
+        lights[2].state = OFF;
+      }
+      if(tempReceivedCommand.indexOf("GREEN") >= 0 && tempReceivedCommand.indexOf("FLASH_FAST") >= 0 ){
+        lights[2].state = FLASH_FAST;
+      }
+      if(tempReceivedCommand.indexOf("GREEN") >= 0 && tempReceivedCommand.indexOf("FLASH_SLOW") >= 0 ){
+        lights[2].state = FLASH_SLOW;
+      }
+
+      if(tempReceivedCommand.indexOf("BUZZER") >= 0 && tempReceivedCommand.indexOf("ON") >= 0 ){
+        buzzer.state = ON;
+      }
+      if(tempReceivedCommand.indexOf("BUZZER") >= 0 && tempReceivedCommand.indexOf("OFF") >= 0 ){
+        buzzer.state = OFF;
+      }
+      if(tempReceivedCommand.indexOf("BUZZER") >= 0 && tempReceivedCommand.indexOf("BEEP_FAST") >= 0 ){
+        buzzer.state = FLASH_FAST;
+      }
+      if(tempReceivedCommand.indexOf("BUZZER") >= 0 && tempReceivedCommand.indexOf("BEEP_SLOW") >= 0 ){
+        buzzer.state = FLASH_SLOW;
       }
     }
   }
@@ -513,6 +600,14 @@ void loop() {
   }
   /* END STEPPER MOTOR CONTROL SECTION */
 
+  /* MACHINE SINGALING DEVICE - SECTION */
+  unsigned long currentTime = millis();
+    if (currentTime - lastUpdate >= runInterval) {
+        for (int i = 0; i < NUMBER_OF_LIGHTS; i++) updateDevice(lights[i], lightPins[i], 200, 500);
+        updateDevice(buzzer, buzzerPin, 100, 300);
+        lastUpdate = currentTime;
+    }
+  /* END MACHINE SINGALING DEVICE - SECTION */
   
   
   if(gotTemperatures){        
@@ -659,3 +754,30 @@ int readFromBoard(){ // returns the number of commands received
   }
   return receivedCommandsIndex;
 }
+
+void updateDevice(Device &device, int pin, unsigned long fastInterval, unsigned long slowInterval) {
+    unsigned long currentTime = millis();
+    unsigned long interval = (device.state == FLASH_FAST || device.state == BEEP_FAST) ? fastInterval : slowInterval;
+    
+    switch (device.state) {
+        case OFF:
+            digitalWrite(pin, LOW);
+            device.currentState = LOW;
+            break;
+        case ON:
+            digitalWrite(pin, HIGH);
+            device.currentState = HIGH;
+            break;
+        case FLASH_FAST:
+        case FLASH_SLOW:
+        case BEEP_FAST:
+        case BEEP_SLOW:
+            if (currentTime - device.lastToggle >= interval) {
+                device.currentState = !device.currentState;
+                digitalWrite(pin, device.currentState);
+                device.lastToggle = currentTime;
+            }
+            break;
+    }
+}
+
