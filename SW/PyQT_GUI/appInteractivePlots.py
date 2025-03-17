@@ -46,7 +46,7 @@ def plot_all_days(data_type):
     concatenated_data.sort_values('Timestamp', inplace = True)
 
 	# Filter valid data
-	concatenated_data = filter_valid_data(concatenated_data)
+    concatenated_data = filter_valid_data(concatenated_data)
 
     # Plot the data interactively
     fig, ax = plt.subplots(figsize=(10, 6))
@@ -111,7 +111,7 @@ def plot_current_day(data_type):
     current_day_data = pd.read_csv(file_path, parse_dates=['Timestamp'])
 	
 	# Filter valid data
-	current_day_data = filter_valid_data(current_day_data)
+    current_day_data = filter_valid_data(current_day_data)
 
     # Plot the data interactively
     fig, ax = plt.subplots(figsize=(10, 6))
