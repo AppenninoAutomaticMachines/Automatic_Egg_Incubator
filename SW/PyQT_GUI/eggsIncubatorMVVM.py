@@ -204,7 +204,7 @@ class MainSoftwareThread(QtCore.QThread):
         self.move_CCW_motor_btn = False # = not pressed
 		
 		# PLOT
-		self.remove_erroneous_values_from_plot = True
+        self.remove_erroneous_values_from_plot = True
         
         #--- Create Machine_Statistic folder ---#
         machine_statistics_folder_path = "Machine_Statistics"
@@ -344,7 +344,7 @@ class MainSoftwareThread(QtCore.QThread):
             elif not self.move_CCW_motor_btn:
                 self.eggTurnerMotor.stop()
 				
-		if self.current_button == "reset_statistics_T_btn":
+        if self.current_button == "reset_statistics_T_btn":
             self.thc.reset_all_values()
             
         if self.current_button == "plotAllDays_temp_T_btn":
@@ -440,9 +440,9 @@ class MainSoftwareThread(QtCore.QThread):
             if self.current_heater_output_control != self.thc.get_output_control(): # appena cambia il comando logico all'heater, allora invio il comando ad Arduino            
                 self.current_heater_output_control = self.thc.get_output_control()
                 self.queue_command("HTR01", self.current_heater_output_control)  # @<HTR01, True># @<HTR01, False>#
-		else:
+            else:
 			# caso in cui non ho NEMMENO UNA temperatura valida, tutti in errore. Allora spengo il riscaldatore.
-			self.queue_command("HTR01", False)  # @<HTR01, True># @<HTR01, False>#
+                self.queue_command("HTR01", False)  # @<HTR01, True># @<HTR01, False>#
 			# metto un contatore: se questa cosa è vera per più di 20 ccili, allora off
 			# FILTRAGGIO?? NON VORREI CHE CI SINAO DEGLI SPIKE...magari  se sto in questo else per più di un tot di secondi, allora dò il false, significa che l'errore è probabile che sia persistente.
 			
@@ -1013,7 +1013,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui.move_CCW_motor_btn.clicked.connect(lambda: self.emit_button_signal(self.ui.move_CCW_motor_btn.objectName()))
         self.ui.layHorizontal_motor_btn.clicked.connect(lambda: self.emit_button_signal(self.ui.layHorizontal_motor_btn.objectName()))
         self.ui.forceEggsTurn_motor_btn.clicked.connect(lambda: self.emit_button_signal(self.ui.forceEggsTurn_motor_btn.objectName()))
-		self.ui.reset_statistics_T_btn.clicked.connect(lambda: self.emit_button_signal(self.ui.reset_statistics_T_btn.objectName()))
+        self.ui.reset_statistics_T_btn.clicked.connect(lambda: self.emit_button_signal(self.ui.reset_statistics_T_btn.objectName()))
         
         self.ui.plotAllDays_temp_T_btn.clicked.connect(lambda: self.emit_button_signal(self.ui.plotAllDays_temp_T_btn.objectName()))
         self.ui.plotToday_temp_T_btn.clicked.connect(lambda: self.emit_button_signal(self.ui.plotToday_temp_T_btn.objectName()))
@@ -1071,10 +1071,10 @@ class MainWindow(QtWidgets.QMainWindow):
             #self.ui.temperature4_2.setText(f"{all_data[5]} °C") PER TEMPERATURA DA UMIDITA
             self.ui.heatCtrlVal.setText(f"{all_data[6]} °C")
             self.ui.humCtrlVal.setText(f"{all_data[7]} °C")
-			if {all_data[8]} == True:
-				self.ui.heaterStatus.setText(f"Heating ON!")
-			else:
-				self.ui.heaterStatus.setText(f"OFF")
+            if {all_data[8]} == True:
+                self.ui.heaterStatus.setText(f"Heating ON!")
+            else:
+                self.ui.heaterStatus.setText(f"OFF")
             #self.ui.temperature4_2.setText(f"{all_data[3]} °C") PER TEMPERATURA DA UMIDITA
             
     def update_statistics_data(self, all_data):
@@ -1086,8 +1086,8 @@ class MainWindow(QtWidgets.QMainWindow):
             self.ui.onCounter_T.setText(f"{all_data[3]}")
             self.ui.offCounter_T.setText(f"{all_data[4]}")
 			# VISUALIZZAZIONE DEI TEMPI: il programma di base mi manda dei secondi. E' qui che stampo la stringa opportunamente in min o h
-            self.ui.timeOn_T.setText(format_time(all_data[5]))
-            self.ui.timeOFF_T.setText(format_time(all_data[6]))
+            self.ui.timeOn_T.setText(self.format_time(all_data[5]))
+            self.ui.timeOFF_T.setText(self.format_time(all_data[6]))
             self.ui.minHum_H.setText(f"{all_data[7]} %")
             self.ui.meanHum_H.setText(f"{all_data[8]} %")
             self.ui.maxHum_H.setText(f"{all_data[9]} %")
@@ -1098,17 +1098,17 @@ class MainWindow(QtWidgets.QMainWindow):
             
         pass
 	
-	def format_time(value):
-		if value < 60:
-			return(f"{value} sec")
-		elif value < 3600:
-			minutes = value // 60
-			seconds = value % 60
-			return(f"{minutes} min {seconds} sec" if seconds else f"{minutes} min")
-		else:
-			hours = value // 3600
-			minutes = (value % 3600) // 60
-			return(f"{hours}h {minutes}min" if minutes else f"{hours}h")
+    def format_time(value):
+        if value < 60:
+            return(f"{value} sec")
+        elif value < 3600:
+            minutes = value // 60
+            seconds = value % 60
+            return(f"{minutes} min {seconds} sec" if seconds else f"{minutes} min")
+        else:
+            hours = value // 3600
+            minutes = (value % 3600) // 60
+            return(f"{hours}h {minutes}min" if minutes else f"{hours}h")
             
     def update_display_motor_data(self, all_data):
         if len(all_data) > 0:
