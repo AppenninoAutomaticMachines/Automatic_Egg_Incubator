@@ -27,16 +27,22 @@ FATTO:
               Fatto tutto manca la spunta check box + gestione
       Aggiungere checkBox + gestione per questa spunta (una globale nella pagina del grafico), non sto a metterla dedicata
 
+FATTO:
+        la visualizzazzione di TON e TOFF, convertirli opportunamente in min o h
+            MDIFICA: self.ui.timeOn_T.setText(format_time(all_data[5]))
+                      self.ui.timeOFF_T.setText(format_time(all_data[6]))
+                      verificare il corretto funzionamento della funzione format_time e verifica che effettivamente si visualizzi per bene nella box della GUI
 
+
+
+
+DA FARE:
 
 inizia a pensare alla torretta luminosa
   MODIFICA SW fatta: in attesa del montaggio della torretta luminosa + buzzer.
+circuito con 4 transistor per alimentare i 3led + cicalino 12V (non voglio usare dei relè, ovviamente)
 
 
-
-DA FARE: circuito con 4 transistor per alimentare i 3led + cicalino 12V (non voglio usare dei relè, ovviamente)
-
-testing del 12/03/2025 
 
   se ci sono troppi errori nei sensori, allora allarme e mandare il comando di stop all'heater
   
@@ -44,10 +50,8 @@ testing del 12/03/2025
 
   stato del motore così posso pulire un po' il terminale
 
-  la visualizzazzione di TON e TOFF, convertirli opportunamente in min o h
-    MDIFICA: self.ui.timeOn_T.setText(format_time(all_data[5]))
-              self.ui.timeOFF_T.setText(format_time(all_data[6]))
-              verificare il corretto funzionamento della funzione format_time e verifica che effettivamente si visualizzi per bene nella box della GUI
+  
+
 
 
   
