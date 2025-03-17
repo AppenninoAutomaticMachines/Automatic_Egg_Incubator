@@ -14,7 +14,7 @@ import sys
 	E in ogni subfolder memorizzo i vari dati.
 '''
 
-def plot_all_days(data_type):
+def plot_all_days(data_type, remove_erroneous_values):
     all_data = []
 
     machine_statistics_folder_path = "Machine_Statistics"
@@ -46,7 +46,7 @@ def plot_all_days(data_type):
     concatenated_data.sort_values('Timestamp', inplace = True)
 
 	# Filter valid data
-    concatenated_data = filter_valid_data(concatenated_data)
+    concatenated_data = filter_valid_data(concatenated_data, remove_erroneous_values)
 
     # Plot the data interactively
     fig, ax = plt.subplots(figsize=(10, 6))
@@ -88,7 +88,7 @@ def plot_all_days(data_type):
 
 
 # Function to plot current day's data interactively
-def plot_current_day(data_type):
+def plot_current_day(data_type, remove_erroneous_values):
     current_date = datetime.now().strftime('%Y-%m-%d')
 
     machine_statistics_folder_path = "Machine_Statistics"
@@ -111,7 +111,7 @@ def plot_current_day(data_type):
     current_day_data = pd.read_csv(file_path, parse_dates=['Timestamp'])
 	
 	# Filter valid data
-    current_day_data = filter_valid_data(current_day_data)
+    current_day_data = filter_valid_data(current_day_data, remove_erroneous_values)
 
     # Plot the data interactively
     fig, ax = plt.subplots(figsize=(10, 6))
@@ -151,13 +151,15 @@ def plot_current_day(data_type):
     # Show the interactive plot
     plt.show()
 	
-def filter_valid_data(data):
+def filter_valid_data(data, remove_erroneous_values):
     """Remove values outside the valid range if filtering is enabled."""
-    if remove_erroneous_values_from_plot:
+    if remove_erroneous_values:
         for column in data.columns:
             if column != 'Timestamp':
                 data = data[(data[column] >= VALID_RANGE[0]) & (data[column] <= VALID_RANGE[1])]
-    return data
+        return data
+    else:
+        return data
 
 
 # Check the number of arguments passed
@@ -170,16 +172,18 @@ arg1 = sys.argv[1]
 min_value = float(sys.argv[2])  # Convert argument to float
 max_value = float(sys.argv[3])  # Convert argument to float
 VALID_RANGE = (min_value, max_value)  # Define the range dynamically
-remove_erroneous_values_from_plot = sys.argv[4]
+remove_erroneous_values_from_plot = sys.argv[4].lower() == 'true'
 
 print(f"Argument 1: {arg1}") # arg1 = quale tipo di statistica vogliamo eseguire.
-
+print(f"Argument 2: {min_value}") # arg1 = quale tipo di statistica vogliamo eseguire.
+print(f"Argument 3: {max_value}") # arg1 = quale tipo di statistica vogliamo eseguire.
+print(f"Argument 4: {remove_erroneous_values_from_plot}") # arg1 = quale tipo di statistica vogliamo eseguire.
 # Example usage
 try:
     if arg1 == 'PLOT_ALL_DAYS_DATA_TEMPERATURES':
-        plot_all_days('Temperatures')
+        plot_all_days('Temperatures', remove_erroneous_values_from_plot)
     elif arg1 == 'PLOT_CURRENT_DAY_DATA_TEMPERATURES':
-        plot_current_day('Temperatures')
+        plot_current_day('Temperatures', remove_erroneous_values_from_plot)
     elif arg1 == 'PLOT_ALL_DAYS_DATA_HUMIDITY':
         plot_all_days('Humidity')
     elif arg1 == 'PLOT_CURRENT_DAY_DATA_HUMIDITY':
