@@ -129,15 +129,20 @@ class SerialThread(QtCore.QThread):
         if match:
             infoName_part = match.group(1)
             infoData_part = match.group(2)
-
-            if SerialThread.is_number(infoData_part):
+            
+            # Handle 'NAN' case explicitly
+            if infoData_part.upper() == "NAN":
+                number = 0.0  # Use None to indicate missing or invalid data
+            elif SerialThread.is_number(infoData_part):
                 number = float(infoData_part) if '.' in infoData_part else int(infoData_part)
-                for identifier in identifiers:
-                    if infoName_part.startswith(identifier):
-                        identifiers_data_list.append({infoName_part: number})
-                        break
             else:
                 print(f"Non-numeric data: {infoData_part}")
+                return  # Exit function if the data isn't valid
+
+            for identifier in identifiers:
+                if infoName_part.startswith(identifier):
+                    identifiers_data_list.append({infoName_part: number})
+                    break
         else:
             print("The input string does not match the expected format.")
 
@@ -348,12 +353,28 @@ class MainSoftwareThread(QtCore.QThread):
             self.thc.reset_all_values()
             
         if self.current_button == "plotAllDays_temp_T_btn":
-            command = ['python3', 'appInteractivePlots.py', 'PLOT_ALL_DAYS_DATA_TEMPERATURES', self.VALID_RANGE_TEMPERATURE[0], self.VALID_RANGE_TEMPERATURE[1], self.remove_erroneous_values_from_plot]
+            command = [
+                "python3",
+                "appInteractivePlots.py",
+                "PLOT_ALL_DAYS_DATA_TEMPERATURES",
+                str(self.VALID_RANGE_TEMPERATURE[0]),
+                str(self.VALID_RANGE_TEMPERATURE[1]),
+                str(self.remove_erroneous_values_from_plot),
+            ]
+            print(command)
             process = subprocess.Popen(command)
             print("Subprocess started and main program continues...")
             
         if self.current_button == "plotToday_temp_T_btn":
-            command = ['python3', 'appInteractivePlots.py', 'PLOT_CURRENT_DAY_DATA_TEMPERATURES', self.VALID_RANGE_TEMPERATURE[0], self.VALID_RANGE_TEMPERATURE[1], self.remove_erroneous_values_from_plot]
+            command = [
+                "python3",
+                "appInteractivePlots.py",
+                "PLOT_CURRENT_DAY_DATA_TEMPERATURES",
+                str(self.VALID_RANGE_TEMPERATURE[0]),
+                str(self.VALID_RANGE_TEMPERATURE[1]),
+                str(self.remove_erroneous_values_from_plot),
+            ]
+            print(command)
             process = subprocess.Popen(command)
             print("Subprocess started and main program continues...")
             
@@ -416,6 +437,12 @@ class MainSoftwareThread(QtCore.QThread):
             self.hhc.set_upper_limit(rounded_value)
         elif value_name == "minHysteresisValue_humidity_spinBox":
             self.hhc.set_lower_limit(rounded_value)
+            
+    def handle_radio_button_toggle(self, value_name, value):
+        if value_name == "removeErrors_from_T_plots":
+            self.remove_erroneous_values_from_plot = value
+            print(f"{value_name} + {value}")
+            
 
     def process_serial_data(self, new_data):
         self.arduino_readings_timestamp = time.time()
@@ -440,15 +467,16 @@ class MainSoftwareThread(QtCore.QThread):
             if self.current_heater_output_control != self.thc.get_output_control(): # appena cambia il comando logico all'heater, allora invio il comando ad Arduino            
                 self.current_heater_output_control = self.thc.get_output_control()
                 self.queue_command("HTR01", self.current_heater_output_control)  # @<HTR01, True># @<HTR01, False>#
-            else:
-			# caso in cui non ho NEMMENO UNA temperatura valida, tutti in errore. Allora spengo il riscaldatore.
-                self.queue_command("HTR01", False)  # @<HTR01, True># @<HTR01, False>#
-			# metto un contatore: se questa cosa è vera per più di 20 ccili, allora off
-			# FILTRAGGIO?? NON VORREI CHE CI SINAO DEGLI SPIKE...magari  se sto in questo else per più di un tot di secondi, allora dò il false, significa che l'errore è probabile che sia persistente.
+        #else:
+        # caso in cui non ho NEMMENO UNA temperatura valida, tutti in errore. Allora spengo il riscaldatore.
+            # devo lavorare sul ctonroller....altrimenti ppython pensa sia acceso e invece è spento
+            #self.queue_command("HTR01", False)  # @<HTR01, True># @<HTR01, False>#
+        # metto un contatore: se questa cosa è vera per più di 20 ccili, allora off
+        # FILTRAGGIO?? NON VORREI CHE CI SINAO DEGLI SPIKE...magari  se sto in questo else per più di un tot di secondi, allora dò il false, significa che l'errore è probabile che sia persistente.
 			
         # Check for persistent errors
         #print(current_temperatures)
-        self.check_errors(current_temperatures)
+        #self.check_errors(current_temperatures)
                 
             
             
@@ -520,9 +548,10 @@ class MainSoftwareThread(QtCore.QThread):
              
         
         # SAVING DATA IN FILES
-        if ((datetime.now() - self.last_saving_time) >= timedelta(minutes = self.saving_interval)):
-                start_time = time.perf_counter()
-                
+        time_difference = datetime.now() - self.last_saving_time
+        #print(time_difference)
+        if (time_difference >= timedelta(minutes = self.saving_interval)):
+                start_time = time.perf_counter()                
                 self.save_data_to_files('Temperatures', current_temperatures) #{'TMP01': 23.1, 'TMP02': 23.1, 'TMP03': 23.1}
                 self.save_data_to_files('Humidity', current_humidities) #{'HUM01': 52.5}
                 self.last_saving_time = datetime.now()
@@ -963,7 +992,7 @@ class MainSoftwareThread(QtCore.QThread):
                 else:
                     pass
                 
-            print(f"{self.main_state} {self.manual_state} {self.rotation_state}")
+            #print(f"{self.main_state} {self.manual_state} {self.rotation_state}")
                             
                         
                     
@@ -991,6 +1020,7 @@ class MainWindow(QtWidgets.QMainWindow):
     button_clicked = QtCore.pyqtSignal(str)  # Emits button name
     float_spinBox_value_changed = QtCore.pyqtSignal(str, float)  # Emits spinbox value  // METTI INT se intero
     initialization_step = QtCore.pyqtSignal(str, float)
+    radio_button_toggled = QtCore.pyqtSignal(str, bool)
     
     def __init__(self, main_software_thread):
         super().__init__()
@@ -1006,6 +1036,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.float_spinBox_value_changed.connect(self.main_software_thread.handle_float_spinBox_value)
         self.initialization_step.connect(self.main_software_thread.handle_intialization_step)
         self.main_software_thread.update_spinbox_value.connect(self.update_spinbox)
+        self.radio_button_toggled.connect(self.main_software_thread.handle_radio_button_toggle)
 
 
         # Connect buttons to handlers that emit signals
@@ -1021,13 +1052,19 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui.plotToday_humidity_H_btn.clicked.connect(lambda: self.emit_button_signal(self.ui.plotToday_humidity_H_btn.objectName()))
 
         # Connect radio buttons to emit its values
-        self.ui.heaterOFF_radioBtn.toggled.connect(self.handle_radio_button)
-        self.ui.heaterAUTO_radioBtn.toggled.connect(self.handle_radio_button)
-        self.ui.heaterON_radioBtn.toggled.connect(self.handle_radio_button)
-        
-        self.ui.humidifierOFF_radioBtn.toggled.connect(self.handle_radio_button)
-        self.ui.humidifierAUTO_radioBtn.toggled.connect(self.handle_radio_button)
-        self.ui.humidifierON_radioBtn.toggled.connect(self.handle_radio_button)
+        # Connect radio buttons to emit signals
+        radio_buttons = [
+            self.ui.heaterOFF_radioBtn,
+            self.ui.heaterAUTO_radioBtn,
+            self.ui.heaterON_radioBtn,
+            self.ui.humidifierOFF_radioBtn,
+            self.ui.humidifierAUTO_radioBtn,
+            self.ui.humidifierON_radioBtn,
+            self.ui.removeErrors_from_T_plots,
+            self.ui.removeErrors_from_H_plots,
+        ]
+        for radio_button in radio_buttons:
+            radio_button.toggled.connect(lambda state, btn=radio_button: self.emit_radio_button_signal(btn.objectName(), state))
         
         # Connect spinBox to emit its values
         self.ui.speedRPM_motor_spinBox.valueChanged.connect(lambda value: self.emit_float_spinbox_signal(self.ui.speedRPM_motor_spinBox.objectName(), value))
@@ -1059,6 +1096,9 @@ class MainWindow(QtWidgets.QMainWindow):
         #value = float(value)  # Cast value to float explicitly
         self.float_spinBox_value_changed.emit(spinbox_name, value)
         #print(f"[MainWindow] Emitting signal from {spinbox_name} with value: {value}")
+        
+    def emit_radio_button_signal(self, radio_button_name, state):
+        self.radio_button_toggled.emit(radio_button_name, state)
 
     def update_display_data(self, all_data):
         # Update the temperature labels in the GUI
@@ -1071,7 +1111,7 @@ class MainWindow(QtWidgets.QMainWindow):
             #self.ui.temperature4_2.setText(f"{all_data[5]} °C") PER TEMPERATURA DA UMIDITA
             self.ui.heatCtrlVal.setText(f"{all_data[6]} °C")
             self.ui.humCtrlVal.setText(f"{all_data[7]} °C")
-            if {all_data[8]} == True:
+            if all_data[8] == True:
                 self.ui.heaterStatus.setText(f"Heating ON!")
             else:
                 self.ui.heaterStatus.setText(f"OFF")
@@ -1098,7 +1138,7 @@ class MainWindow(QtWidgets.QMainWindow):
             
         pass
 	
-    def format_time(value):
+    def format_time(self, value):
         if value < 60:
             return(f"{value} sec")
         elif value < 3600:
@@ -1122,12 +1162,12 @@ class MainWindow(QtWidgets.QMainWindow):
 
         if spinbox:  # Ensure the spinbox exists
             spinbox.setValue(value)  # Set the new value safely in the GUI thread
-            
+    '''       
     def handle_radio_button(self):
         sender = self.sender()
         if sender.isChecked():
             print(f"Radio button '{sender.text()}' selected")
-
+    '''
     def closeEvent(self, event):
         # Ensure the threads are stopped when the window is closed
         self.main_software_thread.stop()
