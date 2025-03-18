@@ -1,6 +1,5 @@
 DA FARE:
 MONTARE: arduino MEGA
-circuito con 4 transistor per alimentare i 3led + cicalino 12V (non voglio usare dei relè, ovviamente)
 se ci sono troppi errori nei sensori, allora allarme e mandare il comando di stop all'heater  
 fare grafico on off, forse devo salvare tutto in un file, non l'ho predisposto...
 stato del motore così posso pulire un po' il terminale
@@ -13,6 +12,7 @@ da gestire la temperatura del sensore di umidità
 gestire rotation interval
 TORRETTA LUMINOSA:
         chatGPT --> classe che gestisce i messaggi machineSignaling + torretta luminosa + transistor
+        circuito con 4 transistor per alimentare i 3led + cicalino 12V (non voglio usare dei relè, ovviamente)
         FATTO: sw arduino coi comandi.
 Usare arduinoEggINcubator perché è il sw di arduino che comincia a gestire anche lo stepper,mentre quello di prima di base dava indietro solo le temperature e i feedback degli induttori, ma poca roba, prendeva pochi comandi.
 - sistemare spinbox del tempo di rotazione. Step di 5minuti, con min 5min massimo 180min (3h) + conseguente gestione corretta dello spinbox
