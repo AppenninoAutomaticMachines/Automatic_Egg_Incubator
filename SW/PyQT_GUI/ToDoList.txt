@@ -1,3 +1,29 @@
+DA FARE:
+MONTARE: arduino MEGA
+circuito con 4 transistor per alimentare i 3led + cicalino 12V (non voglio usare dei relè, ovviamente)
+se ci sono troppi errori nei sensori, allora allarme e mandare il comando di stop all'heater
+  
+fare grafico on off, forse devo salvare tutto in un file, non l'ho predisposto...
+
+stato del motore così posso pulire un po' il terminale
+da fare: inibire le letture mentre si muove il motore?? fra 4 sensori e umidità non vorrei che si rallenti troppo (riguarda bito che avevo già fatto)
+radio button per forzature
+
+controllo che se vai semre on e la temperatura non aumenta di un tot, allora probabile errore su heater o porta aperta...
+
+mettere un po' un filtro sui comandi dei relè...nel senso che se arrivano di fila true false arduino li filtra li tiene in memoria e li ridarta?
+
+pensare al discorso dei parametri attuali che si salvano su un file, così se spengo e riaccendo riparto da lì
+
+da gestire la temperatura del sensore di umidità
+gestire rotation interval
+
+TORRETTA LUMINOSA:
+        chatGPT --> classe che gestisce i messaggi machineSignaling + torretta luminosa + transistor
+        FATTO: sw arduino coi comandi.
+
+
+
 05/03/2025
 Usare arduinoEggINcubator perché è il sw di arduino che comincia a gestire anche lo stepper,mentre quello di prima di base dava indietro solo le temperature e i feedback degli induttori, ma poca roba, prendeva pochi comandi.
 Comincio a sviluppare per bene questo codice.
@@ -36,35 +62,5 @@ FATTO:
 
 
 
-DA FARE:
 
-inizia a pensare alla torretta luminosa
-  MODIFICA SW fatta: in attesa del montaggio della torretta luminosa + buzzer.
-circuito con 4 transistor per alimentare i 3led + cicalino 12V (non voglio usare dei relè, ovviamente)
-
-
-
-  se ci sono troppi errori nei sensori, allora allarme e mandare il comando di stop all'heater
-  
-  fare grafico on off, forse devo salvare tutto in un file, non l'ho predisposto...
-
-  stato del motore così posso pulire un po' il terminale
-
-  
-
-
-
-  
-
-  da fare: inibire le letture mentre si muove il motore?? fra 4 sensori e umidità non vorrei che si rallenti troppo (riguarda bito che avevo già fatto)
-  radio button per forzature
-
-  controllo che se vai semre on e la temperatura non aumenta di un tot, allora probabile errore su heater o porta aperta...
-
-mettere un po' un filtro sui comandi dei relè...nel senso che se arrivano di fila true false arduino li filtra li tiene in memoria e li ridarta?
-
-pensare al discorso dei parametri attuali che si salvano su un file, così se spengo e riaccendo riparto da lì
-
-da gestire la temperatura del sensore di umidità
-gestire rotation interval
 
