@@ -19,11 +19,15 @@ Usare arduinoEggINcubator perché è il sw di arduino che comincia a gestire anc
 - controlli di sicurezza sulle temperature --> gestione dell'errore da fare. DOpo un po' spegni il riscaldatore
 - premi i pulsanti di movimento dei motori e in automatico va in modalità manuale. Per ripristinare la modalità automatica devi cliccare un forceEggTurns, perché così riprendi esattametne da dove eri ripartito prima.
 
+situazione in cui le temperature sono freezate
+Ma è perché è molto stabile la temperatura o si sono bloccate??
+
+
 // ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- //
 |                        |
 |                        |
 ▼                        ▼
-
+------------------------------
 FATTO: pulsante di reset delle statistiche MODIFICA: if self.current_button == "reset_statistics_T_btn": self.thc.reset_all_values()
 FATTO: scrivere heater status, da GUI devo vedere se sto scaldando o no... MODIFICA: in all values [self.thc.get_output_control()] # pubblico l'heater status
               if {all_data[8]} == True:
