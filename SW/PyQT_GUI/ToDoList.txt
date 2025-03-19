@@ -22,7 +22,7 @@ Usare arduinoEggINcubator perché è il sw di arduino che comincia a gestire anc
 situazione in cui le temperature sono freezate
 Ma è perché è molto stabile la temperatura o si sono bloccate??
 Sezione messaggi
-
+fare un bit di arduino pin tipo alive da avere feedback visivo
 
 // ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- //
 |                        |
