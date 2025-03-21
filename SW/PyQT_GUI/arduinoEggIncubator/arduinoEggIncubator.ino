@@ -18,7 +18,7 @@
 #define NUMBER_OF_TEMPERATURES_SENSORS_ON_ONE_WIRE_BUS 4 //sensori di temperatura
 #define DEFAULT_DEBOUNCE_TIME 25 //ms
 #define ENABLE_HEATER true
-#define ENABLE_HUMIDIFIER false
+#define ENABLE_HUMIDIFIER true
 
 /* PIN ARDUINO */
 #define ONE_WIRE_BUS 4
@@ -780,4 +780,3 @@ void updateDevice(Device &device, int pin, unsigned long fastInterval, unsigned 
             break;
     }
 }
-
