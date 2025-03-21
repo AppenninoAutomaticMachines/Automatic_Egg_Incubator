@@ -24,11 +24,12 @@ Ma è perché è molto stabile la temperatura o si sono bloccate??
 Sezione messaggi
 fare un bit di arduino pin tipo alive da avere feedback visivo
 
-// ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- //
+// --------------------- //
 |                        |
 |                        |
 ▼                        ▼
-------------------------------
+// --------------------- //
+
 FATTO: pulsante di reset delle statistiche MODIFICA: if self.current_button == "reset_statistics_T_btn": self.thc.reset_all_values()
 FATTO: scrivere heater status, da GUI devo vedere se sto scaldando o no... MODIFICA: in all values [self.thc.get_output_control()] # pubblico l'heater status
               if {all_data[8]} == True:
