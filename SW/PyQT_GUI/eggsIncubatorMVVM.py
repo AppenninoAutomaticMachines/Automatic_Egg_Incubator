@@ -187,6 +187,7 @@ class MainSoftwareThread(QtCore.QThread):
         self.INVALID_VALUES = [-127.0, 85.0]  # Known error values
         self.THRESHOLD = 0.5  # Acceptable variation from the valid range
         self.VALID_RANGE_TEMPERATURE = (5.0, 45.0)  # Expected temperature range
+        self.VALID_RANGE_HUMIDITY = (0.0, 100.0) # Expected humidity range
         
         # Error tracking
         self.ERROR_TIME_LIMIT = 10  # Tempo in secondi oltre il quale generare un warning
@@ -202,14 +203,14 @@ class MainSoftwareThread(QtCore.QThread):
         self.current_humidifier_output_control = False # variabile che mi ricorda lo stato attuale dell'heater
         
         self.eggTurnerMotor = self.StepperMotor("Egg_Turner_Stepper_Motor")
-        self.eggTurnerMotor.setFunctionInterval(30) # Set default interval to 3600s 
         
         # BUTTON HANDLING
         self.move_CW_motor_btn = False # = not pressed
         self.move_CCW_motor_btn = False # = not pressed
 		
 		# PLOT
-        self.remove_erroneous_values_from_plot = True
+        self.remove_erroneous_values_from_T_plot = True
+        self.remove_erroneous_values_from_H_plot = True
         
         #--- Create Machine_Statistic folder ---#
         machine_statistics_folder_path = "Machine_Statistics"
@@ -263,7 +264,10 @@ class MainSoftwareThread(QtCore.QThread):
                 # [timePassed timeToNextTurn turnsCounter]
                 all_values = [self.eggTurnerMotor.getTimeSinceLastRotation()] + \
                                 [self.eggTurnerMotor.getTimeUntilNextRotation()] + \
-                                [self.eggTurnerMotor.getTurnsCounter()]
+                                [self.eggTurnerMotor.getTurnsCounter()] + \
+                                [self.eggTurnerMotor.main_state] + \
+                                [self.eggTurnerMotor.manual_state] + \
+                                [self.eggTurnerMotor.rotation_state]
                 self.update_motor.emit(all_values)
                 
                 self.eggTurnerMotor.resetUpdateMotorData()
@@ -359,7 +363,7 @@ class MainSoftwareThread(QtCore.QThread):
                 "PLOT_ALL_DAYS_DATA_TEMPERATURES",
                 str(self.VALID_RANGE_TEMPERATURE[0]),
                 str(self.VALID_RANGE_TEMPERATURE[1]),
-                str(self.remove_erroneous_values_from_plot),
+                str(self.remove_erroneous_values_from_T_plot),
             ]
             print(command)
             process = subprocess.Popen(command)
@@ -372,19 +376,35 @@ class MainSoftwareThread(QtCore.QThread):
                 "PLOT_CURRENT_DAY_DATA_TEMPERATURES",
                 str(self.VALID_RANGE_TEMPERATURE[0]),
                 str(self.VALID_RANGE_TEMPERATURE[1]),
-                str(self.remove_erroneous_values_from_plot),
+                str(self.remove_erroneous_values_from_T_plot),
             ]
             print(command)
             process = subprocess.Popen(command)
             print("Subprocess started and main program continues...")
             
-        if self.current_button == "plotAllDays_humidity_H_btn":
-            command = ['python3', 'appInteractivePlots.py', 'PLOT_ALL_DAYS_DATA_HUMIDITY']
+        if self.current_button == "plotAllDays_temp_H_btn":
+            command = [
+                "python3",
+                "appInteractivePlots.py",
+                "PLOT_ALL_DAYS_DATA_HUMIDITY",
+                str(self.VALID_RANGE_HUMIDITY[0]),
+                str(self.VALID_RANGE_HUMIDITY[1]),
+                str(self.remove_erroneous_values_from_H_plot),
+            ]
+            print(command)
             process = subprocess.Popen(command)
             print("Subprocess started and main program continues...")
             
-        if self.current_button == "plotToday_humidity_H_btn":
-            command = ['python3', 'appInteractivePlots.py', 'PLOT_CURRENT_DAY_DATA_HUMIDITY']
+        if self.current_button == "plotToday_temp_H_btn":
+            command = [
+                "python3",
+                "appInteractivePlots.py",
+                "PLOT_CURRENT_DAY_DATA_HUMIDITY",
+                str(self.VALID_RANGE_HUMIDITY[0]),
+                str(self.VALID_RANGE_HUMIDITY[1]),
+                str(self.remove_erroneous_values_from_T_plot),
+            ]
+            print(command)
             process = subprocess.Popen(command)
             print("Subprocess started and main program continues...")
         
@@ -394,7 +414,7 @@ class MainSoftwareThread(QtCore.QThread):
         self.spinbox_values[spinbox_name] = rounded_value       
         
         if spinbox_name == "speedRPM_motor_spinBox":
-            self.current_speedRPM_spinBox_value = rounded_value
+            self.eggTurnerMotor.setFunctionInterval(rounded_value) # Set the rotation interval
         elif spinbox_name == "maxHysteresisValue_temperature_spinBox":
             if rounded_value <= self.thc.get_lower_limit():
                 self.thc.set_upper_limit(rounded_value)
@@ -439,11 +459,29 @@ class MainSoftwareThread(QtCore.QThread):
             self.hhc.set_lower_limit(rounded_value)
             
     def handle_radio_button_toggle(self, value_name, value):
+        if value_name == "heaterOFF_radioBtn":
+            self.thc.set_control_mode("forceOFF")
+        if value_name == "heaterAUTO_radioBtn":
+            self.thc.set_control_mode("AUTO")
+        if value_name == "heaterON_radioBtn":
+            self.thc.set_control_mode("forceON")
+            
+        if value_name == "humidifierOFF_radioBtn":
+            self.hhc.set_control_mode("forceOFF")
+        if value_name == "humidifierAUTO_radioBtn":
+            self.hhc.set_control_mode("AUTO")
+        if value_name == "humidifierON_radioBtn":
+            self.hhc.set_control_mode("forceON")
+            
         if value_name == "removeErrors_from_T_plots":
-            self.remove_erroneous_values_from_plot = value
+            self.remove_erroneous_values_from_T_plot = value
             print(f"{value_name} + {value}")
             
-
+        if value_name == "removeErrors_from_H_plots":
+            self.remove_erroneous_values_from_H_plot = value
+            print(f"{value_name} + {value}")
+            
+            
     def process_serial_data(self, new_data):
         self.arduino_readings_timestamp = time.time()
         self.current_data = new_data
@@ -623,6 +661,9 @@ class MainSoftwareThread(QtCore.QThread):
             self.time_off = 0.0
             
             self._last_switch_time = time.time()
+            
+            self.forceON = False
+            self.forceOFF = False
         
         # Method to set the lower limit
         def set_lower_limit(self, lower_limit):
@@ -639,6 +680,17 @@ class MainSoftwareThread(QtCore.QThread):
             self.upper_limit = upper_limit
             if self.lower_limit == self.upper_limit:
                 self._output_control = False  # Safety enforcement
+                
+        def set_control_mode(self, control_mode):
+            if control_mode == "forceON":
+                self.forceON = True
+                self.forceOFF = False
+            if control_mode == "forceOFF":
+                self.forceON = False
+                self.forceOFF = True
+            if control_mode == "AUTO":
+                self.forceON = False
+                self.forceOFF = False
         
         # Method to get the upper limit
         def get_upper_limit(self):
@@ -651,11 +703,12 @@ class MainSoftwareThread(QtCore.QThread):
                 self.last_measuring_time = time.time()
                 self.reset_timer_to_do = False
                 
-                
+            '''
             # Safety check: If limits are equal, force OFF state
             if self.lower_limit == self.upper_limit:
                 self._output_control = False
                 return
+            '''
         
             # Ensure values is a list for consistency
             if not isinstance(values, list):
@@ -670,13 +723,20 @@ class MainSoftwareThread(QtCore.QThread):
             for value in values:
                 self._max_value = max(self._max_value, value)
                 self._min_value = min(self._min_value, value)
-            
-            # Check if output state changes
+                
             new_output = self._output_control
-            if self._mean_value > self.upper_limit:
-                new_output = False  # Turn OFF if mean is above upper limit
-            elif self._mean_value < self.lower_limit:
-                new_output = True   # Turn ON if mean is below lower limit
+            # Check if output state changes
+            if self.lower_limit == self.upper_limit:
+                new_output = False
+            elif self.forceON: 
+                new_output = True               
+            elif self.forceOFF:  
+                new_output = False              
+            else: # AUTO                
+                if self._mean_value > self.upper_limit:
+                    new_output = False  # Turn OFF if mean is above upper limit
+                elif self._mean_value < self.lower_limit:
+                    new_output = True   # Turn ON if mean is below lower limit
                 
             # update time tracking (continuous)
             elapsed_time = time.time() - self.last_measuring_time
@@ -695,11 +755,11 @@ class MainSoftwareThread(QtCore.QThread):
                     self.off_count += 1
                 else:
                     self.time_off += elapsed_time
-                    self.on_count += 1
-                
-                self._output_control = new_output
+                    self.on_count += 1  
                 self.last_measuring_time = time.time()
                 
+                
+            self._output_control = new_output
             
                 
         
@@ -768,11 +828,9 @@ class MainSoftwareThread(QtCore.QThread):
                 30 AUTOMATIC_MODE
             
             """
-            self.main_state = 1
+            self.main_state = "INITIALIZATION"
             
-            self.automatic_state = 1
-            
-            self.manual_state = 1
+            self.manual_state = "WAITING_FOR_COMMAND"
             
             '''
                 Vogio gestire tutto con una variabile...anziché avere direzione e movimento, ne ho una sola
@@ -814,27 +872,27 @@ class MainSoftwareThread(QtCore.QThread):
             self.motor_data_update_interval_sec = 15 # indica ogni quanti secondi viene fatto l'update dei dati relativi al motore
 
         def moveCWContinuous(self):
-            self.main_state = 10
-            self.manual_state = 20
+            self.main_state = "MANUAL_MODE"
+            self.manual_state = "MOVING_CW_CONTINUOUSLY"
             print(f"{self.name}: Moving cw continuously.")
 
         def moveCCWContinuous(self):
-            self.main_state = 10
-            self.manual_state = 30
+            self.main_state = "MANUAL_MODE"
+            self.manual_state = "MOVING_CCW_CONTINUOUSLY"
             print(f"{self.name}: Moving ccw continuously.")
 
         def stop(self):
             self.stop_command = True
             print(f"{self.name}: Stopping motor.")
         
-        def setFunction1(self):
-            self.main_state = 30
+        def setFunction1(self): # ?? non la usa nessuno
+            self.main_state = "AUTOMATIC_MODE"
             self.last_ack_time = time.time()
             self.alarm_triggered = False
             print(f"{self.name}: Automatic function 1 enabled.")
         
-        def stopFunction1(self):
-            self.main_state = 0
+        def stopFunction1(self): # ?? non la usa nessuno
+            self.main_state = "STOPPED"
             print(f"{self.name}: Stopping automatic function 1.")
         
         def setFunctionInterval(self, interval):
@@ -856,10 +914,13 @@ class MainSoftwareThread(QtCore.QThread):
             return self.rotation_direction
         
         def getTimeSinceLastRotation(self):
-            return round((time.time() - self.last_execution_time) / 60, 1)# in minutes
+            time_result = round(time.time() - self.last_execution_time, 0) # in seconds
+            return time_result
         
         def getTimeUntilNextRotation(self):
-            return round(max(0, (self.auto_function_interval_sec - (time.time() - self.last_execution_time)) / 60), 1) # in minutes
+            time_result = round(max(0, self.auto_function_interval_sec - (time.time() - self.last_execution_time)), 0) # in seconds
+            print(time_result)
+            return time_result
         
         def getTurnsCounter(self):
             return self.turnsCounter
@@ -872,12 +933,12 @@ class MainSoftwareThread(QtCore.QThread):
         
         def forceEggsRotation(self):
             self.force_change_rotation_flag = True
-            self.main_state = 30 # go back in automatic, if you were in manual
+            self.main_state = "AUTOMATIC_MODE" # go back in automatic, if you were in manual
         
         def update(self):
             current_time = time.time()
             
-            if self.main_state == 1: # INITIALIZATION
+            if self.main_state == "INITIALIZATION":
                 if self.acknowledge_from_external is not None:                    
                     if self.acknowledge_from_external == "IND_CCW": 
                         self.rotation_state = "CCW_reached"
@@ -890,45 +951,46 @@ class MainSoftwareThread(QtCore.QThread):
                         self.acknowledge_from_external = None # reset
                         
                     self.last_execution_time = current_time # salvo il tempo, perché così la prossima FULL TURN avviene contando il tempo da quando ho finito l'homing
-                    self.main_state = 30 # di default andiamo in modalità automatica
+                    self.main_state = "AUTOMATIC_MODE"
                 else:
                     pass
                 
-            elif self.main_state == 10: # MANUAL MODE
-                    if self.manual_state == 1: #waiting for command
+            elif self.main_state == "MANUAL_MODE":
+                    print(self.manual_state)
+                    if self.manual_state == "WAITING_FOR_COMMAND": #waiting for command
                         pass
                         
-                    if self.manual_state == 20: # CW continuous moving
+                    if self.manual_state == "MOVING_CW_CONTINUOUSLY": # CW continuous moving
                         self.rotation_state = "CW_rotation_direction"
                         self.new_command = "manual_" + self.rotation_state
-                        self.manual_state = 50 
+                        self.manual_state = "ROTATION_IN_PROGRESS" 
                         
-                    if self.manual_state == 30: # CCW continuous moving
+                    if self.manual_state == "MOVING_CCW_CONTINUOUSLY": # CCW continuous moving
                         self.rotation_state = "CCW_rotation_direction"
                         self.new_command = "manual_" + self.rotation_state
-                        self.manual_state = 50 
+                        self.manual_state = "ROTATION_IN_PROGRESS" 
                         
-                    if self.manual_state == 50: # rotation in progress
+                    if self.manual_state == "ROTATION_IN_PROGRESS": # rotation in progress
                         # IF ack from limit switch --> comunica che è arrivato ack, ma di fatto si ferma da solo per Arduino
                         if self.acknowledge_from_external is not None:         
                             if self.acknowledge_from_external == "IND_CCW" and self.rotation_state == "CCW_rotation_direction":
                                 self.rotation_state = "CCW_reached"
                                 print("Reached the IND_CCW limit switch")
                                 self.acknowledge_from_external = None # reset
-                                self.manual_state = 1
+                                self.manual_state = "WAITING_FOR_COMMAND"
                                 
                             if self.acknowledge_from_external == "IND_CW" and self.rotation_state == "CW_rotation_direction":
                                 self.rotation_state = "CW_reached"
                                 print("Reached the IND_CW limit switch")
                                 self.acknowledge_from_external = None # reset
-                                self.manual_state = 1
+                                self.manual_state = "WAITING_FOR_COMMAND"
                         
                         # IF stop command, then stop
                         if self.stop_command:
-                            self.manual_state = 60
+                            self.manual_state = "STOPPED"
                             self.stop_command = False
                         
-                    if self.manual_state == 60: # STOPPING
+                    if self.manual_state == "STOPPED": 
                         self.new_command = "stop"
                         
                         if self.rotation_state == "CCW_rotation_direction":
@@ -937,9 +999,9 @@ class MainSoftwareThread(QtCore.QThread):
                         if self.rotation_state == "CW_rotation_direction":
                             self.rotation_state = "stopped_from_CW_rotation_direction"
                             
-                        self.manual_state = 1
+                        self.manual_state = "WAITING_FOR_COMMAND"
             
-            elif self.main_state == 30: # AUTOMATIC MODE                          
+            elif self.main_state == "AUTOMATIC_MODE":
                 if (current_time - self.last_execution_time >= self.auto_function_interval_sec or self.force_change_rotation_flag):
                     
                     if self.rotation_state == "CCW_reached" or self.rotation_state == "CCW_rotation_direction" or self.rotation_state == "stopped_from_CCW_rotation_direction":
@@ -992,7 +1054,7 @@ class MainSoftwareThread(QtCore.QThread):
                 else:
                     pass
                 
-            #print(f"{self.main_state} {self.manual_state} {self.rotation_state}")
+            print(f"{self.main_state} {self.manual_state} {self.rotation_state} {self.new_command}")
                             
                         
                     
@@ -1137,24 +1199,51 @@ class MainWindow(QtWidgets.QMainWindow):
             self.ui.timeOFF_H.setText(f"{all_data[13]} s")
             
         pass
-	
-    def format_time(self, value):
+    
+    def format_time(self, value, unit = None, simple_format = False):
+        """
+            Unit argument is optional:
+                If unit is "sec", it returns only seconds.
+                If unit is "min", it returns only minutes.
+                If unit is "hour", it returns only hours.
+                If unit is None (default), it follows the mixed format.
+        """
+        
+        if unit == "sec":
+            return f"{value} sec"
+        elif unit == "min":
+            return f"{value // 60} min"
+        elif unit == "hour":
+            return f"{value // 3600} h"
+        
+        # Simple format: Only minutes if 60 ≤ value < 3600, only hours if value ≥ 3600
+        if simple_format:
+            if value >= 3600:
+                return f"{value // 3600} h"
+            elif value >= 60:
+                return f"{value // 60} min"
+        
+        # Default behavior (detailed format)
         if value < 60:
-            return(f"{value} sec")
+            return f"{value} sec"
         elif value < 3600:
             minutes = value // 60
             seconds = value % 60
-            return(f"{minutes} min {seconds} sec" if seconds else f"{minutes} min")
+            return f"{minutes} min {seconds} sec" if seconds else f"{minutes} min"
         else:
             hours = value // 3600
             minutes = (value % 3600) // 60
-            return(f"{hours}h {minutes}min" if minutes else f"{hours}h")
+            return f"{hours} h {minutes} min" if minutes else f"{hours} h"
+
             
     def update_display_motor_data(self, all_data):
         if len(all_data) > 0:
-            self.ui.timePassed.setText(f"{all_data[0]} min")
-            self.ui.timeToNextTurn.setText(f"{all_data[1]} min")
+            self.ui.timePassed.setText(self.format_time(all_data[0], simple_format = True))
+            self.ui.timeToNextTurn.setText(self.format_time(all_data[1], simple_format = True))
             self.ui.turnsCounter.setText(f"{all_data[2]}")
+            self.ui.main_state.setText(f"{all_data[3]}")
+            self.ui.manual_state.setText(f"{all_data[4]}")
+            self.ui.rotation_state.setText(f"{all_data[5]}")
 
     def update_spinbox(self, spinbox_name, value):
         """ Update the spinbox in the GUI safely from another thread """
