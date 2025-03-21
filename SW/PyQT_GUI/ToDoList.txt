@@ -24,6 +24,8 @@ Ma è perché è molto stabile la temperatura o si sono bloccate??
 Sezione messaggi
 fare un bit di arduino pin tipo alive da avere feedback visivo
 
+ingrandire un po' le stringhe di visualizzazione in GUI
+
 // --------------------- //
 |                        |
 |                        |
