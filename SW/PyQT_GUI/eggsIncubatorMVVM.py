@@ -25,8 +25,9 @@ from collections import deque
 '''
 
 # ARDUINO serial communication - setup #
-portSetup = "/dev/ttyACM0"
 portSetup = "/dev/ttyUSB0"
+portSetup = "/dev/ttyACM0"
+
 baudrateSetup = 19200
 timeout = 0.1
 
@@ -413,8 +414,8 @@ class MainSoftwareThread(QtCore.QThread):
         print(f"[MainSoftwareThread] Processing spinbox {spinbox_name} of value: {rounded_value} ({type(rounded_value)})")
         self.spinbox_values[spinbox_name] = rounded_value       
         
-        if spinbox_name == "speedRPM_motor_spinBox":
-            self.eggTurnerMotor.setFunctionInterval(rounded_value) # Set the rotation interval
+        if spinbox_name == "rotation_interval_spinBox":
+            self.eggTurnerMotor.setFunctionInterval(rounded_value * 60) # Set the rotation interval
         elif spinbox_name == "maxHysteresisValue_temperature_spinBox":
             if rounded_value <= self.thc.get_lower_limit():
                 self.thc.set_upper_limit(rounded_value)
@@ -539,7 +540,8 @@ class MainSoftwareThread(QtCore.QThread):
                         list(current_humidities_temperatures.values()) + \
                         [self.thc.get_mean_value()] + \
                         [self.hhc.get_mean_value()] + \
-						[self.thc.get_output_control()] # pubblico l'heater status
+						[self.thc.get_output_control()] + \
+                        [self.hhc.get_output_control()] #
                         
             self.update_view.emit(all_values)
             
@@ -956,7 +958,6 @@ class MainSoftwareThread(QtCore.QThread):
                     pass
                 
             elif self.main_state == "MANUAL_MODE":
-                    print(self.manual_state)
                     if self.manual_state == "WAITING_FOR_COMMAND": #waiting for command
                         pass
                         
@@ -1129,7 +1130,7 @@ class MainWindow(QtWidgets.QMainWindow):
             radio_button.toggled.connect(lambda state, btn=radio_button: self.emit_radio_button_signal(btn.objectName(), state))
         
         # Connect spinBox to emit its values
-        self.ui.speedRPM_motor_spinBox.valueChanged.connect(lambda value: self.emit_float_spinbox_signal(self.ui.speedRPM_motor_spinBox.objectName(), value))
+        self.ui.rotation_interval_spinBox.valueChanged.connect(lambda value: self.emit_float_spinbox_signal(self.ui.rotation_interval_spinBox.objectName(), value))
         
         # Temperature Hysteresis
         self.ui.maxHysteresisValue_temperature_spinBox.valueChanged.connect(lambda value: self.emit_float_spinbox_signal(self.ui.maxHysteresisValue_temperature_spinBox.objectName(), value))
@@ -1177,6 +1178,10 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.ui.heaterStatus.setText(f"Heating ON!")
             else:
                 self.ui.heaterStatus.setText(f"OFF")
+            if all_data[9] == True:
+                self.ui.humidifierStatus.setText(f"Humidifying ON!")
+            else:
+                self.ui.humidifierStatus.setText(f"OFF")
             #self.ui.temperature4_2.setText(f"{all_data[3]} °C") PER TEMPERATURA DA UMIDITA
             
     def update_statistics_data(self, all_data):
@@ -1195,8 +1200,8 @@ class MainWindow(QtWidgets.QMainWindow):
             self.ui.maxHum_H.setText(f"{all_data[9]} %")
             self.ui.onCounter_H.setText(f"{all_data[10]}")
             self.ui.offCounter_H.setText(f"{all_data[11]}")
-            self.ui.timeOn_H.setText(f"{all_data[12]} s")
-            self.ui.timeOFF_H.setText(f"{all_data[13]} s")
+            self.ui.timeOn_H.setText(self.format_time(all_data[12]))
+            self.ui.timeOFF_H.setText(self.format_time(all_data[13]))
             
         pass
     
@@ -1238,8 +1243,8 @@ class MainWindow(QtWidgets.QMainWindow):
             
     def update_display_motor_data(self, all_data):
         if len(all_data) > 0:
-            self.ui.timePassed.setText(self.format_time(all_data[0], simple_format = True))
-            self.ui.timeToNextTurn.setText(self.format_time(all_data[1], simple_format = True))
+            self.ui.timePassed.setText(self.format_time(all_data[0]))
+            self.ui.timeToNextTurn.setText(self.format_time(all_data[1]))
             self.ui.turnsCounter.setText(f"{all_data[2]}")
             self.ui.main_state.setText(f"{all_data[3]}")
             self.ui.manual_state.setText(f"{all_data[4]}")
