@@ -4,12 +4,12 @@ se ci sono troppi errori nei sensori, allora allarme e mandare il comando di sto
 fare grafico on off, forse devo salvare tutto in un file, non l'ho predisposto...
 stato del motore così posso pulire un po' il terminale
 da fare: inibire le letture mentre si muove il motore?? fra 4 sensori e umidità non vorrei che si rallenti troppo (riguarda bito che avevo già fatto)
-radio button per forzature
+
 controllo che se vai semre on e la temperatura non aumenta di un tot, allora probabile errore su heater o porta aperta...
 mettere un po' un filtro sui comandi dei relè...nel senso che se arrivano di fila true false arduino li filtra li tiene in memoria e li ridarta?
 pensare al discorso dei parametri attuali che si salvano su un file, così se spengo e riaccendo riparto da lì
 da gestire la temperatura del sensore di umidità
-gestire rotation interval
+
 TORRETTA LUMINOSA:
         chatGPT --> classe che gestisce i messaggi machineSignaling + torretta luminosa + transistor
         circuito con 4 transistor per alimentare i 3led + cicalino 12V (non voglio usare dei relè, ovviamente)
@@ -31,9 +31,9 @@ ingrandire un po' le stringhe di visualizzazione in GUI
 |                        |
 ▼                        ▼
 // --------------------- //
-
+FATTO: gestire rotation interval
 FATTO: montare arduino MEGA
-
+FATTO: radio button per forzature
 FATTO: pulsante di reset delle statistiche MODIFICA: if self.current_button == "reset_statistics_T_btn": self.thc.reset_all_values()
 FATTO: scrivere heater status, da GUI devo vedere se sto scaldando o no... MODIFICA: in all values [self.thc.get_output_control()] # pubblico l'heater status
               if {all_data[8]} == True:
