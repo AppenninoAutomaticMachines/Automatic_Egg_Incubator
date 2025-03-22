@@ -14,7 +14,6 @@ TORRETTA LUMINOSA:
         circuito con 4 transistor per alimentare i 3led + cicalino 12V (non voglio usare dei relè, ovviamente)
         FATTO: sw arduino coi comandi.
 Usare arduinoEggINcubator perché è il sw di arduino che comincia a gestire anche lo stepper,mentre quello di prima di base dava indietro solo le temperature e i feedback degli induttori, ma poca roba, prendeva pochi comandi.
-- sistemare spinbox del tempo di rotazione. Step di 5minuti, con min 5min massimo 180min (3h) + conseguente gestione corretta dello spinbox
 - controlli di sicurezza sulle temperature --> gestione dell'errore da fare. DOpo un po' spegni il riscaldatore
 - premi i pulsanti di movimento dei motori e in automatico va in modalità manuale. Per ripristinare la modalità automatica devi cliccare un forceEggTurns, perché così riprendi esattametne da dove eri ripartito prima.
 
@@ -32,7 +31,7 @@ fare un bit di arduino pin tipo alive da avere feedback visivo
 // --------------------- //
 
 FATTO: ingrandire un po' le stringhe di visualizzazione in GUI
-FATTO: gestire rotation interval
+FATTO: gestire rotation interval - sistemare spinbox del tempo di rotazione. Step di 5minuti, con min 5min massimo 180min (3h) + conseguente gestione corretta dello spinbox
 FATTO: montare arduino MEGA
 FATTO: radio button per forzature
 FATTO: pulsante di reset delle statistiche MODIFICA: if self.current_button == "reset_statistics_T_btn": self.thc.reset_all_values()
