@@ -1,5 +1,4 @@
 DA FARE:
-
 se ci sono troppi errori nei sensori, allora allarme e mandare il comando di stop all'heater  
 fare grafico on off, forse devo salvare tutto in un file, non l'ho predisposto...
 stato del motore così posso pulire un po' il terminale
@@ -24,13 +23,15 @@ Ma è perché è molto stabile la temperatura o si sono bloccate??
 Sezione messaggi
 fare un bit di arduino pin tipo alive da avere feedback visivo
 
-ingrandire un po' le stringhe di visualizzazione in GUI
+
 
 // --------------------- //
 |                        |
 |                        |
 ▼                        ▼
 // --------------------- //
+
+FATTO: ingrandire un po' le stringhe di visualizzazione in GUI
 FATTO: gestire rotation interval
 FATTO: montare arduino MEGA
 FATTO: radio button per forzature
