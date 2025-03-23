@@ -7,7 +7,7 @@ da fare: inibire le letture mentre si muove il motore?? fra 4 sensori e umidità
 controllo che se vai semre on e la temperatura non aumenta di un tot, allora probabile errore su heater o porta aperta...
 mettere un po' un filtro sui comandi dei relè...nel senso che se arrivano di fila true false arduino li filtra li tiene in memoria e li ridarta?
 pensare al discorso dei parametri attuali che si salvano su un file, così se spengo e riaccendo riparto da lì
-da gestire la temperatura del sensore di umidità
+
 
 TORRETTA LUMINOSA:
         chatGPT --> classe che gestisce i messaggi machineSignaling + torretta luminosa + transistor
@@ -35,7 +35,7 @@ pull down del comando di step per lo stepper motor
 |                        |
 ▼                        ▼
 // --------------------- //
-
+FATTO: da gestire la temperatura del sensore di umidità
 FATTO: plot delle humidità
 FATTO: ingrandire un po' le stringhe di visualizzazione in GUI
 FATTO: gestire rotation interval - sistemare spinbox del tempo di rotazione. Step di 5minuti, con min 5min massimo 180min (3h) + conseguente gestione corretta dello spinbox
