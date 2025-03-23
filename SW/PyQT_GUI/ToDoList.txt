@@ -1,6 +1,5 @@
 DA FARE:
 se ci sono troppi errori nei sensori, allora allarme e mandare il comando di stop all'heater  
-fare grafico on off, forse devo salvare tutto in un file, non l'ho predisposto...
 stato del motore così posso pulire un po' il terminale
 da fare: inibire le letture mentre si muove il motore?? fra 4 sensori e umidità non vorrei che si rallenti troppo (riguarda bito che avevo già fatto)
 
@@ -35,6 +34,7 @@ pull down del comando di step per lo stepper motor
 |                        |
 ▼                        ▼
 // --------------------- //
+FATO: grafico dell'azionamento ON/OFF degli attuatori heater e humidifier
 FATTO: da gestire la temperatura del sensore di umidità
 FATTO: plot delle humidità
 FATTO: ingrandire un po' le stringhe di visualizzazione in GUI
