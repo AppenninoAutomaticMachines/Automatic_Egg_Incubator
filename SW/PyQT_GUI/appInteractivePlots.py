@@ -10,6 +10,8 @@ import sys
 	/Machine_Statistics
 			/Temperatures
 			/Humidity
+            /Heater
+            /Humidifier
 			
 	E in ogni subfolder memorizzo i vari dati.
 '''
@@ -23,6 +25,10 @@ def plot_all_days(data_type, remove_erroneous_values):
         folder_path = os.path.join(machine_statistics_folder_path, 'Temperatures')
     elif data_type == 'Humidity':
         folder_path = os.path.join(machine_statistics_folder_path, 'Humidity')
+    elif data_type == 'Heater':
+        folder_path = os.path.join(machine_statistics_folder_path, 'Heater')
+    elif data_type == 'Humidifier':
+        folder_path = os.path.join(machine_statistics_folder_path, 'Humidifier')
     else:
         raise ValueError("Invalid plot configuration")	
 	    
@@ -97,6 +103,10 @@ def plot_current_day(data_type, remove_erroneous_values):
         folder_path = os.path.join(machine_statistics_folder_path, 'Temperatures')
     elif data_type == 'Humidity':
         folder_path = os.path.join(machine_statistics_folder_path, 'Humidity')
+    elif data_type == 'Heater':
+        folder_path = os.path.join(machine_statistics_folder_path, 'Heater')
+    elif data_type == 'Humidifier':
+        folder_path = os.path.join(machine_statistics_folder_path, 'Humidifier')
     else:
         raise ValueError("Invalid plot configuration")	
 	    
@@ -185,9 +195,17 @@ try:
     elif arg1 == 'PLOT_CURRENT_DAY_DATA_TEMPERATURES':
         plot_current_day('Temperatures', remove_erroneous_values_from_plot)
     elif arg1 == 'PLOT_ALL_DAYS_DATA_HUMIDITY':
-        plot_all_days('Humidity')
+        plot_all_days('Humidity', remove_erroneous_values_from_plot)
     elif arg1 == 'PLOT_CURRENT_DAY_DATA_HUMIDITY':
-        plot_current_day('Humidity')
+        plot_current_day('Humidity', remove_erroneous_values_from_plot)
+    elif arg1 == 'PLOT_ALL_DAYS_DATA_HEATER':
+        plot_current_day('Heater', remove_erroneous_values_from_plot)
+    elif arg1 == 'PLOT_CURRENT_DAY_DATA_HEATER':
+        plot_current_day('Heater', remove_erroneous_values_from_plot)
+    elif arg1 == 'PLOT_ALL_DAYS_DATA_HUMIDIFIER':
+        plot_current_day('Humidifier', remove_erroneous_values_from_plot)
+    elif arg1 == 'PLOT_CURRENT_DAY_DATA_HUMIDIFIER':
+        plot_current_day('Humidifier', remove_erroneous_values_from_plot)
     else:
         raise ValueError("Invalid arg1 value: {}".format(arg1))
 
