@@ -218,7 +218,7 @@ class MainSoftwareThread(QtCore.QThread):
         if not os.path.exists(machine_statistics_folder_path):
                 os.makedirs(machine_statistics_folder_path)
 
-        # --- Create Images folder ---#
+        # --- Create Statistics folder ---#
         temperatures_folder_path = os.path.join(machine_statistics_folder_path, 'Temperatures')
         if not os.path.exists(temperatures_folder_path):
             os.makedirs(temperatures_folder_path)
@@ -226,6 +226,14 @@ class MainSoftwareThread(QtCore.QThread):
         humidity_folder_path = os.path.join(machine_statistics_folder_path, 'Humidity')
         if not os.path.exists(humidity_folder_path):
             os.makedirs(humidity_folder_path)
+            
+        heater_actuator_folder_path = os.path.join(machine_statistics_folder_path, 'Heater')
+        if not os.path.exists(heater_actuator_folder_path):
+            os.makedirs(heater_actuator_folder_path)
+
+        humidifier_actuator_folder_path = os.path.join(machine_statistics_folder_path, 'Humidifier')
+        if not os.path.exists(humidifier_actuator_folder_path):
+            os.makedirs(humidifier_actuator_folder_path)
 
     def run(self):
         # Start the SerialThread
@@ -383,7 +391,7 @@ class MainSoftwareThread(QtCore.QThread):
             process = subprocess.Popen(command)
             print("Subprocess started and main program continues...")
             
-        if self.current_button == "plotAllDays_temp_H_btn":
+        if self.current_button == "plotAllDays_humidity_H_btn":
             command = [
                 "python3",
                 "appInteractivePlots.py",
@@ -396,7 +404,7 @@ class MainSoftwareThread(QtCore.QThread):
             process = subprocess.Popen(command)
             print("Subprocess started and main program continues...")
             
-        if self.current_button == "plotToday_temp_H_btn":
+        if self.current_button == "plotToday_humidity_H_btn":
             command = [
                 "python3",
                 "appInteractivePlots.py",
@@ -404,6 +412,58 @@ class MainSoftwareThread(QtCore.QThread):
                 str(self.VALID_RANGE_HUMIDITY[0]),
                 str(self.VALID_RANGE_HUMIDITY[1]),
                 str(self.remove_erroneous_values_from_T_plot),
+            ]
+            print(command)
+            process = subprocess.Popen(command)
+            print("Subprocess started and main program continues...")
+            
+        if self.current_button == "plotAllDays_cnt_T_btn":
+            command = [
+                "python3",
+                "appInteractivePlots.py",
+                "PLOT_ALL_DAYS_DATA_HEATER",
+                str(0),
+                str(1),
+                str(False),
+            ]
+            print(command)
+            process = subprocess.Popen(command)
+            print("Subprocess started and main program continues...")
+            
+        if self.current_button == "plotToday_cnt_T_btn":
+            command = [
+                "python3",
+                "appInteractivePlots.py",
+                "PLOT_CURRENT_DAY_DATA_HEATER",
+                str(0),
+                str(1),
+                str(False),
+            ]
+            print(command)
+            process = subprocess.Popen(command)
+            print("Subprocess started and main program continues...")
+            
+        if self.current_button == "plotAllDays_cnt_H_btn":
+            command = [
+                "python3",
+                "appInteractivePlots.py",
+                "PLOT_ALL_DAYS_DATA_HUMIDIFIER",
+                str(0),
+                str(1),
+                str(False),
+            ]
+            print(command)
+            process = subprocess.Popen(command)
+            print("Subprocess started and main program continues...")
+            
+        if self.current_button == "plotToday_cnt_H_btn":
+            command = [
+                "python3",
+                "appInteractivePlots.py",
+                "PLOT_CURRENT_DAY_DATA_HUMIDIFIER",
+                str(0),
+                str(1),
+                str(False),
             ]
             print(command)
             process = subprocess.Popen(command)
@@ -589,11 +649,13 @@ class MainSoftwareThread(QtCore.QThread):
         
         # SAVING DATA IN FILES
         time_difference = datetime.now() - self.last_saving_time
-        #print(time_difference)
+        
         if (time_difference >= timedelta(minutes = self.saving_interval)):
                 start_time = time.perf_counter()                
                 self.save_data_to_files('Temperatures', current_temperatures) #{'TMP01': 23.1, 'TMP02': 23.1, 'TMP03': 23.1}
                 self.save_data_to_files('Humidity', current_humidities) #{'HUM01': 52.5}
+                self.save_data_to_files('Heater', {'Heater_Status': self.thc.get_output_control()})  # need to pass a dictionary
+                self.save_data_to_files('Humidifier', {'Humidifier_status': self.hhc.get_output_control()}) 
                 self.last_saving_time = datetime.now()
                 print(f"Saved data! {self.last_saving_time}")
                 
@@ -611,6 +673,10 @@ class MainSoftwareThread(QtCore.QThread):
             folder_path = os.path.join(machine_statistics_folder_path, 'Temperatures')
         elif data_type == 'Humidity':
             folder_path = os.path.join(machine_statistics_folder_path, 'Humidity')
+        elif data_type == 'Heater':
+            folder_path = os.path.join(machine_statistics_folder_path, 'Heater')
+        elif data_type == 'Humidifier':
+            folder_path = os.path.join(machine_statistics_folder_path, 'Humidifier')
         else:
             raise ValueError("Invalid path configuration")	
             
@@ -1113,6 +1179,12 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui.plotToday_temp_T_btn.clicked.connect(lambda: self.emit_button_signal(self.ui.plotToday_temp_T_btn.objectName()))
         self.ui.plotAllDays_humidity_H_btn.clicked.connect(lambda: self.emit_button_signal(self.ui.plotAllDays_humidity_H_btn.objectName()))
         self.ui.plotToday_humidity_H_btn.clicked.connect(lambda: self.emit_button_signal(self.ui.plotToday_humidity_H_btn.objectName()))
+        
+        self.ui.plotToday_cnt_T_btn.clicked.connect(lambda: self.emit_button_signal(self.ui.plotToday_cnt_T_btn.objectName()))
+        self.ui.plotAllDays_cnt_T_btn.clicked.connect(lambda: self.emit_button_signal(self.ui.plotAllDays_cnt_T_btn.objectName()))
+        
+        self.ui.plotToday_cnt_H_btn.clicked.connect(lambda: self.emit_button_signal(self.ui.plotToday_cnt_H_btn.objectName()))
+        self.ui.plotAllDays_cnt_H_btn.clicked.connect(lambda: self.emit_button_signal(self.ui.plotAllDays_cnt_H_btn.objectName()))
 
         # Connect radio buttons to emit its values
         # Connect radio buttons to emit signals
@@ -1171,7 +1243,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.ui.temperature3_T.setText(f"{all_data[2]} °C")
             self.ui.temperature4_T.setText(f"{all_data[3]} °C")
             self.ui.humidity1_H.setText(f"{all_data[4]} %")
-            #self.ui.temperature4_2.setText(f"{all_data[5]} °C") PER TEMPERATURA DA UMIDITA
+            self.ui.temperatureFromHumidity1.setText(f"{all_data[5]} °C")
             self.ui.heatCtrlVal.setText(f"{all_data[6]} °C")
             self.ui.humCtrlVal.setText(f"{all_data[7]} °C")
             if all_data[8] == True:
