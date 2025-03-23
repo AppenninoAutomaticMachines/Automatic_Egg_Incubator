@@ -24,6 +24,10 @@ fare un bit di arduino pin tipo alive da avere feedback visivo
 
 sw per sbaglio comando anche il hhc quando comando thc
 
+mettere un sensore per temperatura T ext
+pull down del comando di step per lo stepper motor
+
+
 
 
 // --------------------- //
