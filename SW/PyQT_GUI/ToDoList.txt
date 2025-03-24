@@ -10,7 +10,7 @@ pensare al discorso dei parametri attuali che si salvano su un file, così se sp
 
 TORRETTA LUMINOSA:
         chatGPT --> classe che gestisce i messaggi machineSignaling + torretta luminosa + transistor
-        circuito con 4 transistor per alimentare i 3led + cicalino 12V (non voglio usare dei relè, ovviamente)
+        FATTO: circuito con 4 transistor per alimentare i 3led + cicalino 12V (non voglio usare dei relè, ovviamente)
         FATTO: sw arduino coi comandi.
 Usare arduinoEggINcubator perché è il sw di arduino che comincia a gestire anche lo stepper,mentre quello di prima di base dava indietro solo le temperature e i feedback degli induttori, ma poca roba, prendeva pochi comandi.
 - controlli di sicurezza sulle temperature --> gestione dell'errore da fare. DOpo un po' spegni il riscaldatore
@@ -25,7 +25,7 @@ sw per sbaglio comando anche il hhc quando comando thc
 
 mettere un sensore per temperatura T ext
 pull down del comando di step per lo stepper motor
-
++ fare anche sw pyhton che gestisce le segnalazioni raccogliendo le varie situazioni... poi invia i comandi opportuni ad arduino
 
 
 
