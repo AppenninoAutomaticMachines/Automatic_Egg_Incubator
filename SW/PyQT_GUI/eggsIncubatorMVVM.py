@@ -31,7 +31,10 @@ portSetup = "/dev/ttyACM0"
 baudrateSetup = 19200
 timeout = 0.1
 
-identifiers = ["TMP", "HUM", "HTP", "IND"]  # Global variable
+"""
+	"EXTT" = riguarda il sensore di temperatura esterno.
+"""
+identifiers = ["TMP", "HUM", "HTP", "IND", "EXTT"]  # Global variable
 
 
 class SerialThread(QtCore.QThread):
@@ -553,6 +556,7 @@ class MainSoftwareThread(QtCore.QThread):
         current_humidities = {k: v for d in new_data for k, v in d.items() if k.startswith("HUM")}
         current_humidities_temperatures = {k: v for d in new_data for k, v in d.items() if k.startswith("HTP")}
         current_inductors_feedbacks = {k: v for d in new_data for k, v in d.items() if k.startswith("IND")} #{'IND_CCW': 1, 'IND_CW': 1}
+	current_external_temperature = {k: v for d in new_data for k, v in d.items() if k.startswith("EXTT")} #{'EXTT': 25.2}
         
         
         # TEMPERATURE CONTROLLER SECTION
@@ -600,8 +604,9 @@ class MainSoftwareThread(QtCore.QThread):
                         list(current_humidities_temperatures.values()) + \
                         [self.thc.get_mean_value()] + \
                         [self.hhc.get_mean_value()] + \
-						[self.thc.get_output_control()] + \
-                        [self.hhc.get_output_control()] #
+			[self.thc.get_output_control()] + \
+                        [self.hhc.get_output_control()] + \
+			list(current_external_temperature.values())
                         
             self.update_view.emit(all_values)
             
