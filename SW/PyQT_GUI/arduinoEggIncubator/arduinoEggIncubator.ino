@@ -1,8 +1,3 @@
-/*
-  Questo codice prende le temperature e le umidità e li impacchetta correttametne in trasmissione come richeisto da raspberry.
-  Infine, dipendentemente da cosa succede (interruttori) manda a rpy altre info, per esempio carter aperto
-  oppure motore che raggiunge le posizioni limite. Provo a fare tutto in modo asincrono: mando solo quando ne ho bisogno.
-*/
 /* LIBRARIES */
 #include <SoftwareSerial.h>
 #include <OneWire.h>
@@ -22,20 +17,14 @@
 
 /* PIN ARDUINO */
 #define ONE_WIRE_BUS 4
+#define ONE_WIRE_BUS_EXTERNAL_TEMPERATURE 15
 #define TEMPERATURE_PRECISION 9 // DS18B20 digital termometer provides 9-bit to 12-bit Celsius temperature measurements
 #define HEATER_PIN 12
 #define HUMIDIFIER_PIN 11
-#define CCW_INDUCTOR_PIN 9 // sim 10 // induttore finecorsa SINISTRO (vista posteriore)
-#define CW_INDUCTOR_PIN 8  // sim 9 // induttore finecorsa DESTRO (vista posteriore)
+#define CCW_INDUCTOR_PIN 9 // induttore finecorsa SINISTRO (vista posteriore)
+#define CW_INDUCTOR_PIN 8 // induttore finecorsa DESTRO (vista posteriore)
 #define DHT_PIN 3   //Pin a cui è connesso il sensore
-/*
-#define RED_LED 6
-#define ALIVE 5
-*/
-// pin 7 predisposto per induttore porta
-// 2 not used
-// DHT sul 3
-// not used è per un output...
+
 #define STEPPER_MOTOR_STEP_PIN 6
 #define STEPPER_MOTOR_DIRECTION_PIN 5
 #define STEPPER_MOTOR_MS1_PIN 2
@@ -48,7 +37,11 @@
 #define PIN_GREEN_LIGHT A2
 #define PIN_BUZZER A3
 
-/* ALIVE su PIN fisico */
+#if !defined(DEVICE_DISCONNECTED)
+#define DEVICE_DISCONNECTED -127
+#endif
+
+#define DEVICE_ERROR 85
 
 /* ALIVE su SERIALE */
 /* se vedo che per più di 3.5s non ricevo segnale seriale, allora 1) allarme  2) inibisco i controlli degli attuatori.
@@ -62,23 +55,19 @@ unsigned long serial_alive_timeout_ms = 3500;
 bool serial_communication_is_ok = false; 
 
 /* TEMPERATURES SECTION */
-// NO STAR/RING connection, only ONE SINGLE WIRE UTP cabme (unshielded twisted pair)
-OneWire oneWire(ONE_WIRE_BUS);
+// GENERAL
+float marginFactor = 1.2; // fattore moltiplicativo per aspettare un po' più di delay.
+unsigned long startGetTemperatures, endGetTemperatures;
 
-DallasTemperature sensors(&oneWire);
-
+// INCUBATOR
 #define TEMPERATURE_IDENTIFICATION_PROCEDURE true // se a true visualizzazione nel monitor seriale della temperatura e del sensore associato
+
+OneWire oneWire(ONE_WIRE_BUS);
+DallasTemperature sensors(&oneWire);
 DeviceAddress Thermometer[NUMBER_OF_TEMPERATURES_SENSORS_ON_ONE_WIRE_BUS];
 byte numberOfDevices;
-byte Limit;
-unsigned long conversionTime_DS18B20_sensors; // in millis
+unsigned long conversionTime_DS18B20_sensors; //ms
 unsigned long lastTempRequest;
-
-#if !defined(DEVICE_DISCONNECTED)
-#define DEVICE_DISCONNECTED -127
-#endif
-
-#define DEVICE_ERROR 85
 
 /* Temperature sensors - addresses. LOWEST number = HIGHEST sensor, then follows the decreasing order */
 // RICORDA LA VARIABILE ENABLE_DEVICE_ORDERING
@@ -91,25 +80,26 @@ char temperatureSensor_address3[] = "28FF640E7F489F5E";
 unsigned int deviceDisconnected[NUMBER_OF_TEMPERATURES_SENSORS_ON_ONE_WIRE_BUS];
 unsigned int deviceError[NUMBER_OF_TEMPERATURES_SENSORS_ON_ONE_WIRE_BUS];
 
-
 float temperatures[4]; 
-float marginFactor = 1.2; // fattore moltiplicativo per aspettare un po' più di delay.
-byte controlTemperatureIndex;
 bool gotTemperatures;
-
-byte orderedIndex;
 
 DeviceAddress tempDeviceAddress; // We'll use this variable to store a found device address
 
 // Define a char array to store the hexadecimal representation of the address
 char addressCharArray[17]; // 16 characters for the address + 1 for null terminator
 
+// EXTERNAL TEMPERATURE SENSOR
+OneWire oneWire_externalTemperatureSensor(ONE_WIRE_BUS_EXTERNAL_TEMPERATURE);
+DallasTemperature externalTemperatureSensor(&oneWire_externalTemperatureSensor);
+DeviceAddress externalTemperatureSensor_address;
+
+unsigned int deviceDisconnected_externalTemperatureSensor;
+unsigned int deviceError_externalTemperatureSensor;
+
+float temperature_externalTemperatureSensor; 
 /* END TEMPERATURES SECTION */
 
 
-float temp_sensor1, temp_sensor2, temp_sensor3;
-
-unsigned long startGetTemperatures, endGetTemperatures;
 
 /* CCW_LS */
 antiDebounceInput ccw_inductor_input(CCW_INDUCTOR_PIN, DEFAULT_DEBOUNCE_TIME);
@@ -232,38 +222,26 @@ void setup() {
   //Serial.println("Starting");
 
   sensors.begin();
+  externalTemperatureSensor.begin();
 
   // locate devices on the bus
   //Serial.print("Locating devices...");
   //Serial.print("Found ");
 
   numberOfDevices = sensors.getDeviceCount();
-  /*
-  if(numberOfDevices != NUMBER_OF_TEMPERATURES_SENSORS_ON_ONE_WIRE_BUS){
-    Serial.println("Not found the correct number of devices on the bus.");
-    Serial.print("Expected: ");
-    Serial.print(NUMBER_OF_TEMPERATURES_SENSORS_ON_ONE_WIRE_BUS);
-    Serial.print("  Found: ");
-    Serial.println(numberOfDevices);
-  }
-  */
 
-  //Serial.print(numberOfDevices, DEC);
-  //Serial.println(" devices.");
-
-  // report parasite power requirements
-  /*
-  Serial.print("Parasite power is: ");
-  if (sensors.isParasitePowerMode()) Serial.println("ON");
-  else Serial.println("OFF");
-  */
 
   sensors.setWaitForConversion(false); // quando richiedi le temperature requestTemperatures() la libreria NON aspetta il delay adeguato, quidni devi aspettarlo tu.
   sensors.requestTemperatures(); // send command to all the sensors for temperature conversion.
-  lastTempRequest = millis(); 
+   
+
+  externalTemperatureSensor.setWaitForConversion(false); // quando richiedi le temperature requestTemperatures() la libreria NON aspetta il delay adeguato, quidni devi aspettarlo tu.
+  externalTemperatureSensor.requestTemperatures(); // send command to all the sensor for temperature conversion.
+
+  lastTempRequest = millis();
+  
   conversionTime_DS18B20_sensors = 750 / (1 << (12 - TEMPERATURE_PRECISION));  // res in {9,10,11,12}
 
-  orderedIndex = 0;
   for(uint8_t index = 0; index < numberOfDevices; index++){
     if(sensors.getAddress(tempDeviceAddress, index)){ // fetch dell'indirizzo
 
@@ -297,11 +275,20 @@ void setup() {
       delay(5);
     }
   }
+
+  if(externalTemperatureSensor.getAddress(tempDeviceAddress, 0)){
+    addressToCharArray(tempDeviceAddress, addressCharArray); // indirizzo convertito
+    externalTemperatureSensor.getAddress(externalTemperatureSensor_address, 0);
+    deviceDisconnected_externalTemperatureSensor = 0;
+    deviceError_externalTemperatureSensor = 0;
+    delay(5);
+  }
+
   last_serial_alive_time = millis();
 
   delay(5);
+
   dht.begin();
-  //Serial.println("Setup finished");
 }
 
 void loop() {    
@@ -438,9 +425,22 @@ void loop() {
 
       delay(1);       
     }
+
+    temperature_externalTemperatureSensor = externalTemperatureSensor.getTempC(externalTemperatureSensor_address);
+    if(temperature_externalTemperatureSensor <= DEVICE_DISCONNECTED){
+      deviceDisconnected_externalTemperatureSensor ++;
+    }
+    if(temperature_externalTemperatureSensor >= DEVICE_ERROR){
+      deviceError_externalTemperatureSensor ++;
+    }
+    
+    delay(1);
+
     gotTemperatures = true;
   
     sensors.requestTemperatures();
+    externalTemperatureSensor.requestTemperatures();
+
     lastTempRequest = millis();
     endGetTemperatures = millis();
   }   
@@ -638,6 +638,11 @@ void loop() {
 
     strcpy(bufferChar, "<HTP01,"); // temperatura che viene letta dal sensore di umidità
     dtostrf(temp_fromDHT22, 1, 1, fbuffChar); 
+    listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(bufferChar, fbuffChar), ">");
+    listofDataToSend_numberOfData++;
+
+    strcpy(bufferChar, "<EXTT,");
+    dtostrf(temperature_externalTemperatureSensor, 1, 1, fbuffChar); 
     listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(bufferChar, fbuffChar), ">");
     listofDataToSend_numberOfData++;
 
