@@ -10,41 +10,28 @@
 #define ONE_WIRE_BUS_EXTERNAL_TEMPERATURE 2
 #define TEMPERATURE_PRECISION 9
 
-/* TEMPERATURES SECTION */
-OneWire oneWire(ONE_WIRE_BUS_EXTERNAL_TEMPERATURE);
-
-DallasTemperature sensor(&oneWire);
-
-DeviceAddress Thermometer;
-byte numberOfDevices;
-byte Limit;
-unsigned long conversionTime_DS18B20_sensor; // in millis
-unsigned long lastTempRequest;
-
 #if !defined(DEVICE_DISCONNECTED)
 #define DEVICE_DISCONNECTED -127
 #endif
 
 #define DEVICE_ERROR 85
 
-/* Temperature sensor - addresses. LOWEST number = HIGHEST sensor, then follows the decreasing order */
-// RICORDA LA VARIABILE ENABLE_DEVICE_ORDERING
-char temperatureSensor_address0[] = "28FF640E7213DCBE"; 
+/* TEMPERATURES SECTION */
+OneWire oneWire(ONE_WIRE_BUS_EXTERNAL_TEMPERATURE);
+DallasTemperature sensor(&oneWire);
+DeviceAddress Thermometer;
+unsigned long conversionTime_DS18B20_sensor; //ms
+unsigned long lastTempRequest;
+byte numberOfDevices;
 
-/* Temperature Diagnostic */
 unsigned int deviceDisconnected;
 unsigned int deviceError;
 
-
 float temperature; 
 float marginFactor = 1.2; // fattore moltiplicativo per aspettare un po' più di delay.
-byte controlTemperatureIndex;
 bool gotTemperatures;
 
-byte orderedIndex;
-
 DeviceAddress tempDeviceAddress; // We'll use this variable to store a found device address
-
 // Define a char array to store the hexadecimal representation of the address
 char addressCharArray[17]; // 16 characters for the address + 1 for null terminator
 
