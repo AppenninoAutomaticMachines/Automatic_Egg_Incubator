@@ -26,8 +26,7 @@ sw per sbaglio comando anche il hhc quando comando thc
 mettere un sensore per temperatura T ext
 pull down del comando di step per lo stepper motor
 + fare anche sw pyhton che gestisce le segnalazioni raccogliendo le varie situazioni... poi invia i comandi opportuni ad arduino
-
-
++ messa in servizio raspberry
 
 // --------------------- //
 |                        |
