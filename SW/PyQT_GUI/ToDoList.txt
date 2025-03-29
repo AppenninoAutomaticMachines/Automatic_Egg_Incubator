@@ -10,7 +10,7 @@ pensare al discorso dei parametri attuali che si salvano su un file, così se sp
 
 TORRETTA LUMINOSA:
         chatGPT --> classe che gestisce i messaggi machineSignaling + torretta luminosa + transistor
-        FATTO: circuito con 4 transistor per alimentare i 3led + cicalino 12V (non voglio usare dei relè, ovviamente)
+        FATTO: circuito con 4 transistor per alimentare i 3led + cicalino 12V (non voglio usare dei relè, ovviamente) PIN 23 25 27 29
         FATTO: sw arduino coi comandi.
 Usare arduinoEggINcubator perché è il sw di arduino che comincia a gestire anche lo stepper,mentre quello di prima di base dava indietro solo le temperature e i feedback degli induttori, ma poca roba, prendeva pochi comandi.
 - controlli di sicurezza sulle temperature --> gestione dell'errore da fare. DOpo un po' spegni il riscaldatore
@@ -25,12 +25,14 @@ sw per sbaglio comando anche il hhc quando comando thc
 
 SENSORE TEMPERATURA ESTERNO
         - FATTO SW arduino
-        - cablaggio
+        - cablaggio PIN 20
         - QT Designer + anche parte in update
         - FATTO process_serial
 pull down del comando di step per lo stepper motor
 + fare anche sw pyhton che gestisce le segnalazioni raccogliendo le varie situazioni... poi invia i comandi opportuni ad arduino
 + messa in servizio raspberry
+
+DIGITAL OPUTPT relè sono 12 11 10 21
 
 // --------------------- //
 |                        |
