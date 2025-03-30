@@ -17,7 +17,7 @@
 
 /* PIN ARDUINO */
 #define ONE_WIRE_BUS 4
-#define ONE_WIRE_BUS_EXTERNAL_TEMPERATURE 15
+#define ONE_WIRE_BUS_EXTERNAL_TEMPERATURE 20
 #define TEMPERATURE_PRECISION 9 // DS18B20 digital termometer provides 9-bit to 12-bit Celsius temperature measurements
 #define HEATER_PIN 12
 #define HUMIDIFIER_PIN 11
@@ -32,10 +32,10 @@
 #define STEPPER_MOTOR_MS3_PIN 2
 
 #define NUMBER_OF_LIGHTS 3
-#define PIN_RED_LIGHT A0
-#define PIN_ORANGE_LIGHT A1
-#define PIN_GREEN_LIGHT A2
-#define PIN_BUZZER A3
+#define PIN_RED_LIGHT 23
+#define PIN_ORANGE_LIGHT 25
+#define PIN_GREEN_LIGHT 27
+#define PIN_BUZZER 29
 
 #if !defined(DEVICE_DISCONNECTED)
 #define DEVICE_DISCONNECTED -127
