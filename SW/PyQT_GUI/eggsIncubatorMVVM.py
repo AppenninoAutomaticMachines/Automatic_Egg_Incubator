@@ -556,7 +556,7 @@ class MainSoftwareThread(QtCore.QThread):
         current_humidities = {k: v for d in new_data for k, v in d.items() if k.startswith("HUM")}
         current_humidities_temperatures = {k: v for d in new_data for k, v in d.items() if k.startswith("HTP")}
         current_inductors_feedbacks = {k: v for d in new_data for k, v in d.items() if k.startswith("IND")} #{'IND_CCW': 1, 'IND_CW': 1}
-	current_external_temperature = {k: v for d in new_data for k, v in d.items() if k.startswith("EXTT")} #{'EXTT': 25.2}
+        current_external_temperature = {k: v for d in new_data for k, v in d.items() if k.startswith("EXTT")} #{'EXTT': 25.2}
         
         
         # TEMPERATURE CONTROLLER SECTION
@@ -1108,7 +1108,8 @@ class MainSoftwareThread(QtCore.QThread):
                     # diagnostic: attesa del feedback
                     if (time.time() - self.last_execution_time) >= self.rotation_in_progress_timeout_sec:
                         # manda comando di STOP
-                        self.new_command = "stop"
+                        #self.new_command = "stop"
+                        pass
                         
                     if self.acknowledge_from_external is not None:         
                         if self.acknowledge_from_external == "IND_CCW" and self.rotation_state == "CCW_rotation_direction":
@@ -1250,7 +1251,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.ui.humidity1_H.setText(f"{all_data[4]} %")
             self.ui.temperatureFromHumidity1.setText(f"{all_data[5]} °C")
             self.ui.heatCtrlVal.setText(f"{all_data[6]} °C")
-            self.ui.humCtrlVal.setText(f"{all_data[7]} °C")
+            self.ui.humCtrlVal.setText(f"{all_data[7]} %")
             if all_data[8] == True:
                 self.ui.heaterStatus.setText(f"Heating ON!")
             else:
@@ -1259,6 +1260,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.ui.humidifierStatus.setText(f"Humidifying ON!")
             else:
                 self.ui.humidifierStatus.setText(f"OFF")
+            self.ui.externalTemperature.setText(f"{all_data[10]} °C")
             #self.ui.temperature4_2.setText(f"{all_data[3]} °C") PER TEMPERATURA DA UMIDITA
             
     def update_statistics_data(self, all_data):
