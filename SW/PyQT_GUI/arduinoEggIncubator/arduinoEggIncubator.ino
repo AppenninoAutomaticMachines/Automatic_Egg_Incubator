@@ -58,7 +58,7 @@ bool serial_communication_is_ok = false;
 
 /* TEMPERATURES SECTION */
 // GENERAL
-float marginFactor = 1.2; // fattore moltiplicativo per aspettare un po' più di delay.
+float marginFactor = 1.5; // fattore moltiplicativo per aspettare un po' più di delay.
 unsigned long startGetTemperatures, endGetTemperatures;
 
 // INCUBATOR
@@ -91,6 +91,7 @@ DeviceAddress tempDeviceAddress; // We'll use this variable to store a found dev
 char addressCharArray[17]; // 16 characters for the address + 1 for null terminator
 
 // EXTERNAL TEMPERATURE SENSOR
+#define ENABLE_EXTERNAL_TEMPERATURE_READING true
 OneWire oneWire_externalTemperatureSensor(ONE_WIRE_BUS_EXTERNAL_TEMPERATURE);
 DallasTemperature externalTemperatureSensor(&oneWire_externalTemperatureSensor);
 DeviceAddress externalTemperatureSensor_address;
@@ -229,7 +230,6 @@ void setup() {
   //Serial.println("Starting");
 
   sensors.begin();
-  externalTemperatureSensor.begin();
 
   // locate devices on the bus
   //Serial.print("Locating devices...");
@@ -241,9 +241,12 @@ void setup() {
   sensors.setWaitForConversion(false); // quando richiedi le temperature requestTemperatures() la libreria NON aspetta il delay adeguato, quidni devi aspettarlo tu.
   sensors.requestTemperatures(); // send command to all the sensors for temperature conversion.
    
-
-  externalTemperatureSensor.setWaitForConversion(false); // quando richiedi le temperature requestTemperatures() la libreria NON aspetta il delay adeguato, quidni devi aspettarlo tu.
-  externalTemperatureSensor.requestTemperatures(); // send command to all the sensor for temperature conversion.
+  if (ENABLE_EXTERNAL_TEMPERATURE_READING){
+    externalTemperatureSensor.begin();
+    externalTemperatureSensor.setWaitForConversion(false); // quando richiedi le temperature requestTemperatures() la libreria NON aspetta il delay adeguato, quidni devi aspettarlo tu.
+    externalTemperatureSensor.requestTemperatures(); // send command to all the sensor for temperature conversion.
+  }
+    
 
   lastTempRequest = millis();
   
@@ -283,13 +286,16 @@ void setup() {
     }
   }
 
-  if(externalTemperatureSensor.getAddress(tempDeviceAddress, 0)){
-    addressToCharArray(tempDeviceAddress, addressCharArray); // indirizzo convertito
-    externalTemperatureSensor.getAddress(externalTemperatureSensor_address, 0);
-    deviceDisconnected_externalTemperatureSensor = 0;
-    deviceError_externalTemperatureSensor = 0;
-    delay(5);
+  if (ENABLE_EXTERNAL_TEMPERATURE_READING){
+    if(externalTemperatureSensor.getAddress(tempDeviceAddress, 0)){
+      addressToCharArray(tempDeviceAddress, addressCharArray); // indirizzo convertito
+      externalTemperatureSensor.getAddress(externalTemperatureSensor_address, 0);
+      deviceDisconnected_externalTemperatureSensor = 0;
+      deviceError_externalTemperatureSensor = 0;
+      delay(5);
+    }
   }
+    
 
   last_serial_alive_time = millis();
 
@@ -433,20 +439,21 @@ void loop() {
       delay(1);       
     }
 
-    temperature_externalTemperatureSensor = externalTemperatureSensor.getTempC(externalTemperatureSensor_address);
-    if(temperature_externalTemperatureSensor <= DEVICE_DISCONNECTED){
-      deviceDisconnected_externalTemperatureSensor ++;
-    }
-    if(temperature_externalTemperatureSensor >= DEVICE_ERROR){
-      deviceError_externalTemperatureSensor ++;
-    }
-    
     delay(1);
-
-    gotTemperatures = true;
-  
+    gotTemperatures = true;  
     sensors.requestTemperatures();
-    externalTemperatureSensor.requestTemperatures();
+
+    if (ENABLE_EXTERNAL_TEMPERATURE_READING){
+      temperature_externalTemperatureSensor = externalTemperatureSensor.getTempC(externalTemperatureSensor_address);
+      if(temperature_externalTemperatureSensor <= DEVICE_DISCONNECTED){
+        deviceDisconnected_externalTemperatureSensor ++;
+      }
+      if(temperature_externalTemperatureSensor >= DEVICE_ERROR){
+        deviceError_externalTemperatureSensor ++;
+      }       
+      delay(1);
+      externalTemperatureSensor.requestTemperatures();
+    }      
 
     lastTempRequest = millis();
     endGetTemperatures = millis();
