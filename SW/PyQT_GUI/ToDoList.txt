@@ -23,11 +23,7 @@ fare un bit di arduino pin tipo alive da avere feedback visivo
 
 sw per sbaglio comando anche il hhc quando comando thc
 
-SENSORE TEMPERATURA ESTERNO
-        - FATTO SW arduino
-        - FATTO cablaggio PIN 20
-        - QT Designer + anche parte in update
-        - FATTO process_serial
+
 pull down del comando di step per lo stepper motor
 + fare anche sw pyhton che gestisce le segnalazioni raccogliendo le varie situazioni... poi invia i comandi opportuni ad arduino
 + messa in servizio raspberry
@@ -39,6 +35,11 @@ DIGITAL OPUTPT relè sono 12 11 10 21
 |                        |
 ▼                        ▼
 // --------------------- //
+SENSORE TEMPERATURA ESTERNO
+        - FATTO SW arduino
+        - FATTO cablaggio PIN 20
+        - FATTO QT Designer + anche parte in update
+        - FATTO process_serial
 FATO: grafico dell'azionamento ON/OFF degli attuatori heater e humidifier
 FATTO: da gestire la temperatura del sensore di umidità
 FATTO: plot delle humidità
