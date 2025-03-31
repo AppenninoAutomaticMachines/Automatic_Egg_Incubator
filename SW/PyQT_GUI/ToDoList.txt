@@ -27,8 +27,7 @@ sw per sbaglio comando anche il hhc quando comando thc
 pull down del comando di step per lo stepper motor
 + fare anche sw pyhton che gestisce le segnalazioni raccogliendo le varie situazioni... poi invia i comandi opportuni ad arduino
 + messa in servizio raspberry
-
-DIGITAL OPUTPT relè sono 12 11 10 21
+backup del sensore di temperatura
 
 // --------------------- //
 |                        |
