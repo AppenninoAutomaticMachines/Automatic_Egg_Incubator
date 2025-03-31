@@ -25,7 +25,7 @@ sw per sbaglio comando anche il hhc quando comando thc
 
 SENSORE TEMPERATURA ESTERNO
         - FATTO SW arduino
-        - cablaggio PIN 20
+        - FATTO cablaggio PIN 20
         - QT Designer + anche parte in update
         - FATTO process_serial
 pull down del comando di step per lo stepper motor
