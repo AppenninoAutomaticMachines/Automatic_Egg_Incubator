@@ -17,10 +17,12 @@
 
 /* PIN ARDUINO */
 #define ONE_WIRE_BUS 4
-#define ONE_WIRE_BUS_EXTERNAL_TEMPERATURE 20
+#define ONE_WIRE_BUS_EXTERNAL_TEMPERATURE 22
 #define TEMPERATURE_PRECISION 9 // DS18B20 digital termometer provides 9-bit to 12-bit Celsius temperature measurements
 #define HEATER_PIN 12
 #define HUMIDIFIER_PIN 11
+#define FREE_OUTPUT_RELAY_PC817_1 10
+#define FREE_OUTPUT_RELAY_PC817_2 23
 #define CCW_INDUCTOR_PIN 9 // induttore finecorsa SINISTRO (vista posteriore)
 #define CW_INDUCTOR_PIN 8 // induttore finecorsa DESTRO (vista posteriore)
 #define DHT_PIN 3   //Pin a cui è connesso il sensore
@@ -32,10 +34,10 @@
 #define STEPPER_MOTOR_MS3_PIN 2
 
 #define NUMBER_OF_LIGHTS 3
-#define PIN_RED_LIGHT 23
-#define PIN_ORANGE_LIGHT 25
-#define PIN_GREEN_LIGHT 27
-#define PIN_BUZZER 29
+#define PIN_RED_LIGHT 25
+#define PIN_ORANGE_LIGHT 27
+#define PIN_GREEN_LIGHT 29
+#define PIN_BUZZER 31
 
 #if !defined(DEVICE_DISCONNECTED)
 #define DEVICE_DISCONNECTED -127
@@ -189,8 +191,11 @@ void setup() {
   pinMode(HUMIDIFIER_PIN, OUTPUT);
   digitalWrite(HUMIDIFIER_PIN, LOW);
 
-  //pinMode(RED_LED, OUTPUT);
-  //pinMode(ALIVE, OUTPUT);
+  pinMode(FREE_OUTPUT_RELAY_PC817_1, OUTPUT);
+  digitalWrite(FREE_OUTPUT_RELAY_PC817_1, LOW);
+
+  pinMode(FREE_OUTPUT_RELAY_PC817_2, OUTPUT);
+  digitalWrite(FREE_OUTPUT_RELAY_PC817_2, LOW);
 
   pinMode(STEPPER_MOTOR_STEP_PIN, OUTPUT);
   digitalWrite(STEPPER_MOTOR_STEP_PIN, LOW);
@@ -213,9 +218,11 @@ void setup() {
   /* MACHINE SINGALING DEVICE - SECTION */
   for (int i = 0; i < NUMBER_OF_LIGHTS; i++) {
         pinMode(lightPins[i], OUTPUT);
+        digitalWrite(lightPins[i], LOW);
         lights[i] = {OFF, 0, LOW};
     }
     pinMode(buzzerPin, OUTPUT);
+    digitalWrite(buzzerPin, LOW);
     buzzer = {OFF, 0, LOW};
 
   Serial.begin(SERIAL_SPEED);
