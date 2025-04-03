@@ -1,3 +1,11 @@
+VIDEO:
+incubatrice V2
+machine signaling device
+messa in funzione
+pagina dei messaggi
+PID riscaldatore con SSR
+
+
 DA FARE:
 se ci sono troppi errori nei sensori, allora allarme e mandare il comando di stop all'heater  
 stato del motore così posso pulire un po' il terminale
