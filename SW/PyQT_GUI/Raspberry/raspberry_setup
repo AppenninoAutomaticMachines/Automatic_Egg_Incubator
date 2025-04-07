@@ -33,37 +33,43 @@ venv-py312\Scripts\activate
 xx) INSTALLARE le librerie richieste dal progetto
 
 xx) LANCIO AUTOMATICO DEL SW: configurazione
-sudo nano /etc/systemd/system/pyqt_gui.service 
+  sudo nano /etc/systemd/system/pyqt_gui.service 
 
-  [Unit]
-  Description=Start PyQT GUI Application
-  After=multi-user.target network.target graphical.target nss-user-lookup.target
-  Wants=network.target graphical.target
-  
-  
-  [Service]
-  Type=simple
-  ExecStart=/usr/bin/lxterminal -e /bin/bash -c "sleep 30 && /home/filippo/Documents/PyQT_GUI/venv-py312/bin/python3 /home/filippo/Documents/PyQT_GUI/eggsIncubatorMVVM.py; echo 'Script exited. Press any key...' && read -n 1"
-  WorkingDirectory=/home/filippo/Documents/PyQT_GUI
-  User=filippo
-  Restart=on-failure
-  RestartSec=5
-  Environment=DISPLAY=:0
-  Environment=XAUTHORITY=/home/filippo/.Xauthority
-  
-  [Install]
-  WantedBy=multi-user.target
+    [Unit]
+    Description=Start PyQT GUI Application
+    After=multi-user.target network.target graphical.target nss-user-lookup.target
+    Wants=network.target graphical.target
+    
+    
+    [Service]
+    Type=simple
+    ExecStart=/usr/bin/lxterminal -e /bin/bash -c "sleep 30 && /home/filippo/Documents/PyQT_GUI/venv-py312/bin/python3 /home/filippo/Documents/PyQT_GUI/eggsIncubatorMVVM.py; echo 'Script exited. Press any key...' && read -n 1"
+    WorkingDirectory=/home/filippo/Documents/PyQT_GUI
+    User=filippo
+    Restart=on-failure
+    RestartSec=5
+    Environment=DISPLAY=:0
+    Environment=XAUTHORITY=/home/filippo/.Xauthority
+    
+    [Install]
+    WantedBy=multi-user.target
 
 Notare come lancio lo script con il python che voglio io + scrivo una stringa in caso di errore, così che il terminale rimanga aperto.
 Anche ChatGPT ha detto che il terminale si chiude in automatico se si chiude lo script che l'ha lanciato, perdendo quindi tutta la diagnostica:
 Ah, gotcha. When running under lxterminal via systemd, the terminal closes as soon as the script exits—so if your script crashes or exits early, you lose the error output.
 
-sudo systemctl daemon-reload
-sudo systemctl enable pyqt_gui.service
-sudo systemctl start pyqt_gui.service
-sudo reboot
+  sudo systemctl daemon-reload
+  sudo systemctl enable pyqt_gui.service
+  sudo systemctl start pyqt_gui.service
+  sudo reboot
 
+xx) RDP = remote desktop connection
+Install XRDP
+  sudo apt update && sudo apt upgrade -y
+  sudo apt install -y xrdp
+Finally, run the following command to get the Raspberry Pi IP address. You’ll need the IP address to establish the remote connection.
 
+  hostname -I
 
 
 xx) GENERAL TOOLS
