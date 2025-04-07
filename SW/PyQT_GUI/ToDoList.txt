@@ -4,6 +4,7 @@ machine signaling device
 messa in funzione
 pagina dei messaggi
 PID riscaldatore con SSR
+PC817 circuitry
 
 
 DA FARE:
@@ -20,6 +21,7 @@ TORRETTA LUMINOSA:
         chatGPT --> classe che gestisce i messaggi machineSignaling + torretta luminosa + transistor
         FATTO: circuito con 4 transistor per alimentare i 3led + cicalino 12V (non voglio usare dei relè, ovviamente) PIN 23 25 27 29
         FATTO: sw arduino coi comandi.
+        FATTO: montaggio su incubatrice
 Usare arduinoEggINcubator perché è il sw di arduino che comincia a gestire anche lo stepper,mentre quello di prima di base dava indietro solo le temperature e i feedback degli induttori, ma poca roba, prendeva pochi comandi.
 - controlli di sicurezza sulle temperature --> gestione dell'errore da fare. DOpo un po' spegni il riscaldatore
 - premi i pulsanti di movimento dei motori e in automatico va in modalità manuale. Per ripristinare la modalità automatica devi cliccare un forceEggTurns, perché così riprendi esattametne da dove eri ripartito prima.
@@ -32,7 +34,7 @@ fare un bit di arduino pin tipo alive da avere feedback visivo
 sw per sbaglio comando anche il hhc quando comando thc
 
 
-pull down del comando di step per lo stepper motor
+
 + fare anche sw pyhton che gestisce le segnalazioni raccogliendo le varie situazioni... poi invia i comandi opportuni ad arduino
 + messa in servizio raspberry
 backup del sensore di temperatura
@@ -40,11 +42,21 @@ backup del sensore di temperatura
         - se non trovi gli indirizzi esatti, allora bypass ordinamento (perché magari sostituisco un sensore)
 Durata dell'incubata (file persistente)
 
+CODICE DI ERRORE da sistemare/gestire
+Serial port closed successfully
+Traceback (most recent call last):
+  File "/home/filippo/Documents/PyQT_GUI/eggsIncubatorMVVM.py", line 85, in run
+    dataRead = self.serial_port.read().decode('utf-8')
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeDecodeError: 'utf-8' codec can't decode byte 0xc2 in position 0: unexpected end of data
+Aborted
+
 // --------------------- //
 |                        |
 |                        |
 ▼                        ▼
 // --------------------- //
+FATTO: pull down del comando di step per lo stepper motor
 SENSORE TEMPERATURA ESTERNO
         - FATTO SW arduino
         - FATTO cablaggio PIN 20
