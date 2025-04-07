@@ -1,0 +1,71 @@
+xx) SETUP di un VIRTUAL ENVIRONMENT
+python3 --version
+sudo apt update && sudo apt upgrade -y
+
+sudo apt install -y build-essential zlib1g-dev libffi-dev \
+  libssl-dev libbz2-dev libreadline-dev libsqlite3-dev \
+  libncursesw5-dev xz-utils tk-dev libxml2-dev libxmlsec1-dev \
+  liblzma-dev libgdbm-dev
+  
+cd /usr/src
+sudo wget https://www.python.org/ftp/python/3.12.0/Python-3.12.0.tgz
+sudo tar xvf Python-3.12.0.tgz
+cd Python-3.12.0
+sudo ./configure --enable-optimizations
+sudo make -j$(nproc)
+sudo make altinstall
+
+python3.12 --version
+
+python3.12 -m venv myenv
+python3.12 -m venv testenv
+sudo apt install -y python3.12-venv
+
+cd /path/to/your/project
+python3.12 -m venv venv-py312
+
+source venv-py312/bin/activate
+venv-py312\Scripts\activate
+
+
+
+
+xx) INSTALLARE le librerie richieste dal progetto
+
+xx) LANCIO AUTOMATICO DEL SW: configurazione
+sudo nano /etc/systemd/system/pyqt_gui.service 
+
+  [Unit]
+  Description=Start PyQT GUI Application
+  After=multi-user.target network.target graphical.target nss-user-lookup.target
+  Wants=network.target graphical.target
+  
+  
+  [Service]
+  Type=simple
+  ExecStart=/usr/bin/lxterminal -e /bin/bash -c "sleep 30 && /home/filippo/Documents/PyQT_GUI/venv-py312/bin/python3 /home/filippo/Documents/PyQT_GUI/eggsIncubatorMVVM.py; echo 'Script exited. Press any key...' && read -n 1"
+  WorkingDirectory=/home/filippo/Documents/PyQT_GUI
+  User=filippo
+  Restart=on-failure
+  RestartSec=5
+  Environment=DISPLAY=:0
+  Environment=XAUTHORITY=/home/filippo/.Xauthority
+  
+  [Install]
+  WantedBy=multi-user.target
+
+Notare come lancio lo script con il python che voglio io + scrivo una stringa in caso di errore, così che il terminale rimanga aperto.
+Anche ChatGPT ha detto che il terminale si chiude in automatico se si chiude lo script che l'ha lanciato, perdendo quindi tutta la diagnostica:
+Ah, gotcha. When running under lxterminal via systemd, the terminal closes as soon as the script exits—so if your script crashes or exits early, you lose the error output.
+
+sudo systemctl daemon-reload
+sudo systemctl enable pyqt_gui.service
+sudo systemctl start pyqt_gui.service
+sudo reboot
+
+
+
+
+xx) GENERAL TOOLS
+ls /dev/tty* - to see all serial attached devices
+/home/filippo/Documents/PyQT_GUI/venv-py312/bin/python3 /home/filippo/Documents/PyQT_GUI/eggsIncubatorMVVM.py - lancio di un .py esplicitamente con un python che voglio io
