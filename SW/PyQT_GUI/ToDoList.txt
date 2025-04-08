@@ -42,6 +42,91 @@ backup del sensore di temperatura
         - se non trovi gli indirizzi esatti, allora bypass ordinamento (perché magari sostituisco un sensore)
 Durata dell'incubata (file persistente)
 
+AGGIUNGERE QUESTO CODICE: log in file persistente.
+- fare una cartella nella direcroty del progetto che si chiama 'Log'
+- tipi di messaggio:
+1. INFO
+Informational messages that highlight the progress of the application at a coarse-grained level. These are useful for tracking the general flow of the application.
+
+2. DEBUG
+Detailed information, typically of interest only when diagnosing problems. These messages are useful for developers to understand the internal state of the application.
+
+3. WARNING
+Indications that something unexpected happened, or indicative of some problem in the near future (e.g., ‘disk space low’). The software is still working as expected.
+
+4. ERROR
+Due to a more serious problem, the software has not been able to perform some function. These messages indicate a failure in the application.
+
+5. CRITICAL
+A serious error, indicating that the program itself may be unable to continue running. These messages are used for severe errors that require immediate attention.
+
+6. ALARM
+Specific to your application, this could be used to indicate conditions that require immediate attention but are not necessarily errors (e.g., temperature out of range).
+
+7. EXCEPTION
+Used to log exceptions that occur in the application. This can include stack traces and other debugging information.
+
+- stamperemo in JSON format:
+[
+    {
+        "timestamp": "2025-04-08 21:49:00",
+        "error_type": "INFO",
+        "message": "This is an informational message."
+    },
+    {
+        "timestamp": "2025-04-08 21:50:00",
+        "error_type": "WARNING",
+        "message": "This is a warning message."
+    },
+    {
+        "timestamp": "2025-04-08 21:51:00",
+        "error_type": "ERROR",
+        "message": "This is an error message."
+    }
+]
+
+- ecco il codice da aggiungere:
+import datetime
+import os
+
+# Create a Log folder if it doesn't exist
+if not os.path.exists('Log'):
+    os.makedirs('Log')
+
+def log_message(error_type, message):
+    """
+    Logs a message to a log file named with the current date inside the Log folder in plain text format with sections.
+
+    Args:
+        error_type (str): The type of error (e.g., 'INFO', 'WARNING', 'ERROR').
+        message (str): The message to log.
+    """
+    current_date = datetime.datetime.now().strftime('%Y-%m-%d')
+    log_file = os.path.join('Log', f"log_{current_date}.txt")
+    
+    timestamp = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    
+    with open(log_file, 'a') as file:
+        file.write(f"--- Log Entry ---\n")
+        file.write(f"Timestamp: {timestamp}\n")
+        file.write(f"Error Type: {error_type}\n")
+        file.write(f"Message: {message}\n")
+        file.write(f"-----------------\n\n")
+
+# Example usage:
+log_message('INFO', 'This is an informational message.')
+log_message('WARNING', 'This is a warning message.')
+log_message('ERROR', 'This is an error message.')
+
+
+CAMBIARE NOME LOG MESSAGE IN SERIAL FUNCTION per clarity
+
+
+
+
+
+
+
 CODICE DI ERRORE da sistemare/gestire
 Serial port closed successfully
 Traceback (most recent call last):
