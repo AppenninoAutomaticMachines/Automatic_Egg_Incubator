@@ -36,7 +36,8 @@ sw per sbaglio comando anche il hhc quando comando thc
 
 
 + fare anche sw pyhton che gestisce le segnalazioni raccogliendo le varie situazioni... poi invia i comandi opportuni ad arduino
-+ messa in servizio raspberry
++ messa in servizio raspberry --> comando/controllo da remoto
+
 backup del sensore di temperatura
         - cablaggio
         - se non trovi gli indirizzi esatti, allora bypass ordinamento (perché magari sostituisco un sensore)
