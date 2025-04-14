@@ -211,6 +211,7 @@ def run(self):
 |                        |
 ▼                        ▼
 // --------------------- //
+FATTO: montato schermo + supporto tastiera e mouse + raspberry
 FATTO: pull down del comando di step per lo stepper motor
 SENSORE TEMPERATURA ESTERNO
         - FATTO SW arduino
