@@ -33,6 +33,9 @@ fare un bit di arduino pin tipo alive da avere feedback visivo
 
 sw per sbaglio comando anche il hhc quando comando thc
 
+- comando manuale perforzare humidifier (c'è già...verifica cablaggio)
+- cablaggio pneumatica + montare humidifier anche senza sensore di livello
+
 
 
 + fare anche sw pyhton che gestisce le segnalazioni raccogliendo le varie situazioni... poi invia i comandi opportuni ad arduino
