@@ -8,6 +8,8 @@ PC817 circuitry
 
 
 DA FARE:
+serial_communication_is_ok fallo meglio...sull'alive, e non su qualunque cosa seriale. Altrimenti becca dentro tutto...
+
 se ci sono troppi errori nei sensori, allora allarme e mandare il comando di stop all'heater  
 stato del motore così posso pulire un po' il terminale
 da fare: inibire le letture mentre si muove il motore?? fra 4 sensori e umidità non vorrei che si rallenti troppo (riguarda bito che avevo già fatto)
