@@ -114,6 +114,7 @@ class SerialThread(QtCore.QThread):
         if not self.open_serial_port():
             print("Unable to open serial port after multiple attempts.")
             return
+        time.sleep(5)
 
         buffer = ''
         startRx = False
@@ -171,8 +172,9 @@ class SerialThread(QtCore.QThread):
                 while not self.command_queue.empty():
                     command = self.command_queue.get()
                     self.serial_port.write(command.encode('utf-8'))
-                    if "ALIVE" not in command:
-                        print(f"Sent to Arduino: {command}")
+                    #print(f"Sent to Arduino: {command}")
+                    #if "ALIVE" not in command:
+                        #print(f"Sent to Arduino: {command}")
 
         except serial.SerialException as e:
             log_error(f"Serial error: {e}")
