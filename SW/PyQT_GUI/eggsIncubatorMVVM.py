@@ -173,8 +173,8 @@ class SerialThread(QtCore.QThread):
                     command = self.command_queue.get()
                     self.serial_port.write(command.encode('utf-8'))
                     #print(f"Sent to Arduino: {command}")
-                    #if "ALIVE" not in command:
-                        #print(f"Sent to Arduino: {command}")
+                    if "ALIVE" not in command:
+                        print(f"Sent to Arduino: {command}")
 
         except serial.SerialException as e:
             log_error(f"Serial error: {e}")
