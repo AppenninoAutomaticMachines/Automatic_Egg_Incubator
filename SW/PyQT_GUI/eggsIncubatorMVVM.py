@@ -66,7 +66,7 @@ class SerialThread(QtCore.QThread):
                 time.sleep(self.retry_interval)
                 retries += 1
         return False
-    
+    '''
     def run(self):
         if not self.open_serial_port():
             print("Unable to open serial port after multiple attempts.")
@@ -107,6 +107,75 @@ class SerialThread(QtCore.QThread):
                         
         except serial.SerialException as e:
             print(f"Failed to open serial port: {e}")
+        finally:
+            self.close_serial_port()
+    '''
+    def run(self):
+        if not self.open_serial_port():
+            print("Unable to open serial port after multiple attempts.")
+            return
+
+        buffer = ''
+        startRx = False
+        saving = False
+        identifiers_data_list = []
+
+        decode_error_count = 0
+        decode_error_threshold = 10  # Number of decode errors before resetting serial port
+
+        def log_error(msg):
+            print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] ERROR: {msg}")
+
+        try:
+            while self.running:
+                if self.serial_port.in_waiting > 0:
+                    try:
+                        dataRead = self.serial_port.read().decode('utf-8')
+                        decode_error_count = 0  # Reset error count on success
+                    except UnicodeDecodeError as e:
+                        decode_error_count += 1
+                        log_error(f"Decode error (#{decode_error_count}): {e}. Skipping and waiting for next '@'")
+                        startRx = False
+                        saving = False
+                        buffer = ''
+
+                        # Auto-reset serial port if too many errors
+                        if decode_error_count >= decode_error_threshold:
+                            log_error("Too many decode errors. Resetting serial port.")
+                            self.close_serial_port()
+                            time.sleep(1)
+                            self.open_serial_port()
+                            decode_error_count = 0
+                        continue
+
+                    if dataRead == '@':
+                        startRx = True
+                        buffer = ''
+                        identifiers_data_list.clear()
+                    elif startRx:
+                        if dataRead == '<':
+                            saving = True
+                        if saving:
+                            buffer += dataRead
+                        if dataRead == '>':
+                            saving = False
+                            self.decode_message(buffer, identifiers_data_list)
+                            buffer = ''
+                        if dataRead == '#':
+                            startRx = False
+                            if identifiers_data_list:
+                                self.data_received.emit(identifiers_data_list)
+                                identifiers_data_list.clear()
+
+                # Sending serial data
+                while not self.command_queue.empty():
+                    command = self.command_queue.get()
+                    self.serial_port.write(command.encode('utf-8'))
+                    if "ALIVE" not in command:
+                        print(f"Sent to Arduino: {command}")
+
+        except serial.SerialException as e:
+            log_error(f"Serial error: {e}")
         finally:
             self.close_serial_port()
             
@@ -247,7 +316,7 @@ class MainSoftwareThread(QtCore.QThread):
             if self.command_list:
                 for cmd, value in self.command_list:
                     self.serial_thread.add_command(cmd, value)
-                    print(f"{cmd}, {value}")
+                    #print(f"{cmd}, {value}")
                 self.command_list.clear()
                 
             # parte che gira periodica, quindi ci metto la gestione del motore siccome deve funzionare periodicamente per il timer.
@@ -578,8 +647,7 @@ class MainSoftwareThread(QtCore.QThread):
         # FILTRAGGIO?? NON VORREI CHE CI SINAO DEGLI SPIKE...magari  se sto in questo else per più di un tot di secondi, allora dò il false, significa che l'errore è probabile che sia persistente.
 			
         # Check for persistent errors
-        #print(current_temperatures)
-        #self.check_errors(current_temperatures)
+        self.check_errors(current_temperatures)
                 
             
             
@@ -665,7 +733,7 @@ class MainSoftwareThread(QtCore.QThread):
                 print(f"Saved data! {self.last_saving_time}")
                 
                 end_time = time.perf_counter()
-                print(f"Time requested for saving data [milli-seconds]: {(end_time - start_time)*1000}")
+                #print(f"Time requested for saving data [milli-seconds]: {(end_time - start_time)*1000}")
                 
         
     def save_data_to_files(self, data_type, data_dictionary): #passo un dictionary di temperature/humidities, dimensione variabile per gestire più o meno sensori dinamicamente
@@ -806,9 +874,9 @@ class MainSoftwareThread(QtCore.QThread):
             elif self.forceOFF:  
                 new_output = False              
             else: # AUTO                
-                if self._mean_value > self.upper_limit:
+                if self._mean_value >= self.upper_limit:
                     new_output = False  # Turn OFF if mean is above upper limit
-                elif self._mean_value < self.lower_limit:
+                elif self._mean_value <= self.lower_limit:
                     new_output = True   # Turn ON if mean is below lower limit
                 
             # update time tracking (continuous)
@@ -992,7 +1060,7 @@ class MainSoftwareThread(QtCore.QThread):
         
         def getTimeUntilNextRotation(self):
             time_result = round(max(0, self.auto_function_interval_sec - (time.time() - self.last_execution_time)), 0) # in seconds
-            print(time_result)
+            #print(f"Time until next rotation:{time_result} seconds")  
             return time_result
         
         def getTurnsCounter(self):
@@ -1127,7 +1195,7 @@ class MainSoftwareThread(QtCore.QThread):
                 else:
                     pass
                 
-            print(f"{self.main_state} {self.manual_state} {self.rotation_state} {self.new_command}")
+            #print(f"{self.main_state} {self.manual_state} {self.rotation_state} {self.new_command}")
                             
                         
                     
