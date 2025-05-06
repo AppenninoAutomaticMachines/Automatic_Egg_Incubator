@@ -9,7 +9,6 @@
 
 /* General CONSTANTS */
 #define SERIAL_SPEED 19200
-#define ENABLE_DEVICE_ORDERING true // se true devi mettere gli indirizzi nell'ordine che vuoi, se false il vettore delle temperature non è ordinato in base agli indirizzi
 #define NUMBER_OF_TEMPERATURES_SENSORS_ON_ONE_WIRE_BUS 4 //sensori di temperatura
 #define DEFAULT_DEBOUNCE_TIME 25 //ms
 #define ENABLE_HEATER true
@@ -58,7 +57,8 @@ bool serial_communication_is_ok = false;
 
 /* TEMPERATURES SECTION */
 // GENERAL
-float marginFactor = 1.5; // fattore moltiplicativo per aspettare un po' più di delay.
+bool deviceOrderingActive = true; // di base prova ad ordinare con i sensori che conosciamo.
+float marginFactor = 2; // fattore moltiplicativo per aspettare un po' più di delay.
 unsigned long startGetTemperatures, endGetTemperatures;
 
 // INCUBATOR
@@ -254,35 +254,40 @@ void setup() {
 
   for(uint8_t index = 0; index < numberOfDevices; index++){
     if(sensors.getAddress(tempDeviceAddress, index)){ // fetch dell'indirizzo
+      addressToCharArray(tempDeviceAddress, addressCharArray); // indirizzo convertito
 
-      if(ENABLE_DEVICE_ORDERING){
-        addressToCharArray(tempDeviceAddress, addressCharArray); // indirizzo convertito
-        
-        // ora ordino il vettore dei sensori.
-        if(strcmp(addressCharArray, temperatureSensor_address0) == 0){ // returns 0 when the two strings are identical
-          sensors.getAddress(Thermometer[0], index);
-        }
-        if(strcmp(addressCharArray, temperatureSensor_address1) == 0){ 
-          sensors.getAddress(Thermometer[1], index);
-        }
-        if(strcmp(addressCharArray, temperatureSensor_address2) == 0){ 
-          sensors.getAddress(Thermometer[2], index);
-        }
-        if(strcmp(addressCharArray, temperatureSensor_address3) == 0){ 
-          sensors.getAddress(Thermometer[3], index);
-        }
+      // ora ordino il vettore dei sensori.
+      if(strcmp(addressCharArray, temperatureSensor_address0) == 0){ // returns 0 when the two strings are identical
+        sensors.getAddress(Thermometer[0], index);
+      }
+      else if(strcmp(addressCharArray, temperatureSensor_address1) == 0){ 
+        sensors.getAddress(Thermometer[1], index);
+      }
+      else if(strcmp(addressCharArray, temperatureSensor_address2) == 0){ 
+        sensors.getAddress(Thermometer[2], index);
+      }
+      else if(strcmp(addressCharArray, temperatureSensor_address3) == 0){ 
+        sensors.getAddress(Thermometer[3], index);
       }
       else{
-        // riempo il vettore di temperature senza alcun ordine topologico.
-        sensors.getAddress(Thermometer[index], index);
-      }
-        
+        // evidentemente indirizzo non presente, allora non procedo con il device ordering
+        deviceOrderingActive = false;
+      }       
 
       // initializing arrays - l'azzeramento posso farlo senza posizioni, non importa, tanto è tutto a 0.
       deviceDisconnected[index] = 0;
       deviceError[index] = 0;
 
       delay(5);
+    }
+  }
+
+  if(!deviceOrderingActive){
+    // se si è disattivato perché è cambiato un sensore, allora devo riciclarli tutti e metterli nel vettore a caso.
+    for(uint8_t index = 0; index < numberOfDevices; index++){
+      sensors.getAddress(Thermometer[index], index);
+      deviceDisconnected[index] = 0;
+      deviceError[index] = 0;
     }
   }
 
@@ -436,12 +441,13 @@ void loop() {
         deviceError[index] ++;
       }
 
-      delay(1);       
+      delay(3);       
     }
 
     delay(1);
     gotTemperatures = true;  
     sensors.requestTemperatures();
+    delay(1);
 
     if (ENABLE_EXTERNAL_TEMPERATURE_READING){
       temperature_externalTemperatureSensor = externalTemperatureSensor.getTempC(externalTemperatureSensor_address);
