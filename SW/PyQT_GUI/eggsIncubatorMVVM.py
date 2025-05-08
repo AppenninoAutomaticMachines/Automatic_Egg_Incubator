@@ -1198,9 +1198,9 @@ class MainSoftwareThread(QtCore.QThread):
                     or
                     (self.new_command is not None and "automatic_" in self.new_command) # forzatura dell'update se non è scaduto il tempo ma se è scattato il comando di turn
 		    or
-		    (previous_rotation_state == "CCW_rotation_direction" AND self.rotation_state == "CCW_reached") # forzatura update della visu se non è scaduto il tempo ma ho raggiunto il finecorsa
+		    (previous_rotation_state == "CCW_rotation_direction" and self.rotation_state == "CCW_reached") # forzatura update della visu se non è scaduto il tempo ma ho raggiunto il finecorsa
 		    or
-		    (previous_rotation_state == "CW_rotation_direction" AND self.rotation_state == "CW_reached")
+		    (previous_rotation_state == "CW_rotation_direction" and self.rotation_state == "CW_reached")
 		    ):
                     self.update_motor_data = True
                     self.last_motor_data_update_sec = time.time()
@@ -1362,7 +1362,7 @@ class MainWindow(QtWidgets.QMainWindow):
             
         pass
     
-    def format_time(self, value, unit = None, simple_format = FALSE):
+    def format_time(self, value, unit = None, simple_format = False):
         """
             Unit argument is optional:
                 If unit is "sec", it returns only seconds.
