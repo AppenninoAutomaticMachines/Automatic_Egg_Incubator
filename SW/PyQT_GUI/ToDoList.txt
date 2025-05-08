@@ -10,7 +10,10 @@ PC817 circuitry
 DA FARE:
 serial_communication_is_ok fallo meglio...sull'alive, e non su qualunque cosa seriale. Altrimenti becca dentro tutto... 
         DA TESTARE: lavorato su questo bit serial_communication_is_ok = true;
+
 fare bash per rpi che con 2click rilancia il tutto, ma da venv + installare pandaas
+        DA FARE: predisposto documento in Drive/ChatGPT
+
 appena raggiungi il limite, allora update della visualizzazione del motore
         DA TESTARE: appena raggiugni finecorsa, allroa update della visualizazzione previous_rotation_state variabile locale in funzione di update
 
