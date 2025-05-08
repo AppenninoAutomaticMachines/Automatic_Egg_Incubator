@@ -1,3 +1,4 @@
+
 import sys
 import random
 from PyQt5 import QtCore, QtWidgets
@@ -1165,6 +1166,8 @@ class MainSoftwareThread(QtCore.QThread):
                     self.force_change_rotation_flag # forzatura dell'update quando forzo un giro a mano
                     or
                     (self.new_command is not None and "automatic_" in self.new_command) # forzatura dell'update se non è scaduto il tempo ma se è scattato il comando di turn
+		    or
+		    (self.rotation_state = "CW_reached" or self.rotation_state = "CW_reached") # forzatura dell'update appena si raggiunge uno dei due finecorsa, se non è scaduto il normale tempo di update
                     ):
                     self.update_motor_data = True
                     self.last_motor_data_update_sec = time.time()
