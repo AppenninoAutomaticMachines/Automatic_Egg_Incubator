@@ -314,16 +314,19 @@ void loop() {
   if(Serial.available() > 0){ 
     int numberOfCommandsFromBoard = readFromBoard(); // from ESP8266. It has @ as terminator character
     last_serial_alive_time = millis();
-    serial_communication_is_ok = true;
+    // serial_communication_is_ok = true; qui è troppo libero...se arriva della merda qui la prendevo e dicevo che serial communication ok.
+
     // Guardiamo che comandi ci sono arrivati
     for(byte j = 0; j < numberOfCommandsFromBoard; j++){
       String tempReceivedCommand = receivedCommands[j];
       Serial.println(tempReceivedCommand);
       if(tempReceivedCommand.indexOf("ALIVE") >= 0  &&  tempReceivedCommand.indexOf("True") >= 0 ){ 
         alive_bit = true;
+        serial_communication_is_ok = true; // ogni qualvolta arriva il comando di ALIVE allora ok, la comunicazione sta andando bene.
       }
       if(tempReceivedCommand.indexOf("ALIVE") >= 0  &&  tempReceivedCommand.indexOf("False") >= 0 ){ 
         alive_bit = false;
+        serial_communication_is_ok = true;
       }
       if(tempReceivedCommand.indexOf("HTR01") >= 0 && tempReceivedCommand.indexOf("True") >= 0 ){ 
         digitalWrite(HEATER_PIN, HIGH);
