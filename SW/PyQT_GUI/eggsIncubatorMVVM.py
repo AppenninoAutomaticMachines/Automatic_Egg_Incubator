@@ -1081,6 +1081,7 @@ class MainSoftwareThread(QtCore.QThread):
         
         def update(self):
             current_time = time.time()
+	    previous_rotation_state = self.rotation_state
             
             if self.main_state == "INITIALIZATION":
                 if self.acknowledge_from_external is not None:                    
@@ -1159,18 +1160,7 @@ class MainSoftwareThread(QtCore.QThread):
                     self.new_command = "automatic_" + self.rotation_state
                     print(f"{'Activating' if (self.rotation_state == "CW_rotation_direction" or self.rotation_state == "CCW_rotation_direction") else 'Deactivating'} diagnostics")
                     
-                # ogni tot diciamo che è passato il tempo per fare un update dei dati del motore: il programma, da fuori, riceve il segnale e prende i dati
-                #print(time.time() - self.last_motor_data_update_sec)
-                if ((time.time() - self.last_motor_data_update_sec) >= self.motor_data_update_interval_sec # update periodico
-                    or 
-                    self.force_change_rotation_flag # forzatura dell'update quando forzo un giro a mano
-                    or
-                    (self.new_command is not None and "automatic_" in self.new_command) # forzatura dell'update se non è scaduto il tempo ma se è scattato il comando di turn
-		    or
-		    (self.rotation_state = "CW_reached" or self.rotation_state = "CW_reached") # forzatura dell'update appena si raggiunge uno dei due finecorsa, se non è scaduto il normale tempo di update
-                    ):
-                    self.update_motor_data = True
-                    self.last_motor_data_update_sec = time.time()
+                
                     
                     
                 if self.force_change_rotation_flag:
@@ -1199,6 +1189,21 @@ class MainSoftwareThread(QtCore.QThread):
                             
                 else:
                     pass
+					
+		# ogni tot diciamo che è passato il tempo per fare un update dei dati del motore: il programma, da fuori, riceve il segnale e prende i dati
+                #print(time.time() - self.last_motor_data_update_sec)
+                if ((time.time() - self.last_motor_data_update_sec) >= self.motor_data_update_interval_sec # update periodico
+                    or 
+                    self.force_change_rotation_flag # forzatura dell'update quando forzo un giro a mano
+                    or
+                    (self.new_command is not None and "automatic_" in self.new_command) # forzatura dell'update se non è scaduto il tempo ma se è scattato il comando di turn
+		    or
+		    (previous_rotation_state == "CCW_rotation_direction" AND self.rotation_state == "CCW_reached") # forzatura update della visu se non è scaduto il tempo ma ho raggiunto il finecorsa
+		    or
+		    (previous_rotation_state == "CW_rotation_direction" AND self.rotation_state == "CW_reached")
+		    ):
+                    self.update_motor_data = True
+                    self.last_motor_data_update_sec = time.time()
                 
             #print(f"{self.main_state} {self.manual_state} {self.rotation_state} {self.new_command}")
                             
@@ -1357,7 +1362,7 @@ class MainWindow(QtWidgets.QMainWindow):
             
         pass
     
-    def format_time(self, value, unit = None, simple_format = False):
+    def format_time(self, value, unit = None, simple_format = FALSE):
         """
             Unit argument is optional:
                 If unit is "sec", it returns only seconds.
