@@ -8,14 +8,12 @@ PC817 circuitry
 
 
 DA FARE:
-serial_communication_is_ok fallo meglio...sull'alive, e non su qualunque cosa seriale. Altrimenti becca dentro tutto... 
-        DA TESTARE: lavorato su questo bit serial_communication_is_ok = true;
+
 
 fare bash per rpi che con 2click rilancia il tutto, ma da venv + installare pandaas
         DA FARE: predisposto documento in Drive/ChatGPT
 
-appena raggiungi il limite, allora update della visualizzazione del motore
-        DA TESTARE: appena raggiugni finecorsa, allroa update della visualizazzione previous_rotation_state variabile locale in funzione di update
+
 
 
 se ci sono troppi errori nei sensori, allora allarme e mandare il comando di stop all'heater  
@@ -190,7 +188,13 @@ FATTO: 07/05/2025 aggiunto codice di gestione dell'exception nella funzione def 
                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
                 UnicodeDecodeError: 'utf-8' codec can't decode byte 0xc2 in position 0: unexpected end of data
                 Aborted
+FATTO: 09/05/2025 
+        appena raggiungi il limite, allora update della visualizzazione del motore
+                DA TESTARE: appena raggiugni finecorsa, allroa update della visualizazzione previous_rotation_state variabile locale in funzione di update
 
+FATTO: 09/05/2025 
+        serial_communication_is_ok fallo meglio...sull'alive, e non su qualunque cosa seriale. Altrimenti becca dentro tutto... 
+                DA TESTARE: lavorato su questo bit serial_communication_is_ok = true;
 
 
 
