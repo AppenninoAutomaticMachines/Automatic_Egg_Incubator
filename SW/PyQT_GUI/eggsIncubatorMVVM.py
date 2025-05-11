@@ -50,6 +50,8 @@ class SerialThread(QtCore.QThread):
         self.max_retries = 5
         self.running = True
         self.serial_port = None  # To store the serial port object
+        self.serial_port_successfully_opened = False
+        self.serial_thread_ready_to_go = False
 
     def open_serial_port(self):
         retries = 0
@@ -112,10 +114,14 @@ class SerialThread(QtCore.QThread):
             self.close_serial_port()
     '''
     def run(self):
-        if not self.open_serial_port():
+        self.serial_port_successfully_opened = self.open_serial_port()
+        if not self.serial_port_successfully_opened:
             print("Unable to open serial port after multiple attempts.")
             return
-        time.sleep(5)
+        sync_waiting_time_s = 5
+        print(f"Waiting {sync_waiting_time_s} seconds for Arduino to setup")
+        time.sleep(sync_waiting_time_s)
+        self.serial_thread_ready_to_go = True
 
         buffer = ''
         startRx = False
@@ -173,9 +179,13 @@ class SerialThread(QtCore.QThread):
                 while not self.command_queue.empty():
                     command = self.command_queue.get()
                     self.serial_port.write(command.encode('utf-8'))
-                    #print(f"Sent to Arduino: {command}")
-                    if "ALIVE" not in command:
-                        print(f"Sent to Arduino: {command}")
+                    _debug_active = False
+                    if _debug_active:
+                        print(f"DBG: Printing all cmd to Arduino: {command}")
+                    else:
+                        if "ALIVE" not in command:
+                            print(f"Sent to Arduino: {command}")
+                    time.sleep(0.1)
 
         except serial.SerialException as e:
             log_error(f"Serial error: {e}")
@@ -314,7 +324,9 @@ class MainSoftwareThread(QtCore.QThread):
         # Start the SerialThread
         self.serial_thread.start()
         
-        
+        while not self.serial_thread.serial_thread_ready_to_go:
+            pass
+
         while self.running:            
             if self.command_list:
                 for cmd, value in self.command_list:
@@ -441,8 +453,27 @@ class MainSoftwareThread(QtCore.QThread):
             self.thc.reset_all_values()
             
         if self.current_button == "plotAllDays_temp_T_btn":
+            # Step 1: Search for a folder containing "venv" in the current script's directory
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            venv_dir = None
+
+            for entry in os.listdir(script_dir):
+                if entry.startswith('.'):  # Skip hidden folders
+                    continue
+                full_path = os.path.join(script_dir, entry)
+                if os.path.isdir(full_path) and "venv" in entry:
+                    venv_dir = full_path
+                    break
+
+            # Step 2 & 3: Set python executable accordingly
+            if venv_dir:
+                python_executable = os.path.join(venv_dir, "bin", "python3")
+            else:
+                python_executable = "python3"
+            print(python_executable)
+            
             command = [
-                "python3",
+                python_executable,
                 "appInteractivePlots.py",
                 "PLOT_ALL_DAYS_DATA_TEMPERATURES",
                 str(self.VALID_RANGE_TEMPERATURE[0]),
@@ -1081,7 +1112,7 @@ class MainSoftwareThread(QtCore.QThread):
         
         def update(self):
             current_time = time.time()
-	    previous_rotation_state = self.rotation_state
+            previous_rotation_state = self.rotation_state
             
             if self.main_state == "INITIALIZATION":
                 if self.acknowledge_from_external is not None:                    
