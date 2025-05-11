@@ -9,6 +9,7 @@ PC817 circuitry
 
 DA FARE:
 
+in rpy sto mettendo le statisthce in un percorso sbagliato
 
 fare bash per rpi che con 2click rilancia il tutto, ma da venv + installare pandaas
         DA FARE: predisposto documento in Drive/ChatGPT
