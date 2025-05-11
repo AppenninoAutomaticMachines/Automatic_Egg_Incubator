@@ -1,4 +1,3 @@
-
 import sys
 import random
 from PyQt5 import QtCore, QtWidgets
@@ -453,25 +452,7 @@ class MainSoftwareThread(QtCore.QThread):
             self.thc.reset_all_values()
             
         if self.current_button == "plotAllDays_temp_T_btn":
-            # Step 1: Search for a folder containing "venv" in the current script's directory
-            script_dir = os.path.dirname(os.path.abspath(__file__))
-            venv_dir = None
-
-            for entry in os.listdir(script_dir):
-                if entry.startswith('.'):  # Skip hidden folders
-                    continue
-                full_path = os.path.join(script_dir, entry)
-                if os.path.isdir(full_path) and "venv" in entry:
-                    venv_dir = full_path
-                    break
-
-            # Step 2 & 3: Set python executable accordingly
-            if venv_dir:
-                python_executable = os.path.join(venv_dir, "bin", "python3")
-            else:
-                python_executable = "python3"
-            print(python_executable)
-            
+            python_executable = self.get_python_executable()            
             command = [
                 python_executable,
                 "appInteractivePlots.py",
@@ -485,8 +466,9 @@ class MainSoftwareThread(QtCore.QThread):
             print("Subprocess started and main program continues...")
             
         if self.current_button == "plotToday_temp_T_btn":
+            python_executable = self.get_python_executable()
             command = [
-                "python3",
+                python_executable,
                 "appInteractivePlots.py",
                 "PLOT_CURRENT_DAY_DATA_TEMPERATURES",
                 str(self.VALID_RANGE_TEMPERATURE[0]),
@@ -498,8 +480,9 @@ class MainSoftwareThread(QtCore.QThread):
             print("Subprocess started and main program continues...")
             
         if self.current_button == "plotAllDays_humidity_H_btn":
+            python_executable = self.get_python_executable()
             command = [
-                "python3",
+                python_executable,
                 "appInteractivePlots.py",
                 "PLOT_ALL_DAYS_DATA_HUMIDITY",
                 str(self.VALID_RANGE_HUMIDITY[0]),
@@ -511,8 +494,9 @@ class MainSoftwareThread(QtCore.QThread):
             print("Subprocess started and main program continues...")
             
         if self.current_button == "plotToday_humidity_H_btn":
+            python_executable = self.get_python_executable()
             command = [
-                "python3",
+                python_executable,
                 "appInteractivePlots.py",
                 "PLOT_CURRENT_DAY_DATA_HUMIDITY",
                 str(self.VALID_RANGE_HUMIDITY[0]),
@@ -524,8 +508,9 @@ class MainSoftwareThread(QtCore.QThread):
             print("Subprocess started and main program continues...")
             
         if self.current_button == "plotAllDays_cnt_T_btn":
+            python_executable = self.get_python_executable()
             command = [
-                "python3",
+                python_executable,
                 "appInteractivePlots.py",
                 "PLOT_ALL_DAYS_DATA_HEATER",
                 str(0),
@@ -537,8 +522,9 @@ class MainSoftwareThread(QtCore.QThread):
             print("Subprocess started and main program continues...")
             
         if self.current_button == "plotToday_cnt_T_btn":
+            python_executable = self.get_python_executable()
             command = [
-                "python3",
+                python_executable,
                 "appInteractivePlots.py",
                 "PLOT_CURRENT_DAY_DATA_HEATER",
                 str(0),
@@ -550,8 +536,9 @@ class MainSoftwareThread(QtCore.QThread):
             print("Subprocess started and main program continues...")
             
         if self.current_button == "plotAllDays_cnt_H_btn":
+            python_executable = self.get_python_executable()
             command = [
-                "python3",
+                python_executable,
                 "appInteractivePlots.py",
                 "PLOT_ALL_DAYS_DATA_HUMIDIFIER",
                 str(0),
@@ -563,8 +550,9 @@ class MainSoftwareThread(QtCore.QThread):
             print("Subprocess started and main program continues...")
             
         if self.current_button == "plotToday_cnt_H_btn":
+            python_executable = self.get_python_executable()
             command = [
-                "python3",
+                python_executable,
                 "appInteractivePlots.py",
                 "PLOT_CURRENT_DAY_DATA_HUMIDIFIER",
                 str(0),
@@ -574,6 +562,28 @@ class MainSoftwareThread(QtCore.QThread):
             print(command)
             process = subprocess.Popen(command)
             print("Subprocess started and main program continues...")
+            
+    def get_python_executable(self):
+        """
+        Searches the current script directory for a non-hidden folder containing 'venv'
+        and returns the path to its python3 executable if found.
+        Otherwise, returns 'python3' (system-wide Python).
+        """
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        venv_dir = None
+
+        for entry in os.listdir(script_dir):
+            if entry.startswith('.'):  # Skip hidden folders
+                continue
+            full_path = os.path.join(script_dir, entry)
+            if os.path.isdir(full_path) and "venv" in entry:
+                venv_dir = full_path
+                break
+
+        if venv_dir:
+            return os.path.join(venv_dir, "bin", "python3")
+        else:
+            return "python3"
         
     def handle_float_spinBox_value(self, spinbox_name, value):
         rounded_value = round(value, 1)
