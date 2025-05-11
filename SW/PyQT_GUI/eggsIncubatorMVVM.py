@@ -1,3 +1,4 @@
+
 import sys
 import random
 from PyQt5 import QtCore, QtWidgets
@@ -452,10 +453,12 @@ class MainSoftwareThread(QtCore.QThread):
             self.thc.reset_all_values()
             
         if self.current_button == "plotAllDays_temp_T_btn":
-            python_executable = self.get_python_executable()            
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            python_executable = self.get_python_executable()
+            plot_script = os.path.join(script_dir, "appInteractivePlots.py")          
             command = [
                 python_executable,
-                "appInteractivePlots.py",
+                plot_script,
                 "PLOT_ALL_DAYS_DATA_TEMPERATURES",
                 str(self.VALID_RANGE_TEMPERATURE[0]),
                 str(self.VALID_RANGE_TEMPERATURE[1]),
@@ -466,10 +469,12 @@ class MainSoftwareThread(QtCore.QThread):
             print("Subprocess started and main program continues...")
             
         if self.current_button == "plotToday_temp_T_btn":
+            script_dir = os.path.dirname(os.path.abspath(__file__))
             python_executable = self.get_python_executable()
+            plot_script = os.path.join(script_dir, "appInteractivePlots.py") 
             command = [
                 python_executable,
-                "appInteractivePlots.py",
+                plot_script,
                 "PLOT_CURRENT_DAY_DATA_TEMPERATURES",
                 str(self.VALID_RANGE_TEMPERATURE[0]),
                 str(self.VALID_RANGE_TEMPERATURE[1]),
@@ -480,10 +485,12 @@ class MainSoftwareThread(QtCore.QThread):
             print("Subprocess started and main program continues...")
             
         if self.current_button == "plotAllDays_humidity_H_btn":
+            script_dir = os.path.dirname(os.path.abspath(__file__))
             python_executable = self.get_python_executable()
+            plot_script = os.path.join(script_dir, "appInteractivePlots.py") 
             command = [
                 python_executable,
-                "appInteractivePlots.py",
+                plot_script,
                 "PLOT_ALL_DAYS_DATA_HUMIDITY",
                 str(self.VALID_RANGE_HUMIDITY[0]),
                 str(self.VALID_RANGE_HUMIDITY[1]),
@@ -494,10 +501,12 @@ class MainSoftwareThread(QtCore.QThread):
             print("Subprocess started and main program continues...")
             
         if self.current_button == "plotToday_humidity_H_btn":
+            script_dir = os.path.dirname(os.path.abspath(__file__))
             python_executable = self.get_python_executable()
+            plot_script = os.path.join(script_dir, "appInteractivePlots.py") 
             command = [
                 python_executable,
-                "appInteractivePlots.py",
+                plot_script,
                 "PLOT_CURRENT_DAY_DATA_HUMIDITY",
                 str(self.VALID_RANGE_HUMIDITY[0]),
                 str(self.VALID_RANGE_HUMIDITY[1]),
@@ -508,10 +517,12 @@ class MainSoftwareThread(QtCore.QThread):
             print("Subprocess started and main program continues...")
             
         if self.current_button == "plotAllDays_cnt_T_btn":
+            script_dir = os.path.dirname(os.path.abspath(__file__))
             python_executable = self.get_python_executable()
+            plot_script = os.path.join(script_dir, "appInteractivePlots.py") 
             command = [
                 python_executable,
-                "appInteractivePlots.py",
+                plot_script,
                 "PLOT_ALL_DAYS_DATA_HEATER",
                 str(0),
                 str(1),
@@ -522,10 +533,12 @@ class MainSoftwareThread(QtCore.QThread):
             print("Subprocess started and main program continues...")
             
         if self.current_button == "plotToday_cnt_T_btn":
+            script_dir = os.path.dirname(os.path.abspath(__file__))
             python_executable = self.get_python_executable()
+            plot_script = os.path.join(script_dir, "appInteractivePlots.py") 
             command = [
                 python_executable,
-                "appInteractivePlots.py",
+                plot_script,
                 "PLOT_CURRENT_DAY_DATA_HEATER",
                 str(0),
                 str(1),
@@ -536,10 +549,12 @@ class MainSoftwareThread(QtCore.QThread):
             print("Subprocess started and main program continues...")
             
         if self.current_button == "plotAllDays_cnt_H_btn":
+            script_dir = os.path.dirname(os.path.abspath(__file__))
             python_executable = self.get_python_executable()
+            plot_script = os.path.join(script_dir, "appInteractivePlots.py") 
             command = [
                 python_executable,
-                "appInteractivePlots.py",
+                plot_script,
                 "PLOT_ALL_DAYS_DATA_HUMIDIFIER",
                 str(0),
                 str(1),
@@ -550,10 +565,12 @@ class MainSoftwareThread(QtCore.QThread):
             print("Subprocess started and main program continues...")
             
         if self.current_button == "plotToday_cnt_H_btn":
+            script_dir = os.path.dirname(os.path.abspath(__file__))
             python_executable = self.get_python_executable()
+            plot_script = os.path.join(script_dir, "appInteractivePlots.py") 
             command = [
                 python_executable,
-                "appInteractivePlots.py",
+                plot_script,
                 "PLOT_CURRENT_DAY_DATA_HUMIDIFIER",
                 str(0),
                 str(1),
