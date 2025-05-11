@@ -1,3 +1,4 @@
+# 12/05/2025 interrompo il supporto a questo file, perché su raspberry non riesco ad installarlo, quindi non va
 import os
 import pandas as pd
 import matplotlib.pyplot as plt
