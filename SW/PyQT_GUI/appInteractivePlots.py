@@ -104,14 +104,18 @@ def load_folder_data(folder_path):
     return timestamps_all, data_all
 
 def plot_all_days(data_type, remove_erroneous_values):
-    folder = os.path.join("Machine_Statistics", data_type)
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    machine_statistics_folder_path = os.path.join(script_dir, "Machine_Statistics") 
+    folder = os.path.join(machine_statistics_folder_path, data_type)
     timestamps, data_columns = load_folder_data(folder)
     timestamps, data_columns = sort_by_timestamp(timestamps, data_columns)
     timestamps, data_columns = filter_valid_data(timestamps, data_columns, remove_erroneous_values)
     plot_data(timestamps, data_columns, f"All Days - {data_type}")
 
 def plot_current_day(data_type, remove_erroneous_values):
-    folder = os.path.join("Machine_Statistics", data_type)
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    machine_statistics_folder_path = os.path.join(script_dir, "Machine_Statistics") 
+    folder = os.path.join(machine_statistics_folder_path, data_type)
     current_date = datetime.now().strftime('%Y-%m-%d')
     file_path = os.path.join(folder, f"{current_date}.csv")
 
