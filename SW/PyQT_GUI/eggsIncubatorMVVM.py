@@ -299,7 +299,8 @@ class MainSoftwareThread(QtCore.QThread):
         self.remove_erroneous_values_from_H_plot = True
         
         #--- Create Machine_Statistic folder ---#
-        machine_statistics_folder_path = "Machine_Statistics"
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        machine_statistics_folder_path = os.path.join(script_dir, "Machine_Statistics") 
         if not os.path.exists(machine_statistics_folder_path):
                 os.makedirs(machine_statistics_folder_path)
 
@@ -801,7 +802,8 @@ class MainSoftwareThread(QtCore.QThread):
         now = datetime.now()
         current_date = now.strftime('%Y-%m-%d')
         
-        machine_statistics_folder_path = "Machine_Statistics"
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        machine_statistics_folder_path = os.path.join(script_dir, "Machine_Statistics") 
         # faccio selezione del folder da cui pescare i dati.
         if data_type == 'Temperatures':
             folder_path = os.path.join(machine_statistics_folder_path, 'Temperatures')
