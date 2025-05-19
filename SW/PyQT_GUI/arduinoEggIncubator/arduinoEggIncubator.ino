@@ -319,7 +319,7 @@ void loop() {
     // Guardiamo che comandi ci sono arrivati
     for(byte j = 0; j < numberOfCommandsFromBoard; j++){
       String tempReceivedCommand = receivedCommands[j];
-      Serial.println(tempReceivedCommand);
+      //Serial.println(tempReceivedCommand);
       if(tempReceivedCommand.indexOf("ALIVE") >= 0  &&  tempReceivedCommand.indexOf("True") >= 0 ){ 
         alive_bit = true;
         serial_communication_is_ok = true; // ogni qualvolta arriva il comando di ALIVE allora ok, la comunicazione sta andando bene.
