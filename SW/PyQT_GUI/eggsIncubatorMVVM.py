@@ -702,7 +702,7 @@ class MainSoftwareThread(QtCore.QThread):
                 self.current_heater_output_control = self.thc.get_output_control()
                 self.queue_command("HTR01", self.current_heater_output_control)  # @<HTR01, True># @<HTR01, False>#
         #else:
-        # caso in cui non ho NEMMENO UNA temperatura valida, tutti in errore. Allora spengo il riscaldatore.
+            # caso in cui non ho NEMMENO UNA temperatura valida, tutti in errore. Allora spengo il riscaldatore.
             # devo lavorare sul ctonroller....altrimenti ppython pensa sia acceso e invece è spento
             #self.queue_command("HTR01", False)  # @<HTR01, True># @<HTR01, False>#
         # metto un contatore: se questa cosa è vera per più di 20 ccili, allora off
@@ -918,29 +918,32 @@ class MainSoftwareThread(QtCore.QThread):
             if not isinstance(values, list):
                 values = [values]
             
-            # Calculate the mean of the values
-            self._mean_value = round(sum(values) / len(values), 1)
             
-            #print(f"Mean Value: {self._mean_value}")
-            
-            # Update the max and min values reached
-            for value in values:
-                self._max_value = max(self._max_value, value)
-                self._min_value = min(self._min_value, value)
-                
             new_output = self._output_control
-            # Check if output state changes
-            if self.lower_limit == self.upper_limit:
-                new_output = False
-            elif self.forceON: 
-                new_output = True               
-            elif self.forceOFF:  
-                new_output = False              
-            else: # AUTO                
-                if self._mean_value >= self.upper_limit:
-                    new_output = False  # Turn OFF if mean is above upper limit
-                elif self._mean_value <= self.lower_limit:
-                    new_output = True   # Turn ON if mean is below lower limit
+            
+            if not values:
+                new_output = False # FOR SAFETY!! no values in input, means no good temperatures are passed, then OFF the actuator
+            else:            
+                # Calculate the mean of the values
+                self._mean_value = round(sum(values) / len(values), 1)
+                            
+                # Update the max and min values reached
+                for value in values:
+                    self._max_value = max(self._max_value, value)
+                    self._min_value = min(self._min_value, value)                
+                
+                # Check if output state changes
+                if self.lower_limit == self.upper_limit:
+                    new_output = False
+                elif self.forceON: 
+                    new_output = True               
+                elif self.forceOFF:  
+                    new_output = False              
+                else: # AUTO                
+                    if self._mean_value >= self.upper_limit:
+                        new_output = False  # Turn OFF if mean is above upper limit
+                    elif self._mean_value <= self.lower_limit:
+                        new_output = True   # Turn ON if mean is below lower limit
                 
             # update time tracking (continuous)
             elapsed_time = time.time() - self.last_measuring_time
@@ -960,8 +963,7 @@ class MainSoftwareThread(QtCore.QThread):
                 else:
                     self.time_off += elapsed_time
                     self.on_count += 1  
-                self.last_measuring_time = time.time()
-                
+                self.last_measuring_time = time.time()                
                 
             self._output_control = new_output
             
