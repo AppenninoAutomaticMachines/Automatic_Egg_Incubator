@@ -695,12 +695,13 @@ class MainSoftwareThread(QtCore.QThread):
         # al controllore di temperatura passo solo temperature filtrate, ovvero i valori dentro il range di temperatura corretto
         
         filtered_temperatures = self.filter_temperatures(list(current_temperatures.values()))
-        if filtered_temperatures:            
-            self.thc.update(filtered_temperatures)
-            #print(list(current_temperatures.values()))
-            if self.current_heater_output_control != self.thc.get_output_control(): # appena cambia il comando logico all'heater, allora invio il comando ad Arduino            
-                self.current_heater_output_control = self.thc.get_output_control()
-                self.queue_command("HTR01", self.current_heater_output_control)  # @<HTR01, True># @<HTR01, False>#
+        if not filtered_temperatures:   
+            print("filtered_temperature list is empty! fault in the sensors")         
+        self.thc.update(filtered_temperatures)
+        #print(list(current_temperatures.values()))
+        if self.current_heater_output_control != self.thc.get_output_control(): # appena cambia il comando logico all'heater, allora invio il comando ad Arduino            
+            self.current_heater_output_control = self.thc.get_output_control()
+            self.queue_command("HTR01", self.current_heater_output_control)  # @<HTR01, True># @<HTR01, False>#
         #else:
             # caso in cui non ho NEMMENO UNA temperatura valida, tutti in errore. Allora spengo il riscaldatore.
             # devo lavorare sul ctonroller....altrimenti ppython pensa sia acceso e invece è spento
