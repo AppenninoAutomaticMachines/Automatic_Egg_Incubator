@@ -317,46 +317,75 @@ void loop() {
     // serial_communication_is_ok = true; qui è troppo libero...se arriva della merda qui la prendevo e dicevo che serial communication ok.
 
     // Guardiamo che comandi ci sono arrivati
-    for(byte j = 0; j < numberOfCommandsFromBoard; j++){
+    for (byte j = 0; j < numberOfCommandsFromBoard; j++) {
       String tempReceivedCommand = receivedCommands[j];
       //Serial.println(tempReceivedCommand);
-      if(tempReceivedCommand.indexOf("ALIVE") >= 0  &&  tempReceivedCommand.indexOf("True") >= 0 ){ 
-        alive_bit = true;
-        serial_communication_is_ok = true; // ogni qualvolta arriva il comando di ALIVE allora ok, la comunicazione sta andando bene.
-      }
-      if(tempReceivedCommand.indexOf("ALIVE") >= 0  &&  tempReceivedCommand.indexOf("False") >= 0 ){ 
-        alive_bit = false;
-        serial_communication_is_ok = true;
-      }
-      if(tempReceivedCommand.indexOf("HTR01") >= 0 && tempReceivedCommand.indexOf("True") >= 0 ){ 
-        digitalWrite(HEATER_PIN, HIGH);
-        //Serial.println("OFF");
-      }
-      if(tempReceivedCommand.indexOf("HTR01") >= 0 && tempReceivedCommand.indexOf("False") >= 0 ){ 
-        digitalWrite(HEATER_PIN, LOW);
-        //Serial.println("OFF");
-      }
-      if(tempReceivedCommand.indexOf("HUMER01") >= 0  &&  tempReceivedCommand.indexOf("True") >= 0 ){ 
-        digitalWrite(HUMIDIFIER_PIN, HIGH);
-        //Serial.println("ON");
-      }
-      if(tempReceivedCommand.indexOf("HUMER01") >= 0 && tempReceivedCommand.indexOf("False") >= 0 ){ 
-        digitalWrite(HUMIDIFIER_PIN, LOW);
-        //Serial.println("OFF");
-      }
-      if(tempReceivedCommand.indexOf("STPR01") >= 0 && tempReceivedCommand.indexOf("MCCW") >= 0 ){ //move_counter_clock_wise 
-        stepperMotor_moveCCW_automatic_var = true;
-        stepperMotor_moveCCW_cmd = true;
-      }
-      if(tempReceivedCommand.indexOf("STPR01") >= 0 && tempReceivedCommand.indexOf("MCW") >= 0 ){ //move_clock_wise 
-        stepperMotor_moveCW_automatic_var = true;
-        stepperMotor_moveCW_cmd = true;
-      }
-      if(tempReceivedCommand.indexOf("STPR01") >= 0 && tempReceivedCommand.indexOf("STOP") >= 0 ){ //stop
-        stepperMotor_stop_automatic_var = true;
-        stepperMotor_stop_cmd = true;
+      String tag, value, uid;
+      if (!splitCommand(tempReceivedCommand, tag, value, uid)) {
+        //Serial.println("⚠️ Invalid command format");
+        continue;
       }
 
+      if (tag == "ALIVE") {
+        if (value == "True") {
+          alive_bit = true;
+          serial_communication_is_ok = true;
+        } else if (value == "False") {
+          alive_bit = false;
+          serial_communication_is_ok = true;
+        }
+      }
+
+      if (tag == "HTR01") {
+        if (value == "True") {
+          digitalWrite(HEATER_PIN, HIGH);
+        } else if (value == "False") {
+          digitalWrite(HEATER_PIN, LOW);
+        }
+      }
+
+      if (tag == "HUMER01") {
+        if (value == "True") {
+          digitalWrite(HUMIDIFIER_PIN, HIGH);
+        } else if (value == "False") {
+          digitalWrite(HUMIDIFIER_PIN, LOW);
+        }
+      }
+
+      if (tag == "STPR01") {
+        if (value == "MCCW") {
+          stepperMotor_moveCCW_automatic_var = true;
+          stepperMotor_moveCCW_cmd = true;
+        } else if (value == "MCW") {
+          stepperMotor_moveCW_automatic_var = true;
+          stepperMotor_moveCW_cmd = true;
+        } else if (value == "STOP") {
+          stepperMotor_stop_automatic_var = true;
+          stepperMotor_stop_cmd = true;
+        }
+      }
+
+      // ACK: salva la risposta completa da inviare indietro
+      if (uid.length() > 0) {
+        // Assicurati che Arduino invi l’ACK separatamente e appena esegue il comando
+        listofDataToSend[listofDataToSend_numberOfData] = "<HTR01, " + value + ", " + uid + ">";
+        listofDataToSend_numberOfData++;
+
+        if(listofDataToSend_numberOfData > 0){
+          Serial.print('@'); // SYMBOL TO START BOARDS TRANSMISSION
+          for(byte i = 0; i < listofDataToSend_numberOfData; i++){
+            Serial.print(listofDataToSend[i]); 
+          }
+          Serial.println('#'); // SYMBOL TO END BOARDS TRANSMISSION
+        }
+        listofDataToSend_numberOfData = 0;
+        
+      }
+
+      delay(1);
+    }
+
+    /*
       if(tempReceivedCommand.indexOf("RED") >= 0 && tempReceivedCommand.indexOf("ON") >= 0 ){
         lights[0].state = ON;
       }
@@ -409,6 +438,7 @@ void loop() {
         buzzer.state = FLASH_SLOW;
       }
     }
+    */
   }
   else{
     if(millis() - last_serial_alive_time > serial_alive_timeout_ms){
@@ -421,9 +451,6 @@ void loop() {
     }
   }
   delay(2);
-
-
-  listofDataToSend_numberOfData = 0;
 
   /* TEMPERATURES SECTION */
   /*
@@ -686,6 +713,7 @@ void loop() {
     }
     Serial.println('#'); // SYMBOL TO END BOARDS TRANSMISSION
   }
+  listofDataToSend_numberOfData = 0;
   
   delay(5);
 
@@ -807,4 +835,30 @@ void updateDevice(Device &device, int pin, unsigned long fastInterval, unsigned 
             }
             break;
     }
+}
+
+bool splitCommand(String input, String &tag, String &value, String &uid) {
+  // funzione di parsing
+  input.trim();
+  
+  int firstComma = input.indexOf(',');
+  int secondComma = input.indexOf(',', firstComma + 1);
+
+  if (firstComma < 0) return false;
+
+  tag = input.substring(0, firstComma);
+  
+  if (secondComma < 0) {
+    value = input.substring(firstComma + 1);
+    uid = "";
+  } else {
+    value = input.substring(firstComma + 1, secondComma);
+    uid = input.substring(secondComma + 1);
+  }
+
+  tag.trim();
+  value.trim();
+  uid.trim();
+
+  return true;
 }
