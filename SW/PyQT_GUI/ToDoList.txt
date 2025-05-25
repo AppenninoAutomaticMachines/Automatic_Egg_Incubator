@@ -8,7 +8,7 @@ PC817 circuitry
 
 
 DA FARE:
-
+quando eprdi la connessione da rpy, perché tipo lo riavvii devi anche dire dove sei col motore o riprendere una procedura di initi...
 SOTTO CONTROLLO: 
 //
 
