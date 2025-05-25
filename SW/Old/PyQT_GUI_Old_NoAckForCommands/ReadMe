@@ -1,0 +1,3 @@
+Il 25/05/2025 ho implementato la logica di ack sui comandi inviati verso arduino, modificando quindi 
+l'invio dei dati e anche la ricezione. Perché ho modificato anche Arduino, che ora deve dare indietro l'identificativo univoco del comando.
+Il trunk principale rimane quello dove metto tutte le modifiche.
