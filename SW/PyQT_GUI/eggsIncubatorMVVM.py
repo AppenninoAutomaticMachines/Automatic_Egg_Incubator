@@ -1,4 +1,3 @@
-
 import sys
 import random
 from PyQt5 import QtCore, QtWidgets
@@ -13,6 +12,7 @@ import time
 import queue
 import subprocess
 from collections import deque
+import uuid
 
 
 '''
@@ -36,6 +36,7 @@ timeout = 0.1
 	"EXTT" = riguarda il sensore di temperatura esterno.
 """
 identifiers = ["TMP", "HUM", "HTP", "IND", "EXTT"]  # Global variable
+command_tags = ["HTR01", "HUMER01", "STPR01"]
 
 
 class SerialThread(QtCore.QThread):
@@ -52,6 +53,18 @@ class SerialThread(QtCore.QThread):
         self.serial_port = None  # To store the serial port object
         self.serial_port_successfully_opened = False
         self.serial_thread_ready_to_go = False
+        
+        self.awaiting_ack = None
+        self.ack_received_flag = False
+        self.failed_commands = []
+        self.max_retries = 3
+        self.ack_timeout = 0.5
+        
+        self.pending_command = None
+        self.failed_commands = []
+        self.ack_timeout = 0.5  # secondi
+        self.max_retries = 3
+        self.last_sent_time = None
 
     def open_serial_port(self):
         retries = 0
@@ -69,50 +82,7 @@ class SerialThread(QtCore.QThread):
                 time.sleep(self.retry_interval)
                 retries += 1
         return False
-    '''
-    def run(self):
-        if not self.open_serial_port():
-            print("Unable to open serial port after multiple attempts.")
-            return
-
-        buffer = ''
-        startRx = False
-        saving = False
-        identifiers_data_list = []
-        
-        try: 
-            while self.running:
-                # Reading serial data
-                if self.serial_port.in_waiting > 0:
-                    dataRead = self.serial_port.read().decode('utf-8')
-                    if dataRead == '@':
-                        startRx = True
-                    if startRx:
-                        if dataRead == '<':
-                            saving = True
-                        if saving:
-                            buffer += dataRead
-                        if dataRead == '>':
-                            saving = False
-                            self.decode_message(buffer, identifiers_data_list)
-                            buffer = ''
-                        if dataRead == '#':
-                            startRx = False
-                            if identifiers_data_list:
-                                self.data_received.emit(identifiers_data_list)
-                                identifiers_data_list.clear()
-                
-                # Sending serial data
-                while not self.command_queue.empty():
-                    command = self.command_queue.get()
-                    self.serial_port.write(command.encode('utf-8'))
-                    print(f"Sent to Arduino: {command}")
-                        
-        except serial.SerialException as e:
-            print(f"Failed to open serial port: {e}")
-        finally:
-            self.close_serial_port()
-    '''
+ 
     def run(self):
         self.serial_port_successfully_opened = self.open_serial_port()
         if not self.serial_port_successfully_opened:
@@ -136,18 +106,17 @@ class SerialThread(QtCore.QThread):
 
         try:
             while self.running:
-                if self.serial_port.in_waiting > 0:
+                while self.serial_port.in_waiting > 0:
                     try:
                         dataRead = self.serial_port.read().decode('utf-8')
-                        decode_error_count = 0  # Reset error count on success
+                        decode_error_count = 0
                     except UnicodeDecodeError as e:
                         decode_error_count += 1
-                        log_error(f"Decode error (#{decode_error_count}): {e}. Skipping and waiting for next '@'")
+                        log_error(f"Decode error (#{decode_error_count}): {e}. Resetting buffer and flags.")
                         startRx = False
-                        saving = False
                         buffer = ''
+                        saving = False
 
-                        # Auto-reset serial port if too many errors
                         if decode_error_count >= decode_error_threshold:
                             log_error("Too many decode errors. Resetting serial port.")
                             self.close_serial_port()
@@ -160,42 +129,101 @@ class SerialThread(QtCore.QThread):
                         startRx = True
                         buffer = ''
                         identifiers_data_list.clear()
+                        saving = False
                     elif startRx:
-                        if dataRead == '<':
-                            saving = True
-                        if saving:
-                            buffer += dataRead
-                        if dataRead == '>':
-                            saving = False
-                            self.decode_message(buffer, identifiers_data_list)
-                            buffer = ''
+                        buffer += dataRead
+
                         if dataRead == '#':
+                            # Messaggio completo ricevuto, es: @<TMP01,17.5><HTR01, True, 08CA9775><STPR01, False, 1234ABCD>#
                             startRx = False
+                            trimmed_buffer = buffer.strip('@').strip('#')
+                            #print(f"🔍 Full buffer received: {trimmed_buffer!r}")
+                            if trimmed_buffer:
+                                self.decode_message(trimmed_buffer, identifiers_data_list, self)
+
+                            buffer = ''
+
                             if identifiers_data_list:
                                 self.data_received.emit(identifiers_data_list)
                                 identifiers_data_list.clear()
 
-                # Sending serial data
-                while not self.command_queue.empty():
-                    command = self.command_queue.get()
-                    self.serial_port.write(command.encode('utf-8'))
-                    _debug_active = False
-                    if _debug_active:
-                        print(f"DBG: Printing all cmd to Arduino: {command}")
-                    else:
-                        if "ALIVE" not in command:
-                            print(f"Sent to Arduino: {command}")
-                    time.sleep(0.1)
+                self._try_send_next_command()
+                
+                time.sleep(0.01)
+
 
         except serial.SerialException as e:
             log_error(f"Serial error: {e}")
         finally:
             self.close_serial_port()
             
-    def add_command(self, cmd, value):
-        formatted_command = f"@<{cmd}, {value}>#"
-        self.command_queue.put(formatted_command)
+    def _try_send_next_command(self):
+        # Se sto già aspettando un ACK, controllo timeout/flag
+        if self.awaiting_ack:
+            if self.ack_received_flag:
+                # ACK arrivato: sblocco
+                self.awaiting_ack = None
+                self.ack_received_flag = False
+                return
+            elif time.time() - self.awaiting_ack["timestamp"] >= self.ack_timeout:
+                cmd_obj = self.awaiting_ack["command"]
+                retries = cmd_obj["retry_count"] + 1
+                if retries <= self.max_retries:
+                    cmd_obj["retry_count"] = retries
+                    self.serial_port.write(cmd_obj["formatted"].encode('utf-8'))
+                    # Stampiamo solo se non è ALIVE
+                    if cmd_obj["cmd"] != "ALIVE":
+                        print(f"Retrying ({retries}) for: {cmd_obj['formatted']}")
+                    self.awaiting_ack["timestamp"] = time.time()
+                else:
+                    # Stampiamo solo se non è ALIVE
+                    if cmd_obj["cmd"] != "ALIVE":
+                        print(f"⚠️ NO ACK for command: {cmd_obj['formatted']}")
+                    self.failed_commands.append(cmd_obj)
+                    self.awaiting_ack = None
+            return
 
+        # Altrimenti, se non ho comandi in attesa, ne prendo uno nuovo
+        if not self.command_queue.empty():
+            cmd_obj = self.command_queue.get()
+            formatted = cmd_obj["formatted"]
+            uid = cmd_obj["id"]
+
+            if uid is None:
+                # Comando senza ACK
+                self.serial_port.write(formatted.encode('utf-8'))
+                # Stampiamo solo se non è ALIVE
+                if cmd_obj["cmd"] != "ALIVE":
+                    print(f"Sent (no ACK needed): {formatted}")
+            else:
+                # Comando con ACK
+                self.serial_port.write(formatted.encode('utf-8'))
+                # Stampiamo solo se non è ALIVE
+                if cmd_obj["cmd"] != "ALIVE":
+                    print(f"Sent to Arduino: {formatted}")
+                cmd_obj["retry_count"] = 0
+                self.awaiting_ack = {
+                    "uid": uid,
+                    "command": cmd_obj,
+                    "timestamp": time.time()
+                }
+            
+    def add_command(self, cmd, value):
+        if cmd in command_tags:
+            unique_id = uuid.uuid4().hex[:8].upper()  # ID breve, es. '3F7A91B2'
+            formatted_command = f"@<{cmd}, {value}, {unique_id}>#"
+        else:
+            unique_id = None
+            formatted_command = f"@<{cmd}, {value}>#"
+
+        self.command_queue.put({
+            "cmd": cmd,
+            "value": value,
+            "id": unique_id,
+            "formatted": formatted_command,
+            "retry_count": 0,
+        })
+    
     def stop(self):
         self.running = False
         self.wait()  # Ensure the thread finishes before returning
@@ -210,28 +238,54 @@ class SerialThread(QtCore.QThread):
                 print(f"Error closing serial port: {e}")
 
     @staticmethod
-    def decode_message(buffer, identifiers_data_list):
-        match = re.match(r"<([^,]+),([^>]+)>", buffer)
-        if match:
-            infoName_part = match.group(1)
-            infoData_part = match.group(2)
+    def decode_message(buffer, identifiers_data_list, serial_thread_instance):
+        import re
+
+        # Prende tutte le sottostringhe tra < e >
+        messages = re.findall(r"<([^>]+)>", buffer)
+        #print(f"🔍 Messages extracted: {messages}")
+        for msg in messages:
+            parts = [p.strip() for p in msg.split(',')]
+            #print(f"🔍 Parsing parts: {parts}")
+            #print(f"⏳ awaiting_ack right now: {serial_thread_instance.awaiting_ack!r}")
+
+            if len(parts) == 3:
+                cmd, value, uid = parts
+                #print(f"🔍 Detected potential ACK - cmd={cmd}, value={value}, uid={uid}")
+                # Se è un comando che richiede ACK e corrisponde all'atteso
+                if cmd in command_tags:
+                    if (serial_thread_instance.awaiting_ack and
+                        serial_thread_instance.awaiting_ack["uid"] == uid):
+                        print(f"✅ ACK ricevuto: {cmd}, {value}, ID={uid}")
+                        serial_thread_instance.ack_received_flag = True
+                else:
+                    print(f"⚠️ ACK {uid} non atteso o awaiting_ack differente")
+                    # Non aggiungo ACK alla lista dati normali
+                    continue
+
+            elif len(parts) == 2:
+                info_name, info_value = parts
+                if info_value.upper() == "NAN":
+                    number = 0.0
+                elif SerialThread.is_number(info_value):
+                    number = float(info_value) if '.' in info_value else int(info_value)
+                else:
+                    print(f"Non-numeric data: {info_value}")
+                    continue
+
+                for identifier in identifiers:
+                    if info_name.startswith(identifier):
+                        identifiers_data_list.append({info_name: number})
+                        break
+
             
-            # Handle 'NAN' case explicitly
-            if infoData_part.upper() == "NAN":
-                number = 0.0  # Use None to indicate missing or invalid data
-            elif SerialThread.is_number(infoData_part):
-                number = float(infoData_part) if '.' in infoData_part else int(infoData_part)
-            else:
-                print(f"Non-numeric data: {infoData_part}")
-                return  # Exit function if the data isn't valid
-
-            for identifier in identifiers:
-                if infoName_part.startswith(identifier):
-                    identifiers_data_list.append({infoName_part: number})
-                    break
+    def handle_ack(self, tag, value, uid):
+        if self.awaiting_ack and self.awaiting_ack["uid"] == uid:
+            print(f"✅ ACK ricevuto: {tag}, {value}, ID={uid}")
+            self.ack_received_flag = True
         else:
-            print("The input string does not match the expected format.")
-
+            print(f"⚠️ ACK ricevuto ma non atteso o ID diverso: {uid}")
+    
     @staticmethod
     def is_number(s):
         try:
