@@ -9,13 +9,10 @@ PC817 circuitry
 
 DA FARE:
 
-in rpy sto mettendo le statisthce in un percorso sbagliato
+SOTTO CONTROLLO: 
+//
 
-fare bash per rpi che con 2click rilancia il tutto, ma da venv + installare pandaas
-        DA FARE: predisposto documento in Drive/ChatGPT
-
-
-
+ caricata modifica grossa per acknowledge dei messaggi
 
 se ci sono troppi errori nei sensori, allora allarme e mandare il comando di stop all'heater  
 stato del motore così posso pulire un po' il terminale
@@ -139,6 +136,8 @@ CAMBIARE NOME LOG MESSAGE IN SERIAL FUNCTION per clarity
 |                        |
 ▼                        ▼
 // --------------------- //
+FATTO: fare bash per rpi che con 2click rilancia il tutto
+FATTO: modifica con matplotlib, siccome la versione attuale di RPY non gesisce pandas
 FATTO: montato schermo + supporto tastiera e mouse + raspberry
 FATTO: pull down del comando di step per lo stepper motor
 SENSORE TEMPERATURA ESTERNO
