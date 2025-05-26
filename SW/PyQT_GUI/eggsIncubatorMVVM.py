@@ -732,7 +732,10 @@ class MainSoftwareThread(QtCore.QThread):
             
             
     def process_serial_data(self, new_data):
-        self.arduino_readings_timestamp = time.time()
+	arduino_time_difference = time.time() - self.arduino_readings_timestamp
+	self.arduino_readings_timestamp = time.time()
+	print(f"Data from serial now! Time passed wrt previous data:{arduino_time_difference}")
+	    
         self.current_data = new_data
         #print(new_data)
         # [{'TMP01': 19.5}, {'TMP02': 19.1}, {'TMP03': 19.8}, {'TMP04': 20.1}, {'HUM01': 19.5}, {'HTP01': 19.5}]
