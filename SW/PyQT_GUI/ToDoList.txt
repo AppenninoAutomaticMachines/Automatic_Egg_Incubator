@@ -16,7 +16,8 @@ VERIFICARE: provare eventualmente ad aumentare la velocità serialBaudRate
 VERIFICARE: rallentiamo l'alive, ne mandiamo meno per sovraccaricare meno
 VERIFICARE: Arduino, ho messo localmente per ogni comando l'ack seriale + serial print fuori dal for
 VERIFICARE: anti debounce del comando di heater proveniente da thc
-VERIFICARE: che la procedura di update thc , quindi call a process_serial, sia fatta poco, una volta ogni almeno 100ms come dice chatGPT. HO aggiunto una print. Che non sia chiamata troppo frequentemente
+VERIFICARE: che la procedura di update thc , quindi call a process_serial, sia fatta poco, una volta ogni almeno 100ms come dice chatGPT. HO aggiunto una print. Che non sia chiamata troppo frequentemente.
+Ma verificare anche che non ci siano dei buchi...magari arduino si inlooppa da qualche parte,
 def process_serial_data(self, new_data):
 	arduino_time_difference = time.time() - self.arduino_readings_timestamp
 	self.arduino_readings_timestamp = time.time()
