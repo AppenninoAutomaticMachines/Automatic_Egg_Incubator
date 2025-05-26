@@ -8,6 +8,16 @@ PC817 circuitry
 
 
 DA FARE:
+verificare che la procedura di update thc , quindi call a process_serial, sia fatta poco, una volta ogni almeno 100ms come dice chatGPT. HO aggiunto una print.
+def process_serial_data(self, new_data):
+	arduino_time_difference = time.time() - self.arduino_readings_timestamp
+	self.arduino_readings_timestamp = time.time()
+	print(f"Data from serial now! Time passed wrt previous data:{arduino_time_difference}")
+
+
+
+
+
 quando eprdi la connessione da rpy, perché tipo lo riavvii devi anche dire dove sei col motore o riprendere una procedura di initi...
 SOTTO CONTROLLO: 
 //
