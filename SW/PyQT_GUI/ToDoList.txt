@@ -8,8 +8,13 @@ PC817 circuitry
 
 
 DA FARE:
+l'idea è che Arduino manda una stringa di dati in fila
+
+I comandi ragionano diversamente: RPY ne manda uno @<HTR01, True, 08CA9775># e arduino, una volta accettato, manda subito indietro ack singolarmente <HTR01, True, 08CA9775>.
+
+VERIFICARE: Arduino, ho messo localmente per ogni comando l'ack seriale + serial print fuori dal for
 VERIFICARE: anti debounce del comando di heater proveniente da thc
-verificare che la procedura di update thc , quindi call a process_serial, sia fatta poco, una volta ogni almeno 100ms come dice chatGPT. HO aggiunto una print.
+VERIFICARE: che la procedura di update thc , quindi call a process_serial, sia fatta poco, una volta ogni almeno 100ms come dice chatGPT. HO aggiunto una print. Che non sia chiamata troppo frequentemente
 def process_serial_data(self, new_data):
 	arduino_time_difference = time.time() - self.arduino_readings_timestamp
 	self.arduino_readings_timestamp = time.time()
