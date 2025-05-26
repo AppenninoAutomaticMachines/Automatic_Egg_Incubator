@@ -58,14 +58,15 @@ class SerialThread(QtCore.QThread):
         self.ack_received_flag = False
         self.failed_commands = []
         self.max_retries = 3
-        self.ack_timeout = 0.5
+        self.ack_timeout = 0.5 # time.time() returns seconds. Suggested is 300-500ms
         
+        '''
         self.pending_command = None
         self.failed_commands = []
         self.ack_timeout = 0.5  # secondi
         self.max_retries = 3
         self.last_sent_time = None
-
+        '''
     def open_serial_port(self):
         retries = 0
         while retries < self.max_retries:
@@ -149,7 +150,7 @@ class SerialThread(QtCore.QThread):
 
                 self._try_send_next_command()
                 
-                time.sleep(0.01)
+                time.sleep(0.1)
 
 
         except serial.SerialException as e:
@@ -328,6 +329,11 @@ class MainSoftwareThread(QtCore.QThread):
         self.THRESHOLD = 0.5  # Acceptable variation from the valid range
         self.VALID_RANGE_TEMPERATURE = (5.0, 45.0)  # Expected temperature range
         self.VALID_RANGE_HUMIDITY = (0.0, 100.0) # Expected humidity range
+
+        self._last_output_change_time = None
+        self._last_output_state = None
+        self._debounced_heater_output = None  # Stato effettivamente inviato
+        self._debounce_duration = 1.0  # secondi
         
         # Error tracking
         self.ERROR_TIME_LIMIT = 10  # Tempo in secondi oltre il quale generare un warning
@@ -429,7 +435,7 @@ class MainSoftwareThread(QtCore.QThread):
                 self.alive_to_arduino_state = not self.alive_to_arduino_state
                 self.queue_command("ALIVE", self.alive_to_arduino_state)
               
-            self.msleep(100)
+            time.sleep(0.1)
             
     def check_errors(self,sensor_data):
         """Verifica errori, aggiorna il contatore e traccia il tempo degli errori persistenti."""
@@ -732,9 +738,9 @@ class MainSoftwareThread(QtCore.QThread):
             
             
     def process_serial_data(self, new_data):
-	arduino_time_difference = time.time() - self.arduino_readings_timestamp
-	self.arduino_readings_timestamp = time.time()
-	print(f"Data from serial now! Time passed wrt previous data:{arduino_time_difference}")
+        arduino_time_difference = time.time() - self.arduino_readings_timestamp
+        self.arduino_readings_timestamp = time.time()
+        print(f"Data from serial now! Time passed wrt previous data:{arduino_time_difference} s")
 	    
         self.current_data = new_data
         #print(new_data)
@@ -756,6 +762,31 @@ class MainSoftwareThread(QtCore.QThread):
             print("filtered_temperature list is empty! fault in the sensors")         
         self.thc.update(filtered_temperatures)
         #print(list(current_temperatures.values()))
+
+        '''
+            chatGPT: adding debounce logic.
+            La scelta migliore è implementarlo nel codice che controlla l’output dell’heater, non all’interno della classe Heater
+            La classe Heater dovrebbe occuparsi solo del controllo logico / PID.
+            La decisione di inviare o meno un comando sulla seriale è una responsabilità applicativa, 
+            quindi deve stare nel codice che usa Heater, cioè fuori da essa, per mantenere una buona separazione delle responsabilità (principio SOLID: Single Responsibility).
+        '''
+        current_state = self.thc.get_output_control()
+
+        if current_state != self._last_output_state:
+            self._last_output_change_time = time.time()
+            self._last_output_state = current_state
+
+        # Se è cambiato e il nuovo stato è stabile da X secondi
+        if (
+            self._last_output_state != self._debounced_heater_output and
+            self._last_output_change_time is not None and
+            (time.time() - self._last_output_change_time) >= self._debounce_duration
+        ):
+            self._debounced_heater_output = self._last_output_state
+            self.queue_command("HTR01", self._debounced_heater_output)
+            print(f"⚙️ Debounced Heater state sent: {self._debounced_heater_output}")
+        '''
+        OLD
         if self.current_heater_output_control != self.thc.get_output_control(): # appena cambia il comando logico all'heater, allora invio il comando ad Arduino            
             self.current_heater_output_control = self.thc.get_output_control()
             self.queue_command("HTR01", self.current_heater_output_control)  # @<HTR01, True># @<HTR01, False>#
@@ -765,7 +796,8 @@ class MainSoftwareThread(QtCore.QThread):
             #self.queue_command("HTR01", False)  # @<HTR01, True># @<HTR01, False>#
         # metto un contatore: se questa cosa è vera per più di 20 ccili, allora off
         # FILTRAGGIO?? NON VORREI CHE CI SINAO DEGLI SPIKE...magari  se sto in questo else per più di un tot di secondi, allora dò il false, significa che l'errore è probabile che sia persistente.
-			
+		'''
+
         # Check for persistent errors
         self.check_errors(current_temperatures)
                 
