@@ -315,7 +315,7 @@ void loop() {
     int numberOfCommandsFromBoard = readFromBoard(); // from ESP8266. It has @ as terminator character
     last_serial_alive_time = millis();
     // serial_communication_is_ok = true; qui è troppo libero...se arriva della merda qui la prendevo e dicevo che serial communication ok.
-    String pendingACK_HTR01, pendingACK_HUMER01, pendingACK_STPR01;
+    String pendingACK; // mandiamo un comando per volta, quindi ci sarà un solo comando a ciclo for.
     // Guardiamo che comandi ci sono arrivati
     for (byte j = 0; j < numberOfCommandsFromBoard; j++) {
       String tempReceivedCommand = receivedCommands[j];
@@ -344,7 +344,7 @@ void loop() {
         }
         // Sposta la generazione ACK qui, fuori dal parsing
         if(uid.length() > 0){
-            pendingACK_HTR01 = "<" + tag + ", " + value + ", " + uid + ">";
+            pendingACK = "<" + tag + ", " + value + ", " + uid + ">";
         }
       }
         
@@ -357,7 +357,7 @@ void loop() {
         }
         // Sposta la generazione ACK qui, fuori dal parsing
         if(uid.length() > 0){
-            pendingACK_HTR01 = "<" + tag + ", " + value + ", " + uid + ">";
+            pendingACK = "<" + tag + ", " + value + ", " + uid + ">";
         }
       }
 
@@ -374,34 +374,20 @@ void loop() {
         }
         // Sposta la generazione ACK qui, fuori dal parsing
         if(uid.length() > 0){
-            pendingACK_HTR01 = "<" + tag + ", " + value + ", " + uid + ">";
+            pendingACK = "<" + tag + ", " + value + ", " + uid + ">";
         }
       }
       delay(1);
     }
 
     // fuori dal ciclo for, mando gli ack
-    if(pendingACK_HTR01.length() > 0){
+    if(pendingACK.length() > 0){
         Serial.print('@');
-        Serial.print(pendingACK_HTR01);
+        Serial.print(pendingACK);
         Serial.println('#');
-        pendingACK_HTR01 = "";
+        pendingACK = "";
+        delay(5);
     }
-
-    if(pendingACK_HUMER01.length() > 0){
-        Serial.print('@');
-        Serial.print(pendingACK_HUMER01);
-        Serial.println('#');
-        pendingACK_HUMER01 = "";
-    }
-
-    if(pendingACK_STPR01.length() > 0){
-        Serial.print('@');
-        Serial.print(pendingACK_STPR01);
-        Serial.println('#');
-        pendingACK_STPR01 = "";
-    }
-
     /*
       if(tempReceivedCommand.indexOf("RED") >= 0 && tempReceivedCommand.indexOf("ON") >= 0 ){
         lights[0].state = ON;
