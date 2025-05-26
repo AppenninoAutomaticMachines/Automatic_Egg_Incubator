@@ -315,7 +315,7 @@ void loop() {
     int numberOfCommandsFromBoard = readFromBoard(); // from ESP8266. It has @ as terminator character
     last_serial_alive_time = millis();
     // serial_communication_is_ok = true; qui è troppo libero...se arriva della merda qui la prendevo e dicevo che serial communication ok.
-
+    String pendingACK_HTR01, pendingACK_HUMER01, pendingACK_STPR01;
     // Guardiamo che comandi ci sono arrivati
     for (byte j = 0; j < numberOfCommandsFromBoard; j++) {
       String tempReceivedCommand = receivedCommands[j];
@@ -342,13 +342,22 @@ void loop() {
         } else if (value == "False") {
           digitalWrite(HEATER_PIN, LOW);
         }
+        // Sposta la generazione ACK qui, fuori dal parsing
+        if(uid.length() > 0){
+            pendingACK_HTR01 = "<" + tag + ", " + value + ", " + uid + ">";
+        }
       }
+        
 
       if (tag == "HUMER01") {
         if (value == "True") {
           digitalWrite(HUMIDIFIER_PIN, HIGH);
         } else if (value == "False") {
           digitalWrite(HUMIDIFIER_PIN, LOW);
+        }
+        // Sposta la generazione ACK qui, fuori dal parsing
+        if(uid.length() > 0){
+            pendingACK_HTR01 = "<" + tag + ", " + value + ", " + uid + ">";
         }
       }
 
@@ -363,26 +372,34 @@ void loop() {
           stepperMotor_stop_automatic_var = true;
           stepperMotor_stop_cmd = true;
         }
-      }
-
-      // ACK: salva la risposta completa da inviare indietro
-      if (uid.length() > 0) {
-        // Assicurati che Arduino invi l’ACK separatamente e appena esegue il comando
-        listofDataToSend[listofDataToSend_numberOfData] = "<HTR01, " + value + ", " + uid + ">";
-        listofDataToSend_numberOfData++;
-
-        if(listofDataToSend_numberOfData > 0){
-          Serial.print('@'); // SYMBOL TO START BOARDS TRANSMISSION
-          for(byte i = 0; i < listofDataToSend_numberOfData; i++){
-            Serial.print(listofDataToSend[i]); 
-          }
-          Serial.println('#'); // SYMBOL TO END BOARDS TRANSMISSION
+        // Sposta la generazione ACK qui, fuori dal parsing
+        if(uid.length() > 0){
+            pendingACK_HTR01 = "<" + tag + ", " + value + ", " + uid + ">";
         }
-        listofDataToSend_numberOfData = 0;
-        
       }
-
       delay(1);
+    }
+
+    // fuori dal ciclo for, mando gli ack
+    if(pendingACK_HTR01.length() > 0){
+        Serial.print('@');
+        Serial.print(pendingACK_HTR01);
+        Serial.println('#');
+        pendingACK_HTR01 = "";
+    }
+
+    if(pendingACK_HUMER01.length() > 0){
+        Serial.print('@');
+        Serial.print(pendingACK_HUMER01);
+        Serial.println('#');
+        pendingACK_HUMER01 = "";
+    }
+
+    if(pendingACK_STPR01.length() > 0){
+        Serial.print('@');
+        Serial.print(pendingACK_STPR01);
+        Serial.println('#');
+        pendingACK_STPR01 = "";
     }
 
     /*
