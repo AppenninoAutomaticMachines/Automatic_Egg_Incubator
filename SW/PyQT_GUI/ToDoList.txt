@@ -12,6 +12,8 @@ l'idea è che Arduino manda una stringa di dati in fila
 
 I comandi ragionano diversamente: RPY ne manda uno @<HTR01, True, 08CA9775># e arduino, una volta accettato, manda subito indietro ack singolarmente <HTR01, True, 08CA9775>.
 
+VERIFICARE: provare eventualmente ad aumentare la velocità serialBaudRate
+VERIFICARE: rallentiamo l'alive, ne mandiamo meno per sovraccaricare meno
 VERIFICARE: Arduino, ho messo localmente per ogni comando l'ack seriale + serial print fuori dal for
 VERIFICARE: anti debounce del comando di heater proveniente da thc
 VERIFICARE: che la procedura di update thc , quindi call a process_serial, sia fatta poco, una volta ogni almeno 100ms come dice chatGPT. HO aggiunto una print. Che non sia chiamata troppo frequentemente
