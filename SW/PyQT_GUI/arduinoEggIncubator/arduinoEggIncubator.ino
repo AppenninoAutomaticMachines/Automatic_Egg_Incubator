@@ -297,15 +297,11 @@ void setup() {
       externalTemperatureSensor.getAddress(externalTemperatureSensor_address, 0);
       deviceDisconnected_externalTemperatureSensor = 0;
       deviceError_externalTemperatureSensor = 0;
-      delay(5);
     }
   }
     
 
   last_serial_alive_time = millis();
-
-  delay(5);
-
   dht.begin();
 }
 
@@ -314,71 +310,70 @@ void loop() {
   if(Serial.available() > 0){ 
     int numberOfCommandsFromBoard = readFromBoard(); // from ESP8266. It has @ as terminator character
     last_serial_alive_time = millis();
-    // serial_communication_is_ok = true; qui è troppo libero...se arriva della merda qui la prendevo e dicevo che serial communication ok.
     String pendingACK; // mandiamo un comando per volta, quindi ci sarà un solo comando a ciclo for.
     // Guardiamo che comandi ci sono arrivati
     for (byte j = 0; j < numberOfCommandsFromBoard; j++) {
       String tempReceivedCommand = receivedCommands[j];
       //Serial.println(tempReceivedCommand);
       String tag, value, uid;
-      if (!splitCommand(tempReceivedCommand, tag, value, uid)) {
-        //Serial.println("⚠️ Invalid command format");
+      if (splitCommand(tempReceivedCommand, tag, value, uid)) {
+        if (tag == "ALIVE") {
+          last_serial_alive_time = millis();
+          if (value == "True") {
+            alive_bit = true;
+            serial_communication_is_ok = true;
+          } else if (value == "False") {
+            alive_bit = false;
+            serial_communication_is_ok = true;
+          }
+        }
+
+        if (tag == "HTR01") {
+          if (value == "True") {
+            digitalWrite(HEATER_PIN, HIGH);
+          } else if (value == "False") {
+            digitalWrite(HEATER_PIN, LOW);
+          }
+          // Sposta la generazione ACK qui, fuori dal parsing
+          if(uid.length() > 0){
+              pendingACK = "<" + tag + ", " + value + ", " + uid + ">";
+          }
+        }
+          
+
+        if (tag == "HUMER01") {
+          if (value == "True") {
+            digitalWrite(HUMIDIFIER_PIN, HIGH);
+          } else if (value == "False") {
+            digitalWrite(HUMIDIFIER_PIN, LOW);
+          }
+          // Sposta la generazione ACK qui, fuori dal parsing
+          if(uid.length() > 0){
+              pendingACK = "<" + tag + ", " + value + ", " + uid + ">";
+          }
+        }
+
+        if (tag == "STPR01") {
+          if (value == "MCCW") {
+            stepperMotor_moveCCW_automatic_var = true;
+            stepperMotor_moveCCW_cmd = true;
+          } else if (value == "MCW") {
+            stepperMotor_moveCW_automatic_var = true;
+            stepperMotor_moveCW_cmd = true;
+          } else if (value == "STOP") {
+            stepperMotor_stop_automatic_var = true;
+            stepperMotor_stop_cmd = true;
+          }
+          // Sposta la generazione ACK qui, fuori dal parsing
+          if(uid.length() > 0){
+              pendingACK = "<" + tag + ", " + value + ", " + uid + ">";
+          }
+        }
+      }
+      else{
+        // comando malformato, non lo considero valido + eventuale log
         continue;
       }
-
-      if (tag == "ALIVE") {
-        if (value == "True") {
-          alive_bit = true;
-          serial_communication_is_ok = true;
-        } else if (value == "False") {
-          alive_bit = false;
-          serial_communication_is_ok = true;
-        }
-      }
-
-      if (tag == "HTR01") {
-        if (value == "True") {
-          digitalWrite(HEATER_PIN, HIGH);
-        } else if (value == "False") {
-          digitalWrite(HEATER_PIN, LOW);
-        }
-        // Sposta la generazione ACK qui, fuori dal parsing
-        if(uid.length() > 0){
-            pendingACK = "<" + tag + ", " + value + ", " + uid + ">";
-        }
-      }
-        
-
-      if (tag == "HUMER01") {
-        if (value == "True") {
-          digitalWrite(HUMIDIFIER_PIN, HIGH);
-        } else if (value == "False") {
-          digitalWrite(HUMIDIFIER_PIN, LOW);
-        }
-        // Sposta la generazione ACK qui, fuori dal parsing
-        if(uid.length() > 0){
-            pendingACK = "<" + tag + ", " + value + ", " + uid + ">";
-        }
-      }
-
-      if (tag == "STPR01") {
-        if (value == "MCCW") {
-          stepperMotor_moveCCW_automatic_var = true;
-          stepperMotor_moveCCW_cmd = true;
-        } else if (value == "MCW") {
-          stepperMotor_moveCW_automatic_var = true;
-          stepperMotor_moveCW_cmd = true;
-        } else if (value == "STOP") {
-          stepperMotor_stop_automatic_var = true;
-          stepperMotor_stop_cmd = true;
-        }
-        // Sposta la generazione ACK qui, fuori dal parsing
-        if(uid.length() > 0){
-            pendingACK = "<" + tag + ", " + value + ", " + uid + ">";
-        }
-      }
-      delay(1);
-    }
 
     // fuori dal ciclo for, mando gli ack
     if(pendingACK.length() > 0){
@@ -386,7 +381,7 @@ void loop() {
         Serial.print(pendingACK);
         Serial.println('#');
         pendingACK = "";
-        delay(5);
+        delay(1);
     }
     /*
       if(tempReceivedCommand.indexOf("RED") >= 0 && tempReceivedCommand.indexOf("ON") >= 0 ){
@@ -453,7 +448,6 @@ void loop() {
 
     }
   }
-  delay(2);
 
   /* TEMPERATURES SECTION */
   /*
@@ -472,15 +466,11 @@ void loop() {
       }
       if(temperatures[index] >= DEVICE_ERROR){
         deviceError[index] ++;
-      }
-
-      delay(3);       
+      }      
     }
 
-    delay(1);
     gotTemperatures = true;  
     sensors.requestTemperatures();
-    delay(1);
 
     if (ENABLE_EXTERNAL_TEMPERATURE_READING){
       temperature_externalTemperatureSensor = externalTemperatureSensor.getTempC(externalTemperatureSensor_address);
@@ -490,7 +480,6 @@ void loop() {
       if(temperature_externalTemperatureSensor >= DEVICE_ERROR){
         deviceError_externalTemperatureSensor ++;
       }       
-      delay(1);
       externalTemperatureSensor.requestTemperatures();
     }      
 
@@ -717,8 +706,8 @@ void loop() {
     Serial.println('#'); // SYMBOL TO END BOARDS TRANSMISSION
   }
   listofDataToSend_numberOfData = 0;
-  
-  delay(5);
+
+  delay(1);
 
   /* reset command section */
   stepperMotor_moveCCW_automatic_var = false;
