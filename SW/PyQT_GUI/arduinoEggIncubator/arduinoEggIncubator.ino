@@ -8,7 +8,7 @@
 
 
 /* General CONSTANTS */
-#define SERIAL_SPEED 19200
+#define SERIAL_SPEED 115200
 #define NUMBER_OF_TEMPERATURES_SENSORS_ON_ONE_WIRE_BUS 4 //sensori di temperatura
 #define DEFAULT_DEBOUNCE_TIME 25 //ms
 #define ENABLE_HEATER true
@@ -49,7 +49,7 @@
   Per mantenere viva la comunicazione, ogni tot mando un comando di alive da python (perché altrimenti se non mando comandi manuali non ho motivo di fare niente)*/
 bool alive_bit = false;
 unsigned long last_serial_alive_time = 0;
-unsigned long serial_alive_timeout_ms = 3500;
+unsigned long serial_alive_timeout_ms = 4000; // rpy manda un alive ogni 2secondi
 
 /* se avvio il sistema senza però avviare il proramma di rpy, allora attenzione, non posso fare certe cose come muovere il motore.
   Finché leggo teperature e le mando al nulla ok, ma se si tratta di azionare attuatori devo aspettare l'alivenowledge dal rpy */
@@ -58,7 +58,7 @@ bool serial_communication_is_ok = false;
 /* TEMPERATURES SECTION */
 // GENERAL
 bool deviceOrderingActive = true; // di base prova ad ordinare con i sensori che conosciamo.
-float marginFactor = 2; // fattore moltiplicativo per aspettare un po' più di delay.
+float marginFactor = 5; // fattore moltiplicativo per aspettare un po' più di delay.
 unsigned long startGetTemperatures, endGetTemperatures;
 
 // INCUBATOR
