@@ -374,7 +374,7 @@ void loop() {
         // comando malformato, non lo considero valido + eventuale log
         continue;
       }
-
+    }
     // fuori dal ciclo for, mando gli ack
     if(pendingACK.length() > 0){
         Serial.print('@');
@@ -383,60 +383,6 @@ void loop() {
         pendingACK = "";
         delay(1);
     }
-    /*
-      if(tempReceivedCommand.indexOf("RED") >= 0 && tempReceivedCommand.indexOf("ON") >= 0 ){
-        lights[0].state = ON;
-      }
-      if(tempReceivedCommand.indexOf("RED") >= 0 && tempReceivedCommand.indexOf("OFF") >= 0 ){
-        lights[0].state = OFF;
-      }
-      if(tempReceivedCommand.indexOf("RED") >= 0 && tempReceivedCommand.indexOf("FLASH_FAST") >= 0 ){
-        lights[0].state = FLASH_FAST;
-      }
-      if(tempReceivedCommand.indexOf("RED") >= 0 && tempReceivedCommand.indexOf("FLASH_SLOW") >= 0 ){
-        lights[0].state = FLASH_SLOW;
-      }
-
-      if(tempReceivedCommand.indexOf("ORANGE") >= 0 && tempReceivedCommand.indexOf("ON") >= 0 ){
-        lights[1].state = ON;
-      }
-      if(tempReceivedCommand.indexOf("ORANGE") >= 0 && tempReceivedCommand.indexOf("OFF") >= 0 ){
-        lights[1].state = OFF;
-      }
-      if(tempReceivedCommand.indexOf("ORANGE") >= 0 && tempReceivedCommand.indexOf("FLASH_FAST") >= 0 ){
-        lights[1].state = FLASH_FAST;
-      }
-      if(tempReceivedCommand.indexOf("ORANGE") >= 0 && tempReceivedCommand.indexOf("FLASH_SLOW") >= 0 ){
-        lights[1].state = FLASH_SLOW;
-      }
-
-      if(tempReceivedCommand.indexOf("GREEN") >= 0 && tempReceivedCommand.indexOf("ON") >= 0 ){
-        lights[2].state = ON;
-      }
-      if(tempReceivedCommand.indexOf("GREEN") >= 0 && tempReceivedCommand.indexOf("OFF") >= 0 ){
-        lights[2].state = OFF;
-      }
-      if(tempReceivedCommand.indexOf("GREEN") >= 0 && tempReceivedCommand.indexOf("FLASH_FAST") >= 0 ){
-        lights[2].state = FLASH_FAST;
-      }
-      if(tempReceivedCommand.indexOf("GREEN") >= 0 && tempReceivedCommand.indexOf("FLASH_SLOW") >= 0 ){
-        lights[2].state = FLASH_SLOW;
-      }
-
-      if(tempReceivedCommand.indexOf("BUZZER") >= 0 && tempReceivedCommand.indexOf("ON") >= 0 ){
-        buzzer.state = ON;
-      }
-      if(tempReceivedCommand.indexOf("BUZZER") >= 0 && tempReceivedCommand.indexOf("OFF") >= 0 ){
-        buzzer.state = OFF;
-      }
-      if(tempReceivedCommand.indexOf("BUZZER") >= 0 && tempReceivedCommand.indexOf("BEEP_FAST") >= 0 ){
-        buzzer.state = FLASH_FAST;
-      }
-      if(tempReceivedCommand.indexOf("BUZZER") >= 0 && tempReceivedCommand.indexOf("BEEP_SLOW") >= 0 ){
-        buzzer.state = FLASH_SLOW;
-      }
-    }
-    */
   }
   else{
     if(millis() - last_serial_alive_time > serial_alive_timeout_ms){
