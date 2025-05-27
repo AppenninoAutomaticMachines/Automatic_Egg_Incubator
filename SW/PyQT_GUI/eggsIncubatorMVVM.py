@@ -29,7 +29,7 @@ import uuid
 portSetup = "/dev/ttyUSB0"
 portSetup = "/dev/ttyACM0"
 
-baudrateSetup = 19200
+baudrateSetup = 115200
 timeout = 0.1
 
 """
@@ -310,7 +310,7 @@ class MainSoftwareThread(QtCore.QThread):
         self.current_data = []  # Holds the most recent data received from SerialThread
         
         self.alive_to_arduino_state = False
-        self.alive_to_arduino_time_interval_sec = 1 # invio un ack ad arduino ogni secondo
+        self.alive_to_arduino_time_interval_sec = 2 # invio un ack ad arduino 2 secondi
         self.last_alive_to_arduino_time = time.time()
         
         self.saving_interval = 1 # default: every minute
@@ -740,8 +740,10 @@ class MainSoftwareThread(QtCore.QThread):
     def process_serial_data(self, new_data):
         arduino_time_difference = time.time() - self.arduino_readings_timestamp
         self.arduino_readings_timestamp = time.time()
-        print(f"Data from serial now! Time passed wrt previous data:{arduino_time_difference} s")
-	    
+        # Convert to milliseconds and format without commas
+        ms = int(arduino_time_difference * 1000)
+        print(f"Data from serial now! Time passed wrt previous data: {ms} ms")
+        
         self.current_data = new_data
         #print(new_data)
         # [{'TMP01': 19.5}, {'TMP02': 19.1}, {'TMP03': 19.8}, {'TMP04': 20.1}, {'HUM01': 19.5}, {'HTP01': 19.5}]
