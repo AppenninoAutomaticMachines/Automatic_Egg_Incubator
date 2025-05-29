@@ -12,20 +12,6 @@ l'idea è che Arduino manda una stringa di dati in fila
 
 I comandi ragionano diversamente: RPY ne manda uno @<HTR01, True, 08CA9775># e arduino, una volta accettato, manda subito indietro ack singolarmente <HTR01, True, 08CA9775>.
 
-VERIFICARE: provare eventualmente ad aumentare la velocità serialBaudRate
-VERIFICARE: rallentiamo l'alive, ne mandiamo meno per sovraccaricare meno
-VERIFICARE: Arduino, ho messo localmente per ogni comando l'ack seriale + serial print fuori dal for
-VERIFICARE: anti debounce del comando di heater proveniente da thc
-VERIFICARE: che la procedura di update thc , quindi call a process_serial, sia fatta poco, una volta ogni almeno 100ms come dice chatGPT. HO aggiunto una print. Che non sia chiamata troppo frequentemente.
-Ma verificare anche che non ci siano dei buchi...magari arduino si inlooppa da qualche parte,
-def process_serial_data(self, new_data):
-	arduino_time_difference = time.time() - self.arduino_readings_timestamp
-	self.arduino_readings_timestamp = time.time()
-	print(f"Data from serial now! Time passed wrt previous data:{arduino_time_difference}")
-
-
-
-
 
 quando eprdi la connessione da rpy, perché tipo lo riavvii devi anche dire dove sei col motore o riprendere una procedura di initi...
 SOTTO CONTROLLO: 
@@ -214,6 +200,19 @@ FATTO: 09/05/2025
 FATTO: 09/05/2025 
         serial_communication_is_ok fallo meglio...sull'alive, e non su qualunque cosa seriale. Altrimenti becca dentro tutto... 
                 DA TESTARE: lavorato su questo bit serial_communication_is_ok = true;
+
+FATTO: 27/05/2025 aumentata la velocità serialBaudRate a 112500
+FATTO: 27/05/2025 rallentato il bit di ALIVE, per provare a sovraccaricare meno la comunicazione seriale
+FATTO: 27/05/2025 Arduino, ho messo localmente per ogni comando l'ack seriale + serial print fuori dal for
+FATTO: 27/05/2025 anti debounce del comando di heater proveniente da thc
+FATTO: 27/05/2025 che la procedura di update thc , quindi call a process_serial, sia fatta poco, una volta ogni almeno 100ms come dice chatGPT. HO aggiunto una print. Che non sia chiamata troppo frequentemente.
+	Ma verificare anche che non ci siano dei buchi...magari arduino si inlooppa da qualche parte,
+	def process_serial_data(self, new_data):
+		arduino_time_difference = time.time() - self.arduino_readings_timestamp
+		self.arduino_readings_timestamp = time.time()
+		print(f"Data from serial now! Time passed wrt previous data:{arduino_time_difference}")
+	+ ATTENZIONE!!! in merito a questo punto, per rallentare la chiamata a process_serial_data() ho deciso di rallentare la lettura dei sensori di temperatura da parte di arduino. Ora lo facciamo circa ogni
+			500ms, quindi la chiamata stessa è fatta meno frequentemente.
 
 
 
