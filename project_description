@@ -1,0 +1,43 @@
+Il mio progetto consiste in un'incubatrice automatica per uova, lo classificherei nei progetti agri-tech.
+Il progetto è innovativo sotto vari aspetti, che elenco di seguito.
+ 
+PARTE MECCANICA:
+in primis, porterò l'idea di 'riciclo', perché ho riciclato un vecchio frigorifero per realizzare questa incubatrice. Il materiale plastico si presta bene alla resistenza all'umidità (l'ambiente per incubare le uova di gallina e anatra è molto umido). Inoltre il materiale isolante è perfetto per mantenere la temperatura costante.
+
+La rotazione delle uova avviene tramite un meccanismo a quadrilateri articolati su più livelli, azionato da un motore stepper ed un cinematismo (quadrilatero articolato) che ho progettato al cad, quindi realizzato tramite ausilio di stampa 3d. In particolare, ho stampato i supporti dei cuscinetti e un sistema regolabile per la definizione delle posizioni limite per la rotazione delle uova. 
+Il sistema di rotazione a più livelli basculanti aumenta di molto la capacità di incubata delle uova.
+
+PARTE ELETTRICA
+ho realizzato in autonomia il quadro elettrico della mia incubatrice. Ho recuperato un alimentatore da PC per fare le linee a 5V e 12V, ho realizzato le schedine con i vari connettori per collegare i sensori e ho usilizzato optoaccoppiatori per comandare i relè.
+La parte che ha richiesto molto studio per risolvere problemi elettrici è stata quella della dorsale di 4 sensori di temperatura DS18B20 che, quando messi in serie e a distanze 'significative' rispetto ad arduino, devono essere collegati con dettagli importanti per garantirne il corretto funzionamento. Questi sensori permettono un controllo ottimale della temperatura nei vari punti del volume riscaldato.
+Ho implementato un sistema di bypass che taglia l'alimentazione ai riscaldatori nel caso in cui la temperatura dovesse erroneamente salire troppo.
+Due induttori misurano le posizioni limite per far ruotare le uova.
+Un terzo induttore verrà installato per monitorare l'apertura della porta
+E' anche presente una luce di segnalazione dello stato della macchina (luce verse-arancione-rossa)
+
+
+PARTE SOFTWARE e CONTROLLORI
+la parte più innovativa in questa versione che ho realizzato è la combo arduino - raspberry.
+Raspberry funge da cervello principale. Ho realizzato uno script python che fa da interfaccia GUI uomo-macchina, per poter settare i parametri e forzare gli attuatori ad andare o no o modalità automatica. C'è tutta una parte di gestione di statistiche dell'incubata (livelli di temperatura, umidità, durata di ON/OFF degli azionamento, per monitorare il consumo energetico) + ho realizzato una parte che fa il plot delle temperature registrate dai sensori (all days = dall'inizio dell'incubata, finora e current day = solo oggi). Da qui si può osservare l'andamento della temperatura nel corso dell'incubata.
+La pagina del motore mostra lo stato di rotazione, quanto tempo è passata dall'ultima rotazione, quanto manca alla successiva. Si può regolare l'intervallo di tempo fra una rotazione e l'altra. Si può comandare una rotazione e si può spostare manualmente il motore con i pulsanti, se si volessero mettere in orizzontale i cestelli (durante la fase di schiusa).
+
+in tutto questo raspberry comunica in seriale con arduino. La comunicazione è bidirezionale.
+raspberry --> arduino
+invia i comandi e attende un acknowledge. Ho implementato un protocollo abbastanza complesso, per evitare errori e con un acknowledge sul comando (con eventuali tentativi multipli di invio successivo). 
+arduino --> raspberry
+lui restituisce periodicamente (ogni 500ms) le temperature dei vari sensori e gli stati di rotazione del motore. In un futuro recente, anche la lettura dell'induttore della porta aperta/chiusa.
+
+con questo schema ho la possibilità di lasciare ad arduino il lavoro 'sporco' di leggere sensori e gestire motori e input/output, in grande numero.
+Raspberry gestisce la GUI e, in futuro, la connettività nwetowrk. L'idea sarà quella di inviare allarmi in caso di guasti / notifiche e di avere anche una connessione remota (disponibile dal rapsberry 4, non dal 3b+ che ho io in questa versione).
+
+NEXT STEP:
+controllore di umidità automatico, con pompa per l'acqua (riempimento automatico) ed elettrovalvola (la nebulizzazione dell'acqua avverrà con l'aria compressa). Studio di un sistema di rilevazione precisa del livello dell'acqua nella vaschetta: il nebulizzatore richiede che il livello sia abbastanza preciso (pochi mm di variazione). Farò tutto al CAD e in stampa 3D, per poter integrare al meglio tutto il sistema.
+
+
+Se sarò accettato e ce ne fosse la possibilità, potrei anche incubare per tempo le uova ed esporre in fiera i pulcini appena nati.
+
+Come prossimi progetti, che potrei realizzare se fossi accettato, ci sarebbe la cella per la gestione dei pulcini appena nati (controllo di temperatura con luce ad infrarossi, porta automatica...).
+
+
+Grazie per l'attenzione! ciao, Filippo
+
