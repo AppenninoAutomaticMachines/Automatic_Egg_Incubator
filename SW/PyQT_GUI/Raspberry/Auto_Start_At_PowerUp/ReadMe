@@ -1,0 +1,26 @@
+Nuova procedura, che per questioni di ambiente grafico funziona meglio (dovevo muovere il mouse...ecc)
+
+Per GUI app visibili, il modo corretto è lanciare il terminale da dentro l’ambiente grafico (non da systemd).
+SOLUZIONE STABILE: usare ~/.config/autostart/ invece di systemd
+1) creazione di questo file:
+  mkdir -p /home/filippo/.config/autostart
+  nano /home/filippo/.config/autostart/pyqtgui.desktop
+
+2) inserisci questo contenuto
+  [Desktop Entry]
+  Type=Application
+  Name=PyQT GUI Launcher
+  Exec=lxterminal -e /home/filippo/Documents/PyQT_GUI/start_with_countdown.sh
+  StartupNotify=false
+  Terminal=false
+
+3) rendi eseguibile lo script .sh
+  chmod +x /home/filippo/Documents/PyQT_GUI/start_with_countdown.sh
+
+4)  Rimuovi il vecchio servizio systemd (se non serve più):
+  sudo systemctl disable pyqtgui.service
+  sudo rm /etc/systemd/system/pyqtgui.service
+  sudo systemctl daemon-reexec
+
+5) sudo reboot
+
