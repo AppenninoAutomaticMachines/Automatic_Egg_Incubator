@@ -24,3 +24,15 @@ SOLUZIONE STABILE: usare ~/.config/autostart/ invece di systemd
 
 5) sudo reboot
 
+❓ Perché le print() sono lente o "bufferizzate"?
+Quando Python scrive su un terminale interattivo (es. lanci manualmente dallo stesso terminale), l’output è non-bufferizzato: viene mostrato subito.
+Quando Python è lanciato in un contesto non interattivo o secondario (es. da systemd o dentro lxterminal -e), Python crede di scrivere su un file o pipe, quindi:
+🔁 Le print() vengono bufferizzate: scritte in blocchi e non in tempo reale.
+✅ Soluzioni per rendere le print() immediate
+✅ 1. Lancia Python con l’opzione -u (unbuffered)
+Modifica il comando nel tuo .sh per forzare l’output non bufferizzato:
+🔁 Modifica questa riga:
+/home/filippo/Documents/PyQT_GUI/venv-py312/bin/python3 /home/filippo/Documents/PyQT_GUI/eggsIncubatorMVVM.py
+✅ In questo modo:
+/home/filippo/Documents/PyQT_GUI/venv-py312/bin/python3 -u /home/filippo/Documents/PyQT_GUI/eggsIncubatorMVVM.py
+Il flag -u dice a Python: "scrivi su stdout/stderr subito, senza buffering".
