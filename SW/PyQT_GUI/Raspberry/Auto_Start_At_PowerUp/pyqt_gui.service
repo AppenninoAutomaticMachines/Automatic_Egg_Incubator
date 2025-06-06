@@ -3,10 +3,9 @@ Description=Start PyQT GUI Application
 After=multi-user.target network.target graphical.target nss-user-lookup.target
 Wants=network.target graphical.target
 
-
 [Service]
 Type=simple
-ExecStart=/usr/bin/lxterminal -e /bin/bash -c "sleep 60 && /home/filippo/Documents/PyQT_GUI/venv-py312/bin/python3 /home/filippo/Documents/PyQT_GUI/eggsIncubatorMVVM.py; echo 'Script exited. Press any key...' && read n 1"
+ExecStart=/usr/bin/lxterminal -e /home/filippo/Documents/PyQT_GUI/start_with_countdown.sh
 WorkingDirectory=/home/filippo/Documents/PyQT_GUI
 User=filippo
 Restart=on-failure
