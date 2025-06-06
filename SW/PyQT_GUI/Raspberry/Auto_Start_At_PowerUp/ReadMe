@@ -10,6 +10,7 @@ Procedura di accensione al POWERUP
 
 3) modificare il file del servizio, in particolare solo la riga ExecStart che va a richiamare il file .sh
   ExecStart=/usr/bin/lxterminal -e /home/filippo/Documents/PyQT_GUI/start_with_countdown.sh
+  Il file del servizio pyqt_gui.service si trova in /etc/systemd/system/pyqt_gui.service
 
 4) ricaricare systemd dove ci sono i servizi
   sudo systemctl daemon-reload
