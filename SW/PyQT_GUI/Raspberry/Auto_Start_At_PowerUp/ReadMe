@@ -16,3 +16,23 @@ Procedura di accensione al POWERUP
   sudo systemctl daemon-reload
   sudo systemctl restart pyqt_gui.service  # o come si chiama il tuo servizio
 
+
+RICORDIAMO COME SI FA A FAR SI CHE UN SERVIZIO SI AVVII AL POWERUP
+
+1) Assicurati che il file del servizio sia in /etc/systemd/system/
+  /etc/systemd/system/myapp.service
+
+2) Rendi il servizio abilitato all’avvio:
+  sudo systemctl enable myapp.service
+
+3) (Facoltativo) Testa l’avvio manualmente:
+  sudo systemctl start myapp.service
+
+4) Verifica che sia attivo:
+  systemctl status myapp.service
+
+5) (Facoltativo) Riavvia il Raspberry Pi per testare l’avvio automatico:
+  sudo reboot
+
+Se hai modificato il .service file, ricorda sempre di ricaricare systemd:
+  sudo systemctl daemon-reload
