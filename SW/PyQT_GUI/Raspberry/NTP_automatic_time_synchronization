@@ -1,0 +1,25 @@
+/* NTP per sincronizzazione automatica dell'orario */
+timezone: Europe/Rome
+
+prima run di:
+  timedatectl status
+mi aspetto che subito non vada, qualcosa di simile quindi: NTP service: inactive o n/a
+Also, check what NTP service might be installed:
+  systemctl list-units --type=service | grep -i ntp
+
+Su raspberry pi:
+  sudo apt update
+  sudo apt install systemd-timesyncd
+  sudo systemctl enable systemd-timesyncd --now
+
+Quindi, ora:
+  sudo timedatectl set-timezone Europe/Rome
+  sudo timedatectl set-ntp true
+e verifica che sia tutto ok:
+  timedatectl status
+
+Once you've properly configured NTP (e.g., using systemd-timesyncd or another NTP client like chrony), 
+your Raspberry Pi will automatically sync with the network time after reboot — no manual action required after each boot.
+
+
+In effetti va in automatico, attenzione però perché ci mette un po' a collegarsi. Rischio che ok che ho 60secondi di avvio automatico del programma, ma se dovesse sforare allora rischiamo di non avere il tempo giusto.
