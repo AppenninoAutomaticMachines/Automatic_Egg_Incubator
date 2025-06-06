@@ -1,5 +1,12 @@
 #!/bin/bash
 
+# Attende finché il display X è disponibile
+while ! xset q > /dev/null 2>&1; do
+    echo "Attendo che il display grafico sia pronto..."
+    sleep 1
+done
+
+
 DELAY=60
 BAR_LENGTH=30
 
@@ -7,7 +14,7 @@ GREEN="\e[92m"
 YELLOW="\e[93m"
 RESET="\e[0m"
 
-echo -e "${YELLOW}Avvio del programma tra $DELAY secondi...${RESET}"
+echo -e "${YELLOW}Starting application in $DELAY seconds...${RESET}"
 
 for ((i=0; i<=DELAY; i++)); do
     percent=$((100 * i / DELAY))
@@ -22,14 +29,14 @@ for ((i=0; i<=DELAY; i++)); do
     sec=$((remaining % 60))
     time_left=$(printf "%02d:%02d" $min $sec)
 
-    printf "\r${GREEN}[%s%s] %3d%% - Mancano %s ${RESET}" "$bar" "$spaces" "$percent" "$time_left"
+    printf "\r${GREEN}[%s%s] %3d%% - Time left %s ${RESET}" "$bar" "$spaces" "$percent" "$time_left"
     sleep 1
 done
 
-echo -e "\n${YELLOW}Avvio del programma ora!${RESET}"
+echo -e "\n${YELLOW}Starting application now!${RESET}"
+sleep 1
+# Avvia lo script Python con output non bufferizzato
+/home/filippo/Documents/PyQT_GUI/venv-py312/bin/python3 -u /home/filippo/Documents/PyQT_GUI/eggsIncubatorMVVM.py
 
-# Avvio script Python
-/home/filippo/Documents/PyQT_GUI/venv-py312/bin/python3 /home/filippo/Documents/PyQT_GUI/eggsIncubatorMVVM.py 2>&1 | tee /home/filippo/Documents/PyQT_GUI/eggs_log.txt
-
-echo -e "${YELLOW}Script terminato. Premi un tasto per chiudere.${RESET}"
+echo -e "\nScript terminato. Premi un tasto per chiudere..."
 read -n 1
