@@ -8,6 +8,9 @@ PC817 circuitry
 
 
 DA FARE:
+
+interruttore per modalità automatica senza raspberry emergenza + che attiva anche una sonda singola di temperatura da aggiungere.
+
 l'idea è che Arduino manda una stringa di dati in fila
 
 I comandi ragionano diversamente: RPY ne manda uno @<HTR01, True, 08CA9775># e arduino, una volta accettato, manda subito indietro ack singolarmente <HTR01, True, 08CA9775>.
