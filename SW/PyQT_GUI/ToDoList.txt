@@ -11,7 +11,8 @@ DA FARE:
 
 20/06/2025:
 1) test del logging + commit
-2) stress test. Lascio acceso rasbperry e arduino per loggare le temperature, no ventole e no relè heater eccitato. force FALSE. + tengo attivi i motori.
+2) filtraggio output humidity controller
+3) stress test. Lascio acceso rasbperry e arduino per loggare le temperature, no ventole e no relè heater eccitato. force FALSE. + tengo attivi i motori.
 
 
 interruttore per modalità automatica senza raspberry emergenza + che attiva anche una sonda singola di temperatura da aggiungere.
