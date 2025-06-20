@@ -25,6 +25,38 @@ import uuid
     self.queue_command("STPR01", "STOP") # stop motor   
 '''
 
+'''
+Siccome ci sono dei thread e si rischia concorrenza fra la chiamata delle funzioni di log, è necessario farne due separate. Un logging per il SerialThread e un logging per
+il MainSoftwareThread
+
+1. INFO
+Informational messages that highlight the progress of the application at a coarse-grained level. These are useful for tracking the general flow of the application.
+
+2. DEBUG
+Detailed information, typically of interest only when diagnosing problems. These messages are useful for developers to understand the internal state of the application.
+
+3. WARNING
+Indications that something unexpected happened, or indicative of some problem in the near future (e.g., ‘disk space low’). The software is still working as expected.
+
+4. ERROR
+Due to a more serious problem, the software has not been able to perform some function. These messages indicate a failure in the application.
+
+5. CRITICAL
+A serious error, indicating that the program itself may be unable to continue running. These messages are used for severe errors that require immediate attention.
+
+6. ALARM
+Specific to your application, this could be used to indicate conditions that require immediate attention but are not necessarily errors (e.g., temperature out of range).
+
+7. EXCEPTION
+Used to log exceptions that occur in the application. This can include stack traces and other debugging information.
+
+Example of usage:
+
+log_message('INFO', 'This is an informational message.')
+log_message('WARNING', 'This is a warning message.')
+log_message('ERROR', 'This is an error message.')
+'''
+
 # ARDUINO serial communication - setup #
 portSetup = "/dev/ttyUSB0"
 portSetup = "/dev/ttyACM0"
@@ -60,6 +92,11 @@ class SerialThread(QtCore.QThread):
         self.max_retries = 3
         self.ack_timeout = 0.5 # time.time() returns seconds. Suggested is 300-500ms
         
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        # Create a Log folder if it doesn't exist
+        self.serial_thread_log_folder_path = os.path.join(script_dir, 'SerialThread_Log')
+        if not os.path.exists(self.serial_thread_log_folder_path):
+            os.makedirs(self.serial_thread_log_folder_path)
         '''
         self.pending_command = None
         self.failed_commands = []
@@ -71,15 +108,15 @@ class SerialThread(QtCore.QThread):
         retries = 0
         while retries < self.max_retries:
             try:
-                print("Estabilishing serial connection....")
+                self.serial_thread_log_message('INFO', 'Estabilishing serial connection')
                 self.serial_port = serial.Serial(self.port, self.baudrate, timeout=1)
                 time.sleep(3)
-                print("Serial port opened successfully")
+                self.serial_thread_log_message('INFO', 'Serial port opened successfully')
                 # Discard any initial data to avoid decode errors
                 self.serial_port.reset_input_buffer()
                 return True
             except serial.SerialException as e:
-                print(f"Failed to open serial port: {e}. Retrying in {self.retry_interval} seconds...")
+                self.serial_thread_log_message('ERROR', f"Failed to open serial port: {e}. Retrying in {self.retry_interval} seconds...")
                 time.sleep(self.retry_interval)
                 retries += 1
         return False
@@ -87,10 +124,10 @@ class SerialThread(QtCore.QThread):
     def run(self):
         self.serial_port_successfully_opened = self.open_serial_port()
         if not self.serial_port_successfully_opened:
-            print("Unable to open serial port after multiple attempts.")
+            self.serial_thread_log_message('ERROR', 'Unable to open serial port after multiple attempts.')
             return
         sync_waiting_time_s = 5
-        print(f"Waiting {sync_waiting_time_s} seconds for Arduino to setup")
+        self.serial_thread_log_message('INFO', f"Waiting {sync_waiting_time_s} seconds for Arduino to setup")
         time.sleep(sync_waiting_time_s)
         self.serial_thread_ready_to_go = True
 
@@ -102,9 +139,11 @@ class SerialThread(QtCore.QThread):
         decode_error_count = 0
         decode_error_threshold = 10  # Number of decode errors before resetting serial port
 
+        '''
         def log_error(msg):
             print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] ERROR: {msg}")
-
+        '''
+        
         try:
             while self.running:
                 while self.serial_port.in_waiting > 0:
@@ -113,13 +152,14 @@ class SerialThread(QtCore.QThread):
                         decode_error_count = 0
                     except UnicodeDecodeError as e:
                         decode_error_count += 1
-                        log_error(f"Decode error (#{decode_error_count}): {e}. Resetting buffer and flags.")
+                        self.serial_thread_log_message('ALARM', f"Decode error (#{decode_error_count}): {e}. Resetting buffer and flags.")
+                        
                         startRx = False
                         buffer = ''
                         saving = False
 
                         if decode_error_count >= decode_error_threshold:
-                            log_error("Too many decode errors. Resetting serial port.")
+                            self.serial_thread_log_message('CRITICAL', 'Too many decode errors. Resetting serial port.')
                             self.close_serial_port()
                             time.sleep(1)
                             self.open_serial_port()
@@ -140,7 +180,7 @@ class SerialThread(QtCore.QThread):
                             trimmed_buffer = buffer.strip('@').strip('#')
                             #print(f"🔍 Full buffer received: {trimmed_buffer!r}")
                             if trimmed_buffer:
-                                self.decode_message(trimmed_buffer, identifiers_data_list, self)
+                                self.decode_message(self, trimmed_buffer, identifiers_data_list, self)
 
                             buffer = ''
 
@@ -154,7 +194,8 @@ class SerialThread(QtCore.QThread):
 
 
         except serial.SerialException as e:
-            log_error(f"Serial error: {e}")
+            self.serial_thread_log_message('ERROR', f"Serial error: {e}")
+            
         finally:
             self.close_serial_port()
             
@@ -174,12 +215,12 @@ class SerialThread(QtCore.QThread):
                     self.serial_port.write(cmd_obj["formatted"].encode('utf-8'))
                     # Stampiamo solo se non è ALIVE
                     if cmd_obj["cmd"] != "ALIVE":
-                        print(f"Retrying ({retries}) for: {cmd_obj['formatted']}")
+                        self.serial_thread_log_message('WARNING', f"Retrying ({retries}) for: {cmd_obj['formatted']}")
                     self.awaiting_ack["timestamp"] = time.time()
                 else:
                     # Stampiamo solo se non è ALIVE
                     if cmd_obj["cmd"] != "ALIVE":
-                        print(f"⚠️ NO ACK for command: {cmd_obj['formatted']}")
+                        self.serial_thread_log_message('ALARM', f"⚠️ NO ACK for command: {cmd_obj['formatted']}")
                     self.failed_commands.append(cmd_obj)
                     self.awaiting_ack = None
             return
@@ -195,13 +236,13 @@ class SerialThread(QtCore.QThread):
                 self.serial_port.write(formatted.encode('utf-8'))
                 # Stampiamo solo se non è ALIVE
                 if cmd_obj["cmd"] != "ALIVE":
-                    print(f"Sent (no ACK needed): {formatted}")
+                    self.serial_thread_log_message('INFO', f"Sent (no ACK needed): {formatted}")
             else:
                 # Comando con ACK
                 self.serial_port.write(formatted.encode('utf-8'))
                 # Stampiamo solo se non è ALIVE
                 if cmd_obj["cmd"] != "ALIVE":
-                    print(f"Sent to Arduino: {formatted}")
+                    self.serial_thread_log_message('INFO', f"Sent to Arduino: {formatted}")
                 cmd_obj["retry_count"] = 0
                 self.awaiting_ack = {
                     "uid": uid,
@@ -234,12 +275,12 @@ class SerialThread(QtCore.QThread):
         if self.serial_port and self.serial_port.is_open:
             try:
                 self.serial_port.close()
-                print("Serial port closed successfully")
+                self.serial_thread_log_message('INFO', 'Serial port closed successfully')
             except Exception as e:
-                print(f"Error closing serial port: {e}")
+                self.serial_thread_log_message('ERROR', f"Error closing serial port: {e}")
 
     @staticmethod
-    def decode_message(buffer, identifiers_data_list, serial_thread_instance):
+    def decode_message(self, buffer, identifiers_data_list, serial_thread_instance):
         import re
 
         # Prende tutte le sottostringhe tra < e >
@@ -257,10 +298,10 @@ class SerialThread(QtCore.QThread):
                 if cmd in command_tags:
                     if (serial_thread_instance.awaiting_ack and
                         serial_thread_instance.awaiting_ack["uid"] == uid):
-                        print(f"✅ ACK ricevuto: {cmd}, {value}, ID={uid}")
+                        self.serial_thread_log_message('INFO', f"✅ ACK ricevuto: {cmd}, {value}, ID={uid}")
                         serial_thread_instance.ack_received_flag = True
                 else:
-                    print(f"⚠️ ACK {uid} non atteso o awaiting_ack differente")
+                    self.serial_thread_log_message('ALARM', f"⚠️ ACK {uid} non atteso o awaiting_ack differente")
                     # Non aggiungo ACK alla lista dati normali
                     continue
 
@@ -271,7 +312,7 @@ class SerialThread(QtCore.QThread):
                 elif SerialThread.is_number(info_value):
                     number = float(info_value) if '.' in info_value else int(info_value)
                 else:
-                    print(f"Non-numeric data: {info_value}")
+                    self.serial_thread_log_message('WARNING', f"Non-numeric data: {info_value}")
                     continue
 
                 for identifier in identifiers:
@@ -282,10 +323,10 @@ class SerialThread(QtCore.QThread):
             
     def handle_ack(self, tag, value, uid):
         if self.awaiting_ack and self.awaiting_ack["uid"] == uid:
-            print(f"✅ ACK ricevuto: {tag}, {value}, ID={uid}")
+            self.serial_thread_log_message('INFO', f"✅ ACK ricevuto: {tag}, {value}, ID={uid}")
             self.ack_received_flag = True
         else:
-            print(f"⚠️ ACK ricevuto ma non atteso o ID diverso: {uid}")
+            self.serial_thread_log_message('ALARM', f"⚠️ ACK ricevuto ma non atteso o ID diverso: {uid}")
     
     @staticmethod
     def is_number(s):
@@ -294,6 +335,27 @@ class SerialThread(QtCore.QThread):
             return True
         except ValueError:
             return False
+        
+    def serial_thread_log_message(self, error_type, message):
+        """
+        Logs a message to a log file named with the current date inside the Log folder in plain text format with sections.
+
+        Args:
+            error_type (str): The type of error (e.g., 'INFO', 'WARNING', 'ERROR').
+            message (str): The message to log.
+        """
+        print(message)
+        current_date = datetime.now().strftime('%Y-%m-%d')
+        log_file = os.path.join(self.serial_thread_log_folder_path, f"log_{current_date}.txt")
+        
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        
+        with open(log_file, 'a') as file:
+            file.write(f"--- Log Entry ---\n")
+            file.write(f"Timestamp: {timestamp}\n")
+            file.write(f"Error Type: {error_type}\n")
+            file.write(f"Message: {message}\n")
+            file.write(f"-----------------\n\n")
 
 
 class MainSoftwareThread(QtCore.QThread):
@@ -380,6 +442,11 @@ class MainSoftwareThread(QtCore.QThread):
         humidifier_actuator_folder_path = os.path.join(machine_statistics_folder_path, 'Humidifier')
         if not os.path.exists(humidifier_actuator_folder_path):
             os.makedirs(humidifier_actuator_folder_path)
+            
+        # Create a Log folder if it doesn't exist
+        self.main_software_thread_log_folder_path = os.path.join(script_dir, 'MainSoftwareThread_Log')
+        if not os.path.exists(self.main_software_thread_log_folder_path):
+            os.makedirs(self.main_software_thread_log_folder_path)
 
     def run(self):
         # Start the SerialThread
@@ -393,13 +460,14 @@ class MainSoftwareThread(QtCore.QThread):
                 for cmd, value in self.command_list:
                     self.serial_thread.add_command(cmd, value)
                     #print(f"{cmd}, {value}")
+                    self.main_software_thread_log_message('INFO', f"Added commad to serial thread queue: {cmd}, {value}")
                 self.command_list.clear()
                 
             # parte che gira periodica, quindi ci metto la gestione del motore siccome deve funzionare periodicamente per il timer.
             self.eggTurnerMotor.update()
             
             if self.eggTurnerMotor.getNewCommand() is not None: # checking if there's a command
-                print(f"Processing command: {self.eggTurnerMotor.getNewCommand()}") 
+                self.main_software_thread_log_message('INFO', f"Processing command: {self.eggTurnerMotor.getNewCommand()}")
                 
                 if (self.eggTurnerMotor.getNewCommand() == "automatic_CCW_rotation_direction"
                     or
@@ -463,12 +531,12 @@ class MainSoftwareThread(QtCore.QThread):
 
         # Stampa solo se ci sono nuovi errori o warning per errori persistenti
         if new_errors:
-            print(f"⚠ ERRORE: Sensori appena entrati in errore: {new_errors}")
-            print(f"Totale errori rilevati finora: {self.error_counter}")
+            self.main_software_thread_log_message('ALARM', f"⚠ ERRORE: Sensori appena entrati in errore: {new_errors}")
+            self.main_software_thread_log_message('INFO', f"Totale errori rilevati finora: {self.error_counter}")
 
         for sensor, start_time in self.error_timestamps.items():
             if current_time - start_time > self.ERROR_TIME_LIMIT and sensor not in self.warned_sensors:
-                print(f"⚠ WARNING: Il sensore '{sensor}' è in errore da più di {self.ERROR_TIME_LIMIT} secondi!")
+                self.main_software_thread_log_message('WARNING', f"⚠ WARNING: Il sensore '{sensor}' è in errore da più di {self.ERROR_TIME_LIMIT} secondi!")
                 self.warned_sensors.add(sensor)  # Segnala il warning solo una volta
             
     def filter_temperatures(self, temperatures):
@@ -488,7 +556,7 @@ class MainSoftwareThread(QtCore.QThread):
         self.serial_thread.wait()
         
     def handle_button_click(self, button_name):
-        print(f"[MainSoftwareThread] Processing button {button_name}")
+        self.main_software_thread_log_message('INFO', f"[MainSoftwareThread] Processing button {button_name}")
         self.current_button = button_name
         
         if self.current_button == "forceEggsTurn_motor_btn":
@@ -525,9 +593,9 @@ class MainSoftwareThread(QtCore.QThread):
                 str(self.VALID_RANGE_TEMPERATURE[1]),
                 str(self.remove_erroneous_values_from_T_plot),
             ]
-            print(command)
+            self.main_software_thread_log_message('INFO', f"Command to plot data: {command}")
             process = subprocess.Popen(command)
-            print("Subprocess started and main program continues...")
+            #print("Subprocess started and main program continues...")
             
         if self.current_button == "plotToday_temp_T_btn":
             script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -541,9 +609,9 @@ class MainSoftwareThread(QtCore.QThread):
                 str(self.VALID_RANGE_TEMPERATURE[1]),
                 str(self.remove_erroneous_values_from_T_plot),
             ]
-            print(command)
+            self.main_software_thread_log_message('INFO', f"Command to plot data: {command}")
             process = subprocess.Popen(command)
-            print("Subprocess started and main program continues...")
+            #print("Subprocess started and main program continues...")
             
         if self.current_button == "plotAllDays_humidity_H_btn":
             script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -557,9 +625,9 @@ class MainSoftwareThread(QtCore.QThread):
                 str(self.VALID_RANGE_HUMIDITY[1]),
                 str(self.remove_erroneous_values_from_H_plot),
             ]
-            print(command)
+            self.main_software_thread_log_message('INFO', f"Command to plot data: {command}")
             process = subprocess.Popen(command)
-            print("Subprocess started and main program continues...")
+            #print("Subprocess started and main program continues...")
             
         if self.current_button == "plotToday_humidity_H_btn":
             script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -573,9 +641,9 @@ class MainSoftwareThread(QtCore.QThread):
                 str(self.VALID_RANGE_HUMIDITY[1]),
                 str(self.remove_erroneous_values_from_T_plot),
             ]
-            print(command)
+            self.main_software_thread_log_message('INFO', f"Command to plot data: {command}")
             process = subprocess.Popen(command)
-            print("Subprocess started and main program continues...")
+            #print("Subprocess started and main program continues...")
             
         if self.current_button == "plotAllDays_cnt_T_btn":
             script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -589,9 +657,9 @@ class MainSoftwareThread(QtCore.QThread):
                 str(1),
                 str(False),
             ]
-            print(command)
+            self.main_software_thread_log_message('INFO', f"Command to plot data: {command}")
             process = subprocess.Popen(command)
-            print("Subprocess started and main program continues...")
+            #print("Subprocess started and main program continues...")
             
         if self.current_button == "plotToday_cnt_T_btn":
             script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -605,9 +673,9 @@ class MainSoftwareThread(QtCore.QThread):
                 str(1),
                 str(False),
             ]
-            print(command)
+            self.main_software_thread_log_message('INFO', f"Command to plot data: {command}")
             process = subprocess.Popen(command)
-            print("Subprocess started and main program continues...")
+            #print("Subprocess started and main program continues...")
             
         if self.current_button == "plotAllDays_cnt_H_btn":
             script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -621,9 +689,9 @@ class MainSoftwareThread(QtCore.QThread):
                 str(1),
                 str(False),
             ]
-            print(command)
+            self.main_software_thread_log_message('INFO', f"Command to plot data: {command}")
             process = subprocess.Popen(command)
-            print("Subprocess started and main program continues...")
+            #print("Subprocess started and main program continues...")
             
         if self.current_button == "plotToday_cnt_H_btn":
             script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -637,9 +705,9 @@ class MainSoftwareThread(QtCore.QThread):
                 str(1),
                 str(False),
             ]
-            print(command)
+            self.main_software_thread_log_message('INFO', f"Command to plot data: {command}")
             process = subprocess.Popen(command)
-            print("Subprocess started and main program continues...")
+            #print("Subprocess started and main program continues...")
             
     def get_python_executable(self):
         """
@@ -665,7 +733,7 @@ class MainSoftwareThread(QtCore.QThread):
         
     def handle_float_spinBox_value(self, spinbox_name, value):
         rounded_value = round(value, 1)
-        print(f"[MainSoftwareThread] Processing spinbox {spinbox_name} of value: {rounded_value} ({type(rounded_value)})")
+        self.main_software_thread_log_message('INFO', f"[MainSoftwareThread] Processing spinbox {spinbox_name} of value: {rounded_value} ({type(rounded_value)})")
         self.spinbox_values[spinbox_name] = rounded_value       
         
         if spinbox_name == "rotation_interval_spinBox":
@@ -730,11 +798,11 @@ class MainSoftwareThread(QtCore.QThread):
             
         if value_name == "removeErrors_from_T_plots":
             self.remove_erroneous_values_from_T_plot = value
-            print(f"{value_name} + {value}")
+            self.main_software_thread_log_message('INFO', f"{value_name} + {value}")
             
         if value_name == "removeErrors_from_H_plots":
             self.remove_erroneous_values_from_H_plot = value
-            print(f"{value_name} + {value}")
+            self.main_software_thread_log_message('INFO', f"{value_name} + {value}")
             
             
     def process_serial_data(self, new_data):
@@ -742,7 +810,7 @@ class MainSoftwareThread(QtCore.QThread):
         self.arduino_readings_timestamp = time.time()
         # Convert to milliseconds and format without commas
         ms = int(arduino_time_difference * 1000)
-        print(f"Data from serial now! Time passed wrt previous data: {ms} ms")
+        self.main_software_thread_log_message('INFO', f"Data from serial now! Time passed wrt previous data: {ms} ms")
         
         self.current_data = new_data
         #print(new_data)
@@ -760,8 +828,8 @@ class MainSoftwareThread(QtCore.QThread):
         # al controllore di temperatura passo solo temperature filtrate, ovvero i valori dentro il range di temperatura corretto
         
         filtered_temperatures = self.filter_temperatures(list(current_temperatures.values()))
-        if not filtered_temperatures:   
-            print("filtered_temperature list is empty! fault in the sensors")         
+        if not filtered_temperatures:
+            self.main_software_thread_log_message('WARNING', 'filtered_temperature list is empty! fault in the sensors')         
         self.thc.update(filtered_temperatures)
         #print(list(current_temperatures.values()))
 
@@ -786,7 +854,7 @@ class MainSoftwareThread(QtCore.QThread):
         ):
             self._debounced_heater_output = self._last_output_state
             self.queue_command("HTR01", self._debounced_heater_output)
-            print(f"⚙️ Debounced Heater state sent: {self._debounced_heater_output}")
+            self.main_software_thread_log_message('INFO', f"⚙️ Debounced Heater state sent: {self._debounced_heater_output}")
         '''
         OLD
         if self.current_heater_output_control != self.thc.get_output_control(): # appena cambia il comando logico all'heater, allora invio il comando ad Arduino            
@@ -884,12 +952,33 @@ class MainSoftwareThread(QtCore.QThread):
                 self.save_data_to_files('Heater', {'Heater_Status': self.thc.get_output_control()})  # need to pass a dictionary
                 self.save_data_to_files('Humidifier', {'Humidifier_status': self.hhc.get_output_control()}) 
                 self.last_saving_time = datetime.now()
-                print(f"Saved data! {self.last_saving_time}")
+                self.main_software_thread_log_message('INFO', f"Saved data! {self.last_saving_time}")
+                
                 
                 end_time = time.perf_counter()
                 #print(f"Time requested for saving data [milli-seconds]: {(end_time - start_time)*1000}")
                 
+    def main_software_thread_log_message(self, error_type, message):
+        """
+        Logs a message to a log file named with the current date inside the Log folder in plain text format with sections.
+
+        Args:
+            error_type (str): The type of error (e.g., 'INFO', 'WARNING', 'ERROR').
+            message (str): The message to log.
+        """
+        print(message)
+        current_date = datetime.now().strftime('%Y-%m-%d')
+        log_file = os.path.join(self.main_software_thread_log_folder_path, f"log_{current_date}.txt")
         
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        
+        with open(log_file, 'a') as file:
+            file.write(f"--- Log Entry ---\n")
+            file.write(f"Timestamp: {timestamp}\n")
+            file.write(f"Error Type: {error_type}\n")
+            file.write(f"Message: {message}\n")
+            file.write(f"-----------------\n\n")
+            
     def save_data_to_files(self, data_type, data_dictionary): #passo un dictionary di temperature/humidities, dimensione variabile per gestire più o meno sensori dinamicamente
         now = datetime.now()
         current_date = now.strftime('%Y-%m-%d')
