@@ -392,10 +392,19 @@ class MainSoftwareThread(QtCore.QThread):
         self.VALID_RANGE_TEMPERATURE = (5.0, 45.0)  # Expected temperature range
         self.VALID_RANGE_HUMIDITY = (0.0, 100.0) # Expected humidity range
 
-        self._last_output_change_time = None
-        self._last_output_state = None
-        self._debounced_heater_output = None  # Stato effettivamente inviato
+        # ANTI-DEBOUNCE for thc temperature hysteresis controller
+        self._last_output_change_time_thc = None
+        self._last_output_state_thc = None
+        self._debounced_heater_output_thc = None  # Stato effettivamente inviato
+        
+        # ANTI-DEBOUNCE for thc humidity hysteresis controller
+        self._last_output_change_time_hhc = None
+        self._last_output_state_hhc = None
+        self._debounced_heater_output_hhc = None  # Stato effettivamente inviato
+        
         self._debounce_duration = 1.0  # secondi
+        
+        
         
         # Error tracking
         self.ERROR_TIME_LIMIT = 10  # Tempo in secondi oltre il quale generare un warning
@@ -842,44 +851,49 @@ class MainSoftwareThread(QtCore.QThread):
         '''
         current_state = self.thc.get_output_control()
 
-        if current_state != self._last_output_state:
-            self._last_output_change_time = time.time()
-            self._last_output_state = current_state
+        if current_state != self._last_output_state_thc:
+            self._last_output_change_time_thc = time.time()
+            self._last_output_state_thc = current_state
 
         # Se è cambiato e il nuovo stato è stabile da X secondi
         if (
-            self._last_output_state != self._debounced_heater_output and
-            self._last_output_change_time is not None and
-            (time.time() - self._last_output_change_time) >= self._debounce_duration
+            self._last_output_state_thc != self._debounced_heater_output_thc and
+            self._last_output_change_time_thc is not None and
+            (time.time() - self._last_output_change_time_thc) >= self._debounce_duration
         ):
-            self._debounced_heater_output = self._last_output_state
-            self.queue_command("HTR01", self._debounced_heater_output)
-            self.main_software_thread_log_message('INFO', f"⚙️ Debounced Heater state sent: {self._debounced_heater_output}")
-        '''
-        OLD
-        if self.current_heater_output_control != self.thc.get_output_control(): # appena cambia il comando logico all'heater, allora invio il comando ad Arduino            
-            self.current_heater_output_control = self.thc.get_output_control()
-            self.queue_command("HTR01", self.current_heater_output_control)  # @<HTR01, True># @<HTR01, False>#
-        #else:
-            # caso in cui non ho NEMMENO UNA temperatura valida, tutti in errore. Allora spengo il riscaldatore.
-            # devo lavorare sul ctonroller....altrimenti ppython pensa sia acceso e invece è spento
-            #self.queue_command("HTR01", False)  # @<HTR01, True># @<HTR01, False>#
-        # metto un contatore: se questa cosa è vera per più di 20 ccili, allora off
-        # FILTRAGGIO?? NON VORREI CHE CI SINAO DEGLI SPIKE...magari  se sto in questo else per più di un tot di secondi, allora dò il false, significa che l'errore è probabile che sia persistente.
-		'''
+            self._debounced_heater_output_thc = self._last_output_state_thc
+            self.queue_command("HTR01", self._debounced_heater_output_thc)
+            self.main_software_thread_log_message('INFO', f"⚙️ Debounced Heater state sent: {self._debounced_heater_output_thc}")
 
         # Check for persistent errors
-        self.check_errors(current_temperatures)
-                
+        self.check_errors(current_temperatures)               
             
             
         # HUMIDITY CONTROLLER SECTION
+        self.hhc.update(list(current_humidities.values()))
+        current_state = self.hhc.get_output_control()
+
+        if current_state != self._last_output_state_hhc:
+            self._last_output_change_time_hhc = time.time()
+            self._last_output_state_hhc = current_state
+
+        # Se è cambiato e il nuovo stato è stabile da X secondi
+        if (
+            self._last_output_state_hhc != self._debounced_heater_output_hhc and
+            self._last_output_change_time_hhc is not None and
+            (time.time() - self._last_output_change_time_hhc) >= self._debounce_duration
+        ):
+            self._debounced_heater_output_hhc = self._last_output_state_hhc
+            self.queue_command("HUMER01", self._debounced_heater_output_hhc)
+            self.main_software_thread_log_message('INFO', f"⚙️ Debounced Humidifier state sent: {self._debounced_heater_output_hhc}")
+        
+        '''
         if current_humidities:
             self.hhc.update(list(current_humidities.values()))
             if self.current_humidifier_output_control != self.hhc.get_output_control():
                 self.current_humidifier_output_control = self.hhc.get_output_control()
                 self.queue_command("HUMER01", self.current_humidifier_output_control) # @<HUMER01, True># @<HUMER01, False>#
-            
+        '''    
             
         # Emit the data to update the view        
         # Collecting all values into a single list
