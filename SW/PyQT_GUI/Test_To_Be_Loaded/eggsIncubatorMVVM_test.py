@@ -13,7 +13,14 @@ import queue
 import subprocess
 from collections import deque
 import uuid
+import json
+import shutil
 
+'''
+    SALVATAGGIO DEI PARAMETRI:
+    non prevedo un bottone in GUI, ogni volta che modifico un parametro sensibile questo viene automaticamente salvato nel file di parametri.
+    All'avvio, in automatico, se un parametro è salvato allora ok viene usato, altrimenti rimane il default scritto nel codice
+'''
 
 '''
     i comandi devono essere quanto più univoci possibile! perhé ho visto che se metto CW e CCW alla domanda indexof() arduino non li sa distinguere
@@ -366,6 +373,7 @@ class MainSoftwareThread(QtCore.QThread):
     
     def __init__(self):
         super().__init__()
+        self.initialization_from_GUI_completed = False
         self.running = True
         self.serial_thread = SerialThread()
         self.serial_thread.data_received.connect(self.process_serial_data)
@@ -457,12 +465,29 @@ class MainSoftwareThread(QtCore.QThread):
         if not os.path.exists(self.main_software_thread_log_folder_path):
             os.makedirs(self.main_software_thread_log_folder_path)
 
+        #--- Create Parameters folder + file ---#
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        parameters_folder_path = os.path.join(script_dir, "Parameters") 
+        if not os.path.exists(parameters_folder_path):
+                os.makedirs(parameters_folder_path)
+
+        self.parameters_file_path = os.path.join(parameters_folder_path, "parameters.json") # file where parameters are saved
+        self.parameters = {} # dictionary storing all parameters in program memory
+        self._load_all_parameters() # loading already existing parameters in the file
+
     def run(self):
         # Start the SerialThread
         self.serial_thread.start()
         
         while not self.serial_thread.serial_thread_ready_to_go:
             pass
+
+        # prima di far partire il loop provo già a settare i paramteri corretti
+        while not self.initialization_from_GUI_completed:
+            pass
+         #1x volta, inizializzatione dei paramteri da file
+         # Initializing parameters from file:
+         self.parameters_initialization_from_file()
 
         while self.running:            
             if self.command_list:
@@ -750,34 +775,50 @@ class MainSoftwareThread(QtCore.QThread):
         elif spinbox_name == "maxHysteresisValue_temperature_spinBox":
             if rounded_value <= self.thc.get_lower_limit():
                 self.thc.set_upper_limit(rounded_value)
+                self.save_parameter('TEMPERATURE_HYSTERESIS_CONTROLLER_UPPER_LIMIT', rounded_value)
+
                 self.thc.set_lower_limit(rounded_value)
+                self.save_parameter('TEMPERATURE_HYSTERESIS_CONTROLLER_LOWER_LIMIT', rounded_value)
                 self.update_spinbox_value.emit("minHysteresisValue_temperature_spinBox", rounded_value)
             else:
                 self.thc.set_upper_limit(rounded_value)
+                self.save_parameter('TEMPERATURE_HYSTERESIS_CONTROLLER_UPPER_LIMIT', rounded_value)
                 
         elif spinbox_name == "minHysteresisValue_temperature_spinBox":
             if rounded_value >= self.thc.get_upper_limit():
                 self.thc.set_upper_limit(rounded_value)
+                self.save_parameter('TEMPERATURE_HYSTERESIS_CONTROLLER_UPPER_LIMIT', rounded_value)
+
                 self.thc.set_lower_limit(rounded_value)
+                self.save_parameter('TEMPERATURE_HYSTERESIS_CONTROLLER_LOWER_LIMIT', rounded_value)
                 self.update_spinbox_value.emit("maxHysteresisValue_temperature_spinBox", rounded_value)
             else:
                 self.thc.set_lower_limit(rounded_value)
+                self.save_parameter('TEMPERATURE_HYSTERESIS_CONTROLLER_LOWER_LIMIT', rounded_value)
                 
         elif spinbox_name == "maxHysteresisValue_humidity_spinBox":
             if rounded_value <= self.hhc.get_lower_limit():
                 self.hhc.set_upper_limit(rounded_value)
+                self.save_parameter('HUMIDITY_HYSTERESIS_CONTROLLER_UPPER_LIMIT', rounded_value)
+
                 self.hhc.set_lower_limit(rounded_value)
+                self.save_parameter('HUMIDITY_HYSTERESIS_CONTROLLER_LOWER_LIMIT', rounded_value)
                 self.update_spinbox_value.emit("minHysteresisValue_humidity_spinBox", rounded_value)
             else:
                 self.hhc.set_upper_limit(rounded_value)
+                self.save_parameter('HUMIDITY_HYSTERESIS_CONTROLLER_UPPER_LIMIT', rounded_value)
                 
         elif spinbox_name == "minHysteresisValue_humidity_spinBox":
             if rounded_value >= self.hhc.get_upper_limit():
                 self.hhc.set_upper_limit(rounded_value)
+                self.save_parameter('HUMIDITY_HYSTERESIS_CONTROLLER_UPPER_LIMIT', rounded_value)
+
                 self.hhc.set_lower_limit(rounded_value)
+                self.save_parameter('HUMIDITY_HYSTERESIS_CONTROLLER_LOWER_LIMIT', rounded_value)
                 self.update_spinbox_value.emit("maxHysteresisValue_humidity_spinBox", rounded_value)
             else:
                 self.hhc.set_lower_limit(rounded_value)
+                self.save_parameter('HUMIDITY_HYSTERESIS_CONTROLLER_LOWER_LIMIT', rounded_value)
             
     def handle_intialization_step(self, value_name, value):
         rounded_value = round(value, 1)
@@ -789,6 +830,10 @@ class MainSoftwareThread(QtCore.QThread):
             self.hhc.set_upper_limit(rounded_value)
         elif value_name == "minHysteresisValue_humidity_spinBox":
             self.hhc.set_lower_limit(rounded_value)
+    
+    def handle_initialization_done(self, parameter, value):
+        # funzione che viene chiamata da MainWindow quando ha completato l'emit di tutti i parametri da default di GUI
+        self.initialization_from_GUI_completed = True
             
     def handle_radio_button_toggle(self, value_name, value):
         if value_name == "heaterOFF_radioBtn":
@@ -933,6 +978,10 @@ class MainSoftwareThread(QtCore.QThread):
             all_values.append(self.hhc.get_time_off())
             
             self.update_statistics.emit(all_values)
+
+            # + saving in parameters file relevan statistics
+            self.save_parameter('TEMPERATURE_HYSTERESIS_CONTROLLER_TIME_ON', self.thc.get_time_on())
+            self.save_parameter('TEMPERATURE_HYSTERESIS_CONTROLLER_TIME_OFF', self.thc.get_time_off())
         
         # INDUCTOR SECTION
         """
@@ -1037,7 +1086,101 @@ class MainSoftwareThread(QtCore.QThread):
             # Append the values from the dictionary to the list
             values_list.extend(data_dictionary.values())
             writer.writerow(values_list)
-            
+
+    # === GESTIONE PARAMETRI === #
+    def parameters_initialization_from_file(self):
+        # TEMPERATURE SPINBOX
+        thc_upper_limit = load_parameter(self, 'TEMPERATURE_HYSTERESIS_CONTROLLER_UPPER_LIMIT')
+        thc_lower_limit = load_parameter(self, 'TEMPERATURE_HYSTERESIS_CONTROLLER_LOWER_LIMIT')
+
+        if (thc_upper_limit is None) or (thc_lower_limit is None):
+            # do nothing, leave default values
+            pass        
+        elif (thc_upper_limit < thc_lower_limit):
+            # check for errors in parameters
+            pass
+        else:
+            # set SW
+            self.thc.set_upper_limit(thc_upper_limit)
+            self.thc.set_lower_limit(thc_lower_limit)
+            # set GUI
+            self.update_spinbox_value.emit("maxHysteresisValue_temperature_spinBox", thc_upper_limit)
+            self.update_spinbox_value.emit("minHysteresisValue_temperature_spinBox", thc_lower_limit)
+
+        # HUMIDITY SPINBOX
+        hhc_upper_limit = load_parameter(self, 'HUMIDITY_HYSTERESIS_CONTROLLER_UPPER_LIMIT')
+        hhc_lower_limit = load_parameter(self, 'HUMIDITY_HYSTERESIS_CONTROLLER_LOWER_LIMIT')
+
+        if (hhc_upper_limit is None) or (hhc_lower_limit is None):
+            # do nothing, leave default values
+            pass        
+        elif (hhc_upper_limit < hhc_lower_limit):
+            # check for errors in parameters
+            pass
+        else:
+            # set SW
+            self.hhc.set_upper_limit(hhc_upper_limit)
+            self.hhc.set_lower_limit(hhc_lower_limit)
+            # set GUI
+            self.update_spinbox_value.emit("maxHysteresisValue_humidity_spinBox", hhc_upper_limit)
+            self.update_spinbox_value.emit("minHysteresisValue_humidity_spinBox", hhc_lower_limit)
+
+        thc_time_on = load_parameter(self, 'TEMPERATURE_HYSTERESIS_CONTROLLER_TIME_ON')
+        if thc_time_on is None:
+            pass
+        else:
+            self.thc.set_time_on(thc_time_on) 
+
+        thc_time_off = load_parameter(self, 'TEMPERATURE_HYSTERESIS_CONTROLLER_TIME_OFF')
+        if thc_time_off is None:
+            pass
+        else:
+            self.thc.set_time_off(thc_time_off) 
+
+
+    def _load_all_parameters(self):
+        if os.path.exists(self.parameters_file_path):
+            try:
+                with open(self.parameters_file_path, "r") as f:
+                    self.parameters = json.load(f)
+            except Exception as e:
+                print(f"Errore nel caricamento dei parametri: {e}")
+                self.parameters = {}
+        else:
+            self.parameters = {}
+    def _save_all_parameters(self):
+        """Salva tutti i parametri nel file, con backup automatico."""
+        try:
+            # Se il file originale esiste, crea una copia di backup
+            if os.path.exists(self.parameters_file_path):
+                backup_path = self.parameters_file_path + ".bak"
+                shutil.copy2(self.parameters_file_path, backup_path)
+
+            # Ora salva il nuovo contenuto
+            with open(self.parameters_file_path, "w") as f:
+                json.dump(self.parameters, f, indent=4)
+        except Exception as e:
+            print(f"Errore nel salvataggio dei parametri: {e}")
+
+    def load_parameter(self, key):
+        """Restituisce il valore del parametro, o None se non esiste."""
+        return self.parameters.get(key, None)
+
+    def save_parameter(self, key, value):
+        """Salva o aggiorna un parametro e lo scrive su file."""
+        self.parameters[key] = value
+        self._save_all_parameters()
+
+    def _load_from_backup(self):
+        backup_path = self.parameters_file_path + ".bak"
+        if os.path.exists(backup_path):
+            try:
+                with open(backup_path, "r") as f:
+                    self.parameters = json.load(f)
+                print("Parametri caricati dal backup.")
+            except Exception as e:
+                print(f"Errore nel caricamento del backup: {e}")
+
     class HysteresisController:
         def __init__(self, lower_limit, upper_limit):            
             self.lower_limit = lower_limit
@@ -1063,7 +1206,13 @@ class MainSoftwareThread(QtCore.QThread):
             
             self.forceON = False
             self.forceOFF = False
-        
+
+        def set_time_on(self, time_on):
+            self.time_on = time_on
+
+        def set_time_off(self, time_off):
+            self.time_off = time_off
+
         # Method to set the lower limit
         def set_lower_limit(self, lower_limit):
             self.lower_limit = lower_limit
@@ -1482,8 +1631,7 @@ class MainSoftwareThread(QtCore.QThread):
                     sono in uno stato dove non me lo aspetto, allora non viene resettato, rimane in variabile e dopo apena entro in modalità automatica
                     la variabile l'ha ancora in pancia e quindi dà una falsa lettura. Allora, alla fine del ciclo, se non l'ho usato, lo resetto.
                 '''                  
-                self.acknowledge_from_external = None # reset
-           
+                self.acknowledge_from_external = None # reset 
 
 class MainWindow(QtWidgets.QMainWindow):
     # Define custom signals - this is done to send button/spinBox and other custom signals to other thread MainSoftwareThread: use Qt Signals
@@ -1505,6 +1653,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.button_clicked.connect(self.main_software_thread.handle_button_click)
         self.float_spinBox_value_changed.connect(self.main_software_thread.handle_float_spinBox_value)
         self.initialization_step.connect(self.main_software_thread.handle_intialization_step)
+        self.initialization_done.connect(self.main-main_software_thread.handle_initialization_done) # signals that MainWindow has completed the initialization procedure (all emit signals have been sent)
         self.main_software_thread.update_spinbox_value.connect(self.update_spinbox)
         self.radio_button_toggled.connect(self.main_software_thread.handle_radio_button_toggle)
 
@@ -1553,13 +1702,17 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui.maxHysteresisValue_humidity_spinBox.valueChanged.connect(lambda value: self.emit_float_spinbox_signal(self.ui.maxHysteresisValue_humidity_spinBox.objectName(), value))
         self.ui.minHysteresisValue_humidity_spinBox.valueChanged.connect(lambda value: self.emit_float_spinbox_signal(self.ui.minHysteresisValue_humidity_spinBox.objectName(), value))
         
-        # Connect to sen initialization values to the mainSoftwareThread
+        # Connect to send initialization values to the mainSoftwareThread
         self.emit_initialization_values(self.ui.maxHysteresisValue_temperature_spinBox.objectName(), self.ui.maxHysteresisValue_temperature_spinBox.value())
         self.emit_initialization_values(self.ui.minHysteresisValue_temperature_spinBox.objectName(), self.ui.minHysteresisValue_temperature_spinBox.value())
         
         self.emit_initialization_values(self.ui.maxHysteresisValue_humidity_spinBox.objectName(), self.ui.maxHysteresisValue_humidity_spinBox.value())
         self.emit_initialization_values(self.ui.minHysteresisValue_humidity_spinBox.objectName(), self.ui.minHysteresisValue_humidity_spinBox.value())
         
+        # signaling that ManWindow initialization procedure has been completed
+        self.initialization_done.emit("GUI_initialization_procedure", True)
+
+
     def emit_initialization_values(self, spinbox_name, value):
         self.initialization_step.emit(spinbox_name, value)
         
