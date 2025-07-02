@@ -1166,12 +1166,14 @@ class MainSoftwareThread(QtCore.QThread):
 
         # EGG TURNS COUNTER
         turns_counter = self.load_parameter('TURNS_COUNTER')
-        selt.eggTurnerMotor.setTurnsCounter(turns_counter) # la visualizzazione si aggiornerà da sola periodicamente
+        if turns_counter is not None:
+            selt.eggTurnerMotor.setTurnsCounter(turns_counter) # la visualizzazione si aggiornerà da sola periodicamente
 
         # ROTATION INTERVAL
         rotation_interval = self.load_parameter('ROTATION_INTERVAL')
-        self.eggTurnerMotor.setFunctionInterval(rotation_interval * 60) # Set the rotation interval
-        self.update_spinbox_value.emit("rotation_interval_spinBox", rotation_interval) # aggiorno la visualizzazione
+        if rotation_interval is not None:
+            self.eggTurnerMotor.setFunctionInterval(rotation_interval * 60) # Set the rotation interval
+            self.update_spinbox_value.emit("rotation_interval_spinBox", rotation_interval) # aggiorno la visualizzazione
 
 
     def _load_all_parameters(self):
