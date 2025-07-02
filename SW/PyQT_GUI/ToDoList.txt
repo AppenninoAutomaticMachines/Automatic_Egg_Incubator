@@ -8,6 +8,8 @@ PC817 circuitry
 
 
 DA FARE:
+- visualizzazione statistiche incubata
+
 
 interruttore per modalità automatica senza raspberry emergenza + che attiva anche una sonda singola di temperatura da aggiungere.
 
