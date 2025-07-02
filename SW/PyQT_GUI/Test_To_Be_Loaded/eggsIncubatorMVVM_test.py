@@ -428,6 +428,7 @@ class MainSoftwareThread(QtCore.QThread):
         self.current_humidifier_output_control = False # variabile che mi ricorda lo stato attuale dell'heater
         
         self.eggTurnerMotor = self.StepperMotor("Egg_Turner_Stepper_Motor")
+        self.last_turnsCounter = 0 # serve per ricordarmi il numero di turns counter
         
         # BUTTON HANDLING
         self.move_CW_motor_btn = False # = not pressed
@@ -487,7 +488,7 @@ class MainSoftwareThread(QtCore.QThread):
             pass
          #1x volta, inizializzatione dei paramteri da file
          # Initializing parameters from file:
-         self.parameters_initialization_from_file()
+        self.parameters_initialization_from_file()
 
         while self.running:            
             if self.command_list:
@@ -528,6 +529,10 @@ class MainSoftwareThread(QtCore.QThread):
                                 [self.eggTurnerMotor.manual_state] + \
                                 [self.eggTurnerMotor.rotation_state]
                 self.update_motor.emit(all_values)
+
+                if self.eggTurnerMotor.getTurnsCounter() != self.last_turnsCounter:
+                    self.last_turnsCounter = self.eggTurnerMotor.getTurnsCounter() # salvo il numero nuovo di turns counter
+                    self.save_parameter('TURNS_COUNTER', self.eggTurnerMotor.getTurnsCounter())
                 
                 self.eggTurnerMotor.resetUpdateMotorData()
             
@@ -772,6 +777,8 @@ class MainSoftwareThread(QtCore.QThread):
         
         if spinbox_name == "rotation_interval_spinBox":
             self.eggTurnerMotor.setFunctionInterval(rounded_value * 60) # Set the rotation interval
+            self.save_parameter('ROTATION_INTERVAL', rounded_value)
+
         elif spinbox_name == "maxHysteresisValue_temperature_spinBox":
             if rounded_value <= self.thc.get_lower_limit():
                 self.thc.set_upper_limit(rounded_value)
@@ -1089,9 +1096,21 @@ class MainSoftwareThread(QtCore.QThread):
 
     # === GESTIONE PARAMETRI === #
     def parameters_initialization_from_file(self):
-        # TEMPERATURE SPINBOX
-        thc_upper_limit = load_parameter(self, 'TEMPERATURE_HYSTERESIS_CONTROLLER_UPPER_LIMIT')
-        thc_lower_limit = load_parameter(self, 'TEMPERATURE_HYSTERESIS_CONTROLLER_LOWER_LIMIT')
+        '''
+        TEMPERATURE_HYSTERESIS_CONTROLLER_UPPER_LIMIT
+        TEMPERATURE_HYSTERESIS_CONTROLLER_LOWER_LIMIT
+        HUMIDITY_HYSTERESIS_CONTROLLER_UPPER_LIMIT
+        HUMIDITY_HYSTERESIS_CONTROLLER_LOWER_LIMIT
+        TEMPERATURE_HYSTERESIS_CONTROLLER_TIME_ON
+        TEMPERATURE_HYSTERESIS_CONTROLLER_TIME_OFF
+        HUMIDITY_HYSTERESIS_CONTROLLER_TIME_ON
+        HUMIDITY_HYSTERESIS_CONTROLLER_TIME_OFF
+        TURNS_COUNTER
+        ROTATION_INTERVAL
+        '''
+        # TEMPERATURE SPINBOX MIN/MAX
+        thc_upper_limit = load_parameter('TEMPERATURE_HYSTERESIS_CONTROLLER_UPPER_LIMIT')
+        thc_lower_limit = load_parameter('TEMPERATURE_HYSTERESIS_CONTROLLER_LOWER_LIMIT')
 
         if (thc_upper_limit is None) or (thc_lower_limit is None):
             # do nothing, leave default values
@@ -1107,9 +1126,9 @@ class MainSoftwareThread(QtCore.QThread):
             self.update_spinbox_value.emit("maxHysteresisValue_temperature_spinBox", thc_upper_limit)
             self.update_spinbox_value.emit("minHysteresisValue_temperature_spinBox", thc_lower_limit)
 
-        # HUMIDITY SPINBOX
-        hhc_upper_limit = load_parameter(self, 'HUMIDITY_HYSTERESIS_CONTROLLER_UPPER_LIMIT')
-        hhc_lower_limit = load_parameter(self, 'HUMIDITY_HYSTERESIS_CONTROLLER_LOWER_LIMIT')
+        # HUMIDITY SPINBOX MIN/MAX
+        hhc_upper_limit = load_parameter('HUMIDITY_HYSTERESIS_CONTROLLER_UPPER_LIMIT')
+        hhc_lower_limit = load_parameter('HUMIDITY_HYSTERESIS_CONTROLLER_LOWER_LIMIT')
 
         if (hhc_upper_limit is None) or (hhc_lower_limit is None):
             # do nothing, leave default values
@@ -1125,17 +1144,34 @@ class MainSoftwareThread(QtCore.QThread):
             self.update_spinbox_value.emit("maxHysteresisValue_humidity_spinBox", hhc_upper_limit)
             self.update_spinbox_value.emit("minHysteresisValue_humidity_spinBox", hhc_lower_limit)
 
-        thc_time_on = load_parameter(self, 'TEMPERATURE_HYSTERESIS_CONTROLLER_TIME_ON')
-        if thc_time_on is None:
+        # TEMPERATURE TIMINGS
+        thc_time_on = load_parameter('TEMPERATURE_HYSTERESIS_CONTROLLER_TIME_ON')
+        thc_time_off = load_parameter('TEMPERATURE_HYSTERESIS_CONTROLLER_TIME_OFF')
+        if (thc_time_on is None) or (thc_time_off is None):
             pass
         else:
+            # la visualizzazione si aggiornerà da sola periodicamente
             self.thc.set_time_on(thc_time_on) 
+            self.thc.set_time_off(thc_time_off)             
 
-        thc_time_off = load_parameter(self, 'TEMPERATURE_HYSTERESIS_CONTROLLER_TIME_OFF')
-        if thc_time_off is None:
+        # HUMIDITY TIMINGS
+        hhc_time_on = load_parameter('HUMIDITY_HYSTERESIS_CONTROLLER_TIME_ON')
+        hhc_time_off = load_parameter('HUMIDITY_HYSTERESIS_CONTROLLER_TIME_OFF')
+        if (hhc_time_on is None) or (hhc_time_off is None):
             pass
         else:
-            self.thc.set_time_off(thc_time_off) 
+            # la visualizzazione si aggiornerà da sola periodicamente
+            self.hhc.set_time_on(hhc_time_on) 
+            self.hhc.set_time_off(hhc_time_off)     
+
+        # EGG TURNS COUNTER
+        turns_counter = self.load_parameter('TURNS_COUNTER')
+        selt.eggTurnerMotor.setTurnsCounter(turns_counter) # la visualizzazione si aggiornerà da sola periodicamente
+
+        # ROTATION INTERVAL
+        rotation_interval = self.load_parameter('ROTATION_INTERVAL')
+        self.eggTurnerMotor.setFunctionInterval(rotation_interval * 60) # Set the rotation interval
+        self.update_spinbox_value.emit("rotation_interval_spinBox", rotation_interval) # aggiorno la visualizzazione
 
 
     def _load_all_parameters(self):
@@ -1148,6 +1184,7 @@ class MainSoftwareThread(QtCore.QThread):
                 self.parameters = {}
         else:
             self.parameters = {}
+    
     def _save_all_parameters(self):
         """Salva tutti i parametri nel file, con backup automatico."""
         try:
@@ -1421,6 +1458,16 @@ class MainSoftwareThread(QtCore.QThread):
             self.last_motor_data_update_sec = time.time()
             self.motor_data_update_interval_sec = 15 # indica ogni quanti secondi viene fatto l'update dei dati relativi al motore
 
+            # Variabili che uso per il salvataggio dei dati: mi servono per: 
+            # 1) fare la foto allo stato stabile di rotazione che raggiungo
+            # 2) fare la foto all'istante (datetime) in cui questa cosa succede
+
+            self.last_time_stable_position_is_reached = None
+            self.last_stable_position = None
+
+        def setTurnsCounter(self, value):
+            self.turnsCounter = value
+
         def moveCWContinuous(self):
             self.main_state = "MANUAL_MODE"
             self.manual_state = "MOVING_CW_CONTINUOUSLY"
@@ -1583,12 +1630,16 @@ class MainSoftwareThread(QtCore.QThread):
                     if self.acknowledge_from_external is not None:         
                         if self.acknowledge_from_external == "IND_CCW" and self.rotation_state == "CCW_rotation_direction":
                             self.rotation_state = "CCW_reached"
+                            self.last_stable_position = self.rotation_state
+                            self.last_time_stable_position_is_reached = datetime.now()
                             print(f"{'Activating' if (self.rotation_state == "CW_rotation_direction" or self.rotation_state == "CCW_rotation_direction") else 'Deactivating'} diagnostics")
                             print("Reached the IND_CCW limit switch")
                             self.acknowledge_from_external = None # reset
                             
                         if self.acknowledge_from_external == "IND_CW" and self.rotation_state == "CW_rotation_direction":
                             self.rotation_state = "CW_reached"
+                            self.last_stable_position = self.rotation_state
+                            self.last_time_stable_position_is_reached = datetime.now()
                             print(f"{'Activating' if (self.rotation_state == "CW_rotation_direction" or self.rotation_state == "CCW_rotation_direction") else 'Deactivating'} diagnostics")
                             print("Reached the IND_CW limit switch")
                             self.acknowledge_from_external = None # reset
