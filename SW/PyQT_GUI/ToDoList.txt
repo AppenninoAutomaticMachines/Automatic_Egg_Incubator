@@ -8,6 +8,8 @@ PC817 circuitry
 
 
 DA FARE:
+- miglioramento: salvo solo se il parametroè effettivamente diverso...non sempre
+
 - visualizzazione statistiche incubata
 
 
