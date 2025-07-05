@@ -345,6 +345,24 @@ class SerialThread(QtCore.QThread):
         
     def serial_thread_log_message(self, error_type, message):
         """
+        Logs a message to a log file named with the current date inside the Log folder.
+        Format: [ERROR_TYPE] Message @ Timestamp
+
+        Args:
+            error_type (str): The type of error (e.g., 'INFO', 'WARNING', 'ERROR').
+            message (str): The message to log.
+        """
+        print(message)
+        current_date = datetime.now().strftime('%Y-%m-%d')
+        log_file = os.path.join(self.serial_thread_log_folder_path, f"log_{current_date}.txt")
+        
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        
+        with open(log_file, 'a', encoding='utf-8') as file:
+            file.write(f"[{error_type}] {message} @ {timestamp}\n")
+        '''
+        OLD VERSION FOR JSON FORMAT
+        """
         Logs a message to a log file named with the current date inside the Log folder in plain text format with sections.
 
         Args:
@@ -363,6 +381,7 @@ class SerialThread(QtCore.QThread):
             file.write(f"Error Type: {error_type}\n")
             file.write(f"Message: {message}\n")
             file.write(f"-----------------\n\n")
+        '''
 
 
 class MainSoftwareThread(QtCore.QThread):
@@ -489,6 +508,7 @@ class MainSoftwareThread(QtCore.QThread):
          #1x volta, inizializzatione dei paramteri da file
          # Initializing parameters from file:
         self.parameters_initialization_from_file()
+        self.main_software_thread_log_message('INFO', f"Loading parameters from file completed. Now the program starts!")
 
         while self.running:            
             if self.command_list:
@@ -1030,6 +1050,25 @@ class MainSoftwareThread(QtCore.QThread):
                 
     def main_software_thread_log_message(self, error_type, message):
         """
+        Logs a message to a log file named with the current date inside the Log folder.
+        Format: [ERROR_TYPE] Message @ Timestamp
+
+        Args:
+            error_type (str): The type of error (e.g., 'INFO', 'WARNING', 'ERROR').
+            message (str): The message to log.
+        """
+        print(message)
+        current_date = datetime.now().strftime('%Y-%m-%d')
+        log_file = os.path.join(self.main_software_thread_log_folder_path, f"log_{current_date}.txt")
+        
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        
+        with open(log_file, 'a', encoding='utf-8') as file:
+            file.write(f"[{error_type}] {message} @ {timestamp}\n")
+        '''
+        OLD VERSION FOR JSON FORMAT
+        
+        """
         Logs a message to a log file named with the current date inside the Log folder in plain text format with sections.
 
         Args:
@@ -1048,7 +1087,7 @@ class MainSoftwareThread(QtCore.QThread):
             file.write(f"Error Type: {error_type}\n")
             file.write(f"Message: {message}\n")
             file.write(f"-----------------\n\n")
-            
+        '''
     def save_data_to_files(self, data_type, data_dictionary): #passo un dictionary di temperature/humidities, dimensione variabile per gestire più o meno sensori dinamicamente
         now = datetime.now()
         current_date = now.strftime('%Y-%m-%d')
@@ -1109,8 +1148,8 @@ class MainSoftwareThread(QtCore.QThread):
         ROTATION_INTERVAL
         '''
         # TEMPERATURE SPINBOX MIN/MAX
-        thc_upper_limit = load_parameter('TEMPERATURE_HYSTERESIS_CONTROLLER_UPPER_LIMIT')
-        thc_lower_limit = load_parameter('TEMPERATURE_HYSTERESIS_CONTROLLER_LOWER_LIMIT')
+        thc_upper_limit = self.load_parameter('TEMPERATURE_HYSTERESIS_CONTROLLER_UPPER_LIMIT')
+        thc_lower_limit = self.load_parameter('TEMPERATURE_HYSTERESIS_CONTROLLER_LOWER_LIMIT')
 
         if (thc_upper_limit is None) or (thc_lower_limit is None):
             # do nothing, leave default values
@@ -1127,8 +1166,8 @@ class MainSoftwareThread(QtCore.QThread):
             self.update_spinbox_value.emit("minHysteresisValue_temperature_spinBox", thc_lower_limit)
 
         # HUMIDITY SPINBOX MIN/MAX
-        hhc_upper_limit = load_parameter('HUMIDITY_HYSTERESIS_CONTROLLER_UPPER_LIMIT')
-        hhc_lower_limit = load_parameter('HUMIDITY_HYSTERESIS_CONTROLLER_LOWER_LIMIT')
+        hhc_upper_limit = self.load_parameter('HUMIDITY_HYSTERESIS_CONTROLLER_UPPER_LIMIT')
+        hhc_lower_limit = self.load_parameter('HUMIDITY_HYSTERESIS_CONTROLLER_LOWER_LIMIT')
 
         if (hhc_upper_limit is None) or (hhc_lower_limit is None):
             # do nothing, leave default values
@@ -1145,8 +1184,8 @@ class MainSoftwareThread(QtCore.QThread):
             self.update_spinbox_value.emit("minHysteresisValue_humidity_spinBox", hhc_lower_limit)
 
         # TEMPERATURE TIMINGS
-        thc_time_on = load_parameter('TEMPERATURE_HYSTERESIS_CONTROLLER_TIME_ON')
-        thc_time_off = load_parameter('TEMPERATURE_HYSTERESIS_CONTROLLER_TIME_OFF')
+        thc_time_on = self.load_parameter('TEMPERATURE_HYSTERESIS_CONTROLLER_TIME_ON')
+        thc_time_off = self.load_parameter('TEMPERATURE_HYSTERESIS_CONTROLLER_TIME_OFF')
         if (thc_time_on is None) or (thc_time_off is None):
             pass
         else:
@@ -1155,8 +1194,8 @@ class MainSoftwareThread(QtCore.QThread):
             self.thc.set_time_off(thc_time_off)             
 
         # HUMIDITY TIMINGS
-        hhc_time_on = load_parameter('HUMIDITY_HYSTERESIS_CONTROLLER_TIME_ON')
-        hhc_time_off = load_parameter('HUMIDITY_HYSTERESIS_CONTROLLER_TIME_OFF')
+        hhc_time_on = self.load_parameter('HUMIDITY_HYSTERESIS_CONTROLLER_TIME_ON')
+        hhc_time_off = self.load_parameter('HUMIDITY_HYSTERESIS_CONTROLLER_TIME_OFF')
         if (hhc_time_on is None) or (hhc_time_off is None):
             pass
         else:
@@ -1691,6 +1730,7 @@ class MainWindow(QtWidgets.QMainWindow):
     button_clicked = QtCore.pyqtSignal(str)  # Emits button name
     float_spinBox_value_changed = QtCore.pyqtSignal(str, float)  # Emits spinbox value  // METTI INT se intero
     initialization_step = QtCore.pyqtSignal(str, float)
+    initialization_done = QtCore.pyqtSignal(str, bool)
     radio_button_toggled = QtCore.pyqtSignal(str, bool)
     
     def __init__(self, main_software_thread):
@@ -1706,7 +1746,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.button_clicked.connect(self.main_software_thread.handle_button_click)
         self.float_spinBox_value_changed.connect(self.main_software_thread.handle_float_spinBox_value)
         self.initialization_step.connect(self.main_software_thread.handle_intialization_step)
-        self.initialization_done.connect(self.main-main_software_thread.handle_initialization_done) # signals that MainWindow has completed the initialization procedure (all emit signals have been sent)
+        self.initialization_done.connect(self.main_software_thread.handle_initialization_done) # signals that MainWindow has completed the initialization procedure (all emit signals have been sent)
         self.main_software_thread.update_spinbox_value.connect(self.update_spinbox)
         self.radio_button_toggled.connect(self.main_software_thread.handle_radio_button_toggle)
 
