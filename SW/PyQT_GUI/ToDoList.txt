@@ -8,6 +8,7 @@ PC817 circuitry
 
 
 DA FARE:
+- test to be loaded sembra ok, ma bisogna fare  un po' più di debug
 - miglioramento: salvo solo se il parametroè effettivamente diverso...non sempre
 
 - visualizzazione statistiche incubata
