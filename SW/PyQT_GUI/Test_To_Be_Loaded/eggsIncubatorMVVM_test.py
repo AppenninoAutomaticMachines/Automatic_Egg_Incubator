@@ -496,11 +496,14 @@ class MainSoftwareThread(QtCore.QThread):
         self._load_all_parameters() # loading already existing parameters in the file
 
     def run(self):
+        self.write_log_section_header()
+        self.main_software_thread_log_message('INFO', f"Starting serial Thread")
         # Start the SerialThread
         self.serial_thread.start()
         
         while not self.serial_thread.serial_thread_ready_to_go:
             pass
+        self.main_software_thread_log_message('INFO', f"Serial Thread started, waiting for GUI initialization")
 
         # prima di far partire il loop provo già a settare i paramteri corretti
         while not self.initialization_from_GUI_completed:
@@ -508,13 +511,12 @@ class MainSoftwareThread(QtCore.QThread):
          #1x volta, inizializzatione dei paramteri da file
          # Initializing parameters from file:
         self.parameters_initialization_from_file()
-        self.main_software_thread_log_message('INFO', f"Loading parameters from file completed. Now the program starts!")
+        self.main_software_thread_log_message('INFO', f"GUI initialization completed: loading parameters from file is done. Now the program starts!")
 
         while self.running:            
             if self.command_list:
                 for cmd, value in self.command_list:
                     self.serial_thread.add_command(cmd, value)
-                    #print(f"{cmd}, {value}")
                     self.main_software_thread_log_message('INFO', f"Added commad to serial thread queue: {cmd}, {value}")
                 self.command_list.clear()
                 
@@ -1047,7 +1049,21 @@ class MainSoftwareThread(QtCore.QThread):
                 
                 end_time = time.perf_counter()
                 #print(f"Time requested for saving data [milli-seconds]: {(end_time - start_time)*1000}")
-                
+
+    def write_log_section_header(self):
+        """
+        Writes a section header in the existing daily log file to mark the start of a new thread run.
+        """
+        current_date = datetime.now().strftime('%Y-%m-%d')
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        log_file = os.path.join(self.main_software_thread_log_folder_path, f"log_{current_date}.txt")
+
+        with open(log_file, 'a', encoding='utf-8') as file:
+            file.write("\n")
+            file.write("=====================================\n")
+            file.write(f" New Run - {timestamp}\n")
+            file.write("=====================================\n") 
+
     def main_software_thread_log_message(self, error_type, message):
         """
         Logs a message to a log file named with the current date inside the Log folder.
@@ -1247,6 +1263,7 @@ class MainSoftwareThread(QtCore.QThread):
     def save_parameter(self, key, value):
         """Salva o aggiorna un parametro e lo scrive su file."""
         self.parameters[key] = value
+        self.main_software_thread_log_message('INFO', f"Saving parameter {key}: {value}")
         self._save_all_parameters()
 
     def _load_from_backup(self):
