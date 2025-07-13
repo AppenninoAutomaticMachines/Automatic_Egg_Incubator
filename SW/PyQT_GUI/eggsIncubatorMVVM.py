@@ -1249,9 +1249,11 @@ class MainSoftwareThread(QtCore.QThread):
         """Salva tutti i parametri nel file, con backup automatico."""
         try:
             # Se il file originale esiste, crea una copia di backup
+            '''
             if os.path.exists(self.parameters_file_path):
                 backup_path = self.parameters_file_path + ".bak"
                 shutil.copy2(self.parameters_file_path, backup_path)
+            '''
 
             # Ora salva il nuovo contenuto
             with open(self.parameters_file_path, "w") as f:
