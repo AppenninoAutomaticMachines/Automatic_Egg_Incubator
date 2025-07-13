@@ -1064,7 +1064,7 @@ class MainSoftwareThread(QtCore.QThread):
             file.write(f" New Run - {timestamp}\n")
             file.write("=====================================\n") 
 
-    def main_software_thread_log_message(self, error_type, message):
+    def main_software_thread_log_message(self, error_type, message, suppress_terminal_print = False):
         """
         Logs a message to a log file named with the current date inside the Log folder.
         Format: [ERROR_TYPE] Message @ Timestamp
@@ -1073,7 +1073,9 @@ class MainSoftwareThread(QtCore.QThread):
             error_type (str): The type of error (e.g., 'INFO', 'WARNING', 'ERROR').
             message (str): The message to log.
         """
-        print(message)
+        if not suppress_terminal_print:
+            print(message)
+        
         current_date = datetime.now().strftime('%Y-%m-%d')
         log_file = os.path.join(self.main_software_thread_log_folder_path, f"log_{current_date}.txt")
         
@@ -1222,7 +1224,7 @@ class MainSoftwareThread(QtCore.QThread):
         # EGG TURNS COUNTER
         turns_counter = self.load_parameter('TURNS_COUNTER')
         if turns_counter is not None:
-            selt.eggTurnerMotor.setTurnsCounter(turns_counter) # la visualizzazione si aggiornerà da sola periodicamente
+            self.eggTurnerMotor.setTurnsCounter(turns_counter) # la visualizzazione si aggiornerà da sola periodicamente
 
         # ROTATION INTERVAL
         rotation_interval = self.load_parameter('ROTATION_INTERVAL')
@@ -1263,7 +1265,7 @@ class MainSoftwareThread(QtCore.QThread):
     def save_parameter(self, key, value):
         """Salva o aggiorna un parametro e lo scrive su file."""
         self.parameters[key] = value
-        self.main_software_thread_log_message('INFO', f"Saving parameter {key}: {value}")
+        self.main_software_thread_log_message('INFO', f"Saving parameter {key}: {value}", suppress_terminal_print = True)
         self._save_all_parameters()
 
     def _load_from_backup(self):
