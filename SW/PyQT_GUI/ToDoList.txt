@@ -8,6 +8,9 @@ PC817 circuitry
 
 
 DA FARE:
+- plot temperatura media
+- plot temperatura ambiente
+- warning light
 - statistica che mostra da quanti giorni è attiva l'incubata, calcoli
 - selettore per modalità riscaldamento con SSR
 - file con temperatura media
