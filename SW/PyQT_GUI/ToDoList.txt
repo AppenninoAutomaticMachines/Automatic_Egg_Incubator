@@ -8,6 +8,7 @@ PC817 circuitry
 
 
 DA FARE:
+- ramping per start dell'incubata + lay horizontal automatico n gg prima della schiusa
 - plot temperatura media
 - plot temperatura ambiente
 - warning light
