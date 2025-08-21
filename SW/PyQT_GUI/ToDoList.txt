@@ -15,7 +15,7 @@ DA FARE:
 - statistica che mostra da quanti giorni è attiva l'incubata, calcoli
 - selettore per modalità riscaldamento con SSR
 - file con temperatura media
-- PID, autotaratura   duty cycle % --> T_media
+- PID + led per indicazione duty cycle (schedina LED) + visualizzazione in py_gui, autotaratura   duty cycle % --> T_media
 - test to be loaded sembra ok, ma bisogna fare  un po' più di debug + controlalre nel file di log ogni volta che salvo il parametro
 - miglioramento: salvo solo se il parametroè effettivamente diverso...non sempre
 
