@@ -464,6 +464,10 @@ class MainSoftwareThread(QtCore.QThread):
                 os.makedirs(machine_statistics_folder_path)
 
         # --- Create Statistics folder ---#
+        external_temperature_folder_path = os.path.join(machine_statistics_folder_path, 'External_Temperature')
+        if not os.path.exists(external_temperature_folder_path):
+            os.makedirs(external_temperature_folder_path)
+            
         temperatures_folder_path = os.path.join(machine_statistics_folder_path, 'Temperatures')
         if not os.path.exists(temperatures_folder_path):
             os.makedirs(temperatures_folder_path)
@@ -642,6 +646,38 @@ class MainSoftwareThread(QtCore.QThread):
 				
         if self.current_button == "reset_statistics_T_btn":
             self.thc.reset_all_values()
+        
+        if self.current_button == "plotMeanTemperature_btn":
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            python_executable = self.get_python_executable()
+            plot_script = os.path.join(script_dir, "appInteractivePlots.py")          
+            command = [
+                python_executable,
+                plot_script,
+                "PLOT_ALL_DAYS_DATA_MEAN_TEMPERATURE",
+                str(self.VALID_RANGE_TEMPERATURE[0]),
+                str(self.VALID_RANGE_TEMPERATURE[1]),
+                str(True),
+            ]
+            self.main_software_thread_log_message('INFO', f"Command to plot data: {command}")
+            process = subprocess.Popen(command)
+            #print("Subprocess started and main program continues...")
+            
+        if self.current_button == "plotExternalTemperature_btn":
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            python_executable = self.get_python_executable()
+            plot_script = os.path.join(script_dir, "appInteractivePlots.py")          
+            command = [
+                python_executable,
+                plot_script,
+                "PLOT_ALL_DAYS_DATA_EXTERNAL_TEMPERATURE",
+                str(self.VALID_RANGE_TEMPERATURE[0]),
+                str(self.VALID_RANGE_TEMPERATURE[1]),
+                str(True),
+            ]
+            self.main_software_thread_log_message('INFO', f"Command to plot data: {command}")
+            process = subprocess.Popen(command)
+            #print("Subprocess started and main program continues...")
             
         if self.current_button == "plotAllDays_temp_T_btn":
             script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -707,38 +743,6 @@ class MainSoftwareThread(QtCore.QThread):
             process = subprocess.Popen(command)
             #print("Subprocess started and main program continues...")
             
-        if self.current_button == "plotAllDays_cnt_T_btn":
-            script_dir = os.path.dirname(os.path.abspath(__file__))
-            python_executable = self.get_python_executable()
-            plot_script = os.path.join(script_dir, "appInteractivePlots.py") 
-            command = [
-                python_executable,
-                plot_script,
-                "PLOT_ALL_DAYS_DATA_HEATER",
-                str(0),
-                str(1),
-                str(False),
-            ]
-            self.main_software_thread_log_message('INFO', f"Command to plot data: {command}")
-            process = subprocess.Popen(command)
-            #print("Subprocess started and main program continues...")
-            
-        if self.current_button == "plotToday_cnt_T_btn":
-            script_dir = os.path.dirname(os.path.abspath(__file__))
-            python_executable = self.get_python_executable()
-            plot_script = os.path.join(script_dir, "appInteractivePlots.py") 
-            command = [
-                python_executable,
-                plot_script,
-                "PLOT_CURRENT_DAY_DATA_HEATER",
-                str(0),
-                str(1),
-                str(False),
-            ]
-            self.main_software_thread_log_message('INFO', f"Command to plot data: {command}")
-            process = subprocess.Popen(command)
-            #print("Subprocess started and main program continues...")
-            
         if self.current_button == "plotAllDays_cnt_H_btn":
             script_dir = os.path.dirname(os.path.abspath(__file__))
             python_executable = self.get_python_executable()
@@ -773,25 +777,28 @@ class MainSoftwareThread(QtCore.QThread):
             
     def get_python_executable(self):
         """
-        Searches the current script directory for a non-hidden folder containing 'venv'
-        and returns the path to its python3 executable if found.
-        Otherwise, returns 'python3' (system-wide Python).
+        Searches the current script directory for a folder containing 'venv'
+        (including hidden ones like '.venv') and returns the path to its python3 executable if found.
+        Otherwise, returns sys.executable to preserve the current interpreter.
         """
+        import os, sys
+
         script_dir = os.path.dirname(os.path.abspath(__file__))
         venv_dir = None
 
         for entry in os.listdir(script_dir):
-            if entry.startswith('.'):  # Skip hidden folders
-                continue
             full_path = os.path.join(script_dir, entry)
             if os.path.isdir(full_path) and "venv" in entry:
                 venv_dir = full_path
                 break
 
         if venv_dir:
-            return os.path.join(venv_dir, "bin", "python3")
-        else:
-            return "python3"
+            python_path = os.path.join(venv_dir, "bin", "python3")
+            if os.path.exists(python_path):
+                return python_path
+
+        # Fallback: use the currently running Python (which might already be in a venv)
+        return sys.executable
         
     def handle_float_spinBox_value(self, spinbox_name, value):
         rounded_value = round(value, 1)
@@ -1039,7 +1046,8 @@ class MainSoftwareThread(QtCore.QThread):
         time_difference = datetime.now() - self.last_saving_time
         
         if (time_difference >= timedelta(minutes = self.saving_interval)):
-                start_time = time.perf_counter()                
+                start_time = time.perf_counter()   
+                self.save_data_to_files('External_Temperature', current_external_temperature) #{'EXTT': 25.2}             
                 self.save_data_to_files('Temperatures', current_temperatures) #{'TMP01': 23.1, 'TMP02': 23.1, 'TMP03': 23.1}
                 self.save_data_to_files('Humidity', current_humidities) #{'HUM01': 52.5}
                 self.save_data_to_files('Heater', {'Heater_Status': self.thc.get_output_control()})  # need to pass a dictionary
@@ -1114,7 +1122,9 @@ class MainSoftwareThread(QtCore.QThread):
         script_dir = os.path.dirname(os.path.abspath(__file__))
         machine_statistics_folder_path = os.path.join(script_dir, "Machine_Statistics") 
         # faccio selezione del folder da cui pescare i dati.
-        if data_type == 'Temperatures':
+        if data_type == 'External_Temperature':
+            folder_path = os.path.join(machine_statistics_folder_path, 'External_Temperature')        
+        elif data_type == 'Temperatures':
             folder_path = os.path.join(machine_statistics_folder_path, 'Temperatures')
         elif data_type == 'Humidity':
             folder_path = os.path.join(machine_statistics_folder_path, 'Humidity')
@@ -1801,13 +1811,12 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui.forceEggsTurn_motor_btn.clicked.connect(lambda: self.emit_button_signal(self.ui.forceEggsTurn_motor_btn.objectName()))
         self.ui.reset_statistics_T_btn.clicked.connect(lambda: self.emit_button_signal(self.ui.reset_statistics_T_btn.objectName()))
         
+        self.ui.plotMeanTemperature_btn.clicked.connect(lambda: self.emit_button_signal(self.ui.plotMeanTemperature_btn.objectName()))
+        self.ui.plotExternalTemperature_btn.clicked.connect(lambda: self.emit_button_signal(self.ui.plotExternalTemperature_btn.objectName()))
         self.ui.plotAllDays_temp_T_btn.clicked.connect(lambda: self.emit_button_signal(self.ui.plotAllDays_temp_T_btn.objectName()))
         self.ui.plotToday_temp_T_btn.clicked.connect(lambda: self.emit_button_signal(self.ui.plotToday_temp_T_btn.objectName()))
         self.ui.plotAllDays_humidity_H_btn.clicked.connect(lambda: self.emit_button_signal(self.ui.plotAllDays_humidity_H_btn.objectName()))
         self.ui.plotToday_humidity_H_btn.clicked.connect(lambda: self.emit_button_signal(self.ui.plotToday_humidity_H_btn.objectName()))
-        
-        self.ui.plotToday_cnt_T_btn.clicked.connect(lambda: self.emit_button_signal(self.ui.plotToday_cnt_T_btn.objectName()))
-        self.ui.plotAllDays_cnt_T_btn.clicked.connect(lambda: self.emit_button_signal(self.ui.plotAllDays_cnt_T_btn.objectName()))
         
         self.ui.plotToday_cnt_H_btn.clicked.connect(lambda: self.emit_button_signal(self.ui.plotToday_cnt_H_btn.objectName()))
         self.ui.plotAllDays_cnt_H_btn.clicked.connect(lambda: self.emit_button_signal(self.ui.plotAllDays_cnt_H_btn.objectName()))
@@ -1894,7 +1903,6 @@ class MainWindow(QtWidgets.QMainWindow):
             self.ui.meanTemp_T.setText(f"{all_data[1]} °C")
             self.ui.maxTemp_T.setText(f"{all_data[2]} °C")
             self.ui.onCounter_T.setText(f"{all_data[3]}")
-            self.ui.offCounter_T.setText(f"{all_data[4]}")
 			# VISUALIZZAZIONE DEI TEMPI: il programma di base mi manda dei secondi. E' qui che stampo la stringa opportunamente in min o h
             self.ui.timeOn_T.setText(self.format_time(all_data[5]))
             self.ui.timeOFF_T.setText(self.format_time(all_data[6]))
