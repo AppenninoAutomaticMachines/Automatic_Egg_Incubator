@@ -9,12 +9,9 @@ PC817 circuitry
 
 DA FARE:
 - ramping per start dell'incubata + lay horizontal automatico n gg prima della schiusa
-- plot temperatura media
-- plot temperatura ambiente
 - warning light
 - statistica che mostra da quanti giorni è attiva l'incubata, calcoli
 - selettore per modalità riscaldamento con SSR
-- file con temperatura media
 - PID + led per indicazione duty cycle (schedina LED) + visualizzazione in py_gui, autotaratura   duty cycle % --> T_media
 - test to be loaded sembra ok, ma bisogna fare  un po' più di debug + controlalre nel file di log ogni volta che salvo il parametro
 - miglioramento: salvo solo se il parametroè effettivamente diverso...non sempre
@@ -152,6 +149,14 @@ FATTO: 27/05/2025 che la procedura di update thc , quindi call a process_serial,
 			500ms, quindi la chiamata stessa è fatta meno frequentemente.
 
 FATTO: 20/06/2025 logging
+FATTO: 07/10/2025 - plot temperatura media
+					- plot temperatura ambiente
+
+
+
+
+
+
 AGGIUNGERE QUESTO CODICE: log in file persistente.
 - fare una cartella nella direcroty del progetto che si chiama 'Log'
 - tipi di messaggio:
