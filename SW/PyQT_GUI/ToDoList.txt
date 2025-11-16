@@ -8,11 +8,12 @@ PC817 circuitry
 
 
 DA FARE:
+- weight control per acqua
+- PID + led per indicazione duty cycle (schedina LED) + visualizzazione in py_gui, autotaratura   duty cycle % --> T_media
 - ramping per start dell'incubata + lay horizontal automatico n gg prima della schiusa
 - warning light
 - statistica che mostra da quanti giorni è attiva l'incubata, calcoli
 - selettore per modalità riscaldamento con SSR
-- PID + led per indicazione duty cycle (schedina LED) + visualizzazione in py_gui, autotaratura   duty cycle % --> T_media
 - miglioramento: salvo solo se il parametroè effettivamente diverso...non sempre
 
 - visualizzazione statistiche incubata
