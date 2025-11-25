@@ -5,6 +5,7 @@
 #include <Wire.h>
 #include <ProfiloLibrary.h>
 #include <DHT.h>
+#include "HX711.h"
 
 
 /* General CONSTANTS */
@@ -13,6 +14,7 @@
 #define DEFAULT_DEBOUNCE_TIME 25 //ms
 #define ENABLE_HEATER true
 #define ENABLE_HUMIDIFIER true
+#define ENABLE_WATER_ELECTROVALVE true
 
 /* PIN ARDUINO */
 #define ONE_WIRE_BUS 4
@@ -20,7 +22,7 @@
 #define TEMPERATURE_PRECISION 9 // DS18B20 digital termometer provides 9-bit to 12-bit Celsius temperature measurements
 #define HEATER_PIN 12
 #define HUMIDIFIER_PIN 11
-#define FREE_OUTPUT_RELAY_PC817_1 10
+#define WATER_ELECTROVALVE_PIN 10
 #define FREE_OUTPUT_RELAY_PC817_2 23
 #define CCW_INDUCTOR_PIN 9 // induttore finecorsa SINISTRO (vista posteriore)
 #define CW_INDUCTOR_PIN 8 // induttore finecorsa DESTRO (vista posteriore)
@@ -150,6 +152,14 @@ float humidity_fromDHT22;  //Variabile in cui verrà inserita la % di umidità
 float temp_fromDHT22; //Variabile in cui verrà inserita la temperatura
 /* END DHT22 HUMIDITY SENSOR */
 
+/* HX711 WEIGHT CONTROL LOAD CELL */
+const int LOADCELL_DOUT_PIN = 33;
+const int LOADCELL_SCK_PIN = 35;
+HX711 scale;
+
+float waterWeight;
+/* END DHT22 HUMIDITY SENSOR */
+
 
 
 /* MACHINE SINGALING DEVICE - SECTION */
@@ -192,8 +202,8 @@ void setup() {
   pinMode(HUMIDIFIER_PIN, OUTPUT);
   digitalWrite(HUMIDIFIER_PIN, LOW);
 
-  pinMode(FREE_OUTPUT_RELAY_PC817_1, OUTPUT);
-  digitalWrite(FREE_OUTPUT_RELAY_PC817_1, LOW);
+  pinMode(WATER_ELECTROVALVE_PIN, OUTPUT);
+  digitalWrite(WATER_ELECTROVALVE_PIN, LOW);
 
   pinMode(FREE_OUTPUT_RELAY_PC817_2, OUTPUT);
   digitalWrite(FREE_OUTPUT_RELAY_PC817_2, LOW);
@@ -228,6 +238,14 @@ void setup() {
 
   Serial.begin(SERIAL_SPEED);
   //Serial.println("Starting");
+
+  /* HX 711 initializing water scale */
+  scale.begin(LOADCELL_DOUT_PIN, LOADCELL_SCK_PIN);
+  waterWeight = scale.read();
+
+  scale.set_scale(420.f); 
+  scale.tare();	// DA TOGLIERE
+  waterWeight = scale.read();
 
   sensors.begin();
 
@@ -369,6 +387,18 @@ void loop() {
               pendingACK = "<" + tag + ", " + value + ", " + uid + ">";
           }
         }
+
+        if (tag == "ELV01") {
+          if (value == "True") {
+            digitalWrite(WATER_ELECTROVALVE_PIN, HIGH);
+          } else if (value == "False") {
+            digitalWrite(WATER_ELECTROVALVE_PIN, LOW);
+          }
+          // Sposta la generazione ACK qui, fuori dal parsing
+          if(uid.length() > 0){
+              pendingACK = "<" + tag + ", " + value + ", " + uid + ">";
+          }
+        }
       }
       else{
         // comando malformato, non lo considero valido + eventuale log
@@ -431,6 +461,12 @@ void loop() {
 
     lastTempRequest = millis();
     endGetTemperatures = millis();
+
+    /* ADDING HERE ALSO WATER SCALE READING */
+    //scale.power_up();	
+    waterWeight = scale.get_units(5);
+    waterWeight = round(waterWeight * 10.0) / 10.0; // arrotondamento ad una cifra decimale
+    //scale.power_down();	
   }   
   /* END TEMPERATURES SECTION */
 
@@ -634,6 +670,11 @@ void loop() {
     listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(bufferChar, fbuffChar), ">");
     listofDataToSend_numberOfData++;
 
+    strcpy(bufferChar, "<WGT01,");
+    dtostrf(waterWeight, 1, 1, fbuffChar); 
+    listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(bufferChar, fbuffChar), ">");
+    listofDataToSend_numberOfData++;
+
     /*
     // feedback about auxHeater state
     listofDataToSend[listofDataToSend_numberOfData] = switch1_state ? "<SWT01, 1>":"<SWT01, 0>"; // converting bool to string
@@ -674,6 +715,10 @@ void loop() {
 
   if(!ENABLE_HUMIDIFIER){
     digitalWrite(HUMIDIFIER_PIN, LOW);
+  }
+
+  if(!ENABLE_WATER_ELECTROVALVE){
+    digitalWrite(WATER_ELECTROVALVE_PIN, LOW);
   }
 }
 
