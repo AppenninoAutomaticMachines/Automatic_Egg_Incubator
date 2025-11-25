@@ -73,9 +73,13 @@ timeout = 0.1
 
 """
 	"EXTT" = riguarda il sensore di temperatura esterno.
+    "HTP"  = è la temperatura restituita dal sensore di umidità
+    "WGT"  = WEIGHT è il valore da una certa cella di carico. La cella di carico 1 misura il peso della vaschetta di acqua
+    
+    "ELV01" = tag che riguarda il comando alla ELECTRO VALVE 01 = valvola per riempire il contenitore dell'acqua
 """
-identifiers = ["TMP", "HUM", "HTP", "IND", "EXTT"]  # Global variable
-command_tags = ["HTR01", "HUMER01", "STPR01"]
+identifiers = ["TMP", "HUM", "HTP", "IND", "EXTT", "WGT"]  # Global variable
+command_tags = ["HTR01", "HUMER01", "STPR01", "ELV01"]
 
 
 class SerialThread(QtCore.QThread):
@@ -418,6 +422,7 @@ class MainSoftwareThread(QtCore.QThread):
         self.THRESHOLD = 0.5  # Acceptable variation from the valid range
         self.VALID_RANGE_TEMPERATURE = (5.0, 45.0)  # Expected temperature range
         self.VALID_RANGE_HUMIDITY = (0.0, 100.0) # Expected humidity range
+        self.VALID_RANGE_WATER_LEVEL = (0.0, 5.0) # Expected humidity range
 
         # ANTI-DEBOUNCE for thc temperature hysteresis controller
         self._last_output_change_time_thc = None
@@ -428,6 +433,11 @@ class MainSoftwareThread(QtCore.QThread):
         self._last_output_change_time_hhc = None
         self._last_output_state_hhc = None
         self._debounced_heater_output_hhc = None  # Stato effettivamente inviato
+        
+        # ANTI-DEBOUNCE for thc water level control hysteresis controller
+        self._last_output_change_time_whc = None
+        self._last_output_state_whc = None
+        self._debounced_heater_output_whc = None  # Stato effettivamente inviato
         
         self._debounce_duration = 1.0  # secondi
         
@@ -444,7 +454,10 @@ class MainSoftwareThread(QtCore.QThread):
         self.current_heater_output_control = False # variabile che mi ricorda lo stato attuale dell'heater
         
         self.hhc = self.HysteresisController(lower_limit = 20.0, upper_limit = 50.0) # humidity hysteresis controller
-        self.current_humidifier_output_control = False # variabile che mi ricorda lo stato attuale dell'heater
+        self.current_humidifier_output_control = False # variabile che mi ricorda lo stato attuale dell'elettrovalvola pneumatica
+        
+        self.whc = self.HysteresisController(lower_limit = 1.0, upper_limit = 4.0) # water hysteresis controller
+        self.current_waterLevel_output_control = False # variabile che mi ricorda lo stato attuale dell'elettrovalvola per l'acqua
         
         self.eggTurnerMotor = self.StepperMotor("Egg_Turner_Stepper_Motor")
         self.last_turnsCounter = 0 # serve per ricordarmi il numero di turns counter
@@ -483,6 +496,10 @@ class MainSoftwareThread(QtCore.QThread):
         humidifier_actuator_folder_path = os.path.join(machine_statistics_folder_path, 'Humidifier')
         if not os.path.exists(humidifier_actuator_folder_path):
             os.makedirs(humidifier_actuator_folder_path)
+            
+        water_weight_actuator_folder_path = os.path.join(machine_statistics_folder_path, 'Water_Weight')
+        if not os.path.exists(water_weight_actuator_folder_path):
+            os.makedirs(water_weight_actuator_folder_path)
             
         # Create a Log folder if it doesn't exist
         self.main_software_thread_log_folder_path = os.path.join(script_dir, 'MainSoftwareThread_Log')
@@ -856,6 +873,29 @@ class MainSoftwareThread(QtCore.QThread):
             else:
                 self.hhc.set_lower_limit(rounded_value)
                 self.save_parameter('HUMIDITY_HYSTERESIS_CONTROLLER_LOWER_LIMIT', rounded_value)
+        elif spinbox_name == "maxHysteresisValue_waterLevelControl_spinBox":
+            if rounded_value <= self.whc.get_lower_limit():
+                self.whc.set_upper_limit(rounded_value)
+                self.save_parameter('WATER_LEVEL_CONTROL_HYSTERESIS_CONTROLLER_UPPER_LIMIT', rounded_value)
+
+                self.whc.set_lower_limit(rounded_value)
+                self.save_parameter('WATER_LEVEL_CONTROL_HYSTERESIS_CONTROLLER_LOWER_LIMIT', rounded_value)
+                self.update_spinbox_value.emit("minHysteresisValue_waterLevelControl_spinBox", rounded_value)
+            else:
+                self.whc.set_upper_limit(rounded_value)
+                self.save_parameter('WATER_LEVEL_CONTROL_HYSTERESIS_CONTROLLER_UPPER_LIMIT', rounded_value)
+                
+        elif spinbox_name == "minHysteresisValue_waterLevelControl_spinBox":
+            if rounded_value >= self.whc.get_upper_limit():
+                self.whc.set_upper_limit(rounded_value)
+                self.save_parameter('WATER_LEVEL_CONTROL_HYSTERESIS_CONTROLLER_UPPER_LIMIT', rounded_value)
+
+                self.whc.set_lower_limit(rounded_value)
+                self.save_parameter('WATER_LEVEL_CONTROL_HYSTERESIS_CONTROLLER_LOWER_LIMIT', rounded_value)
+                self.update_spinbox_value.emit("maxHysteresisValue_waterLevelControl_spinBox", rounded_value)
+            else:
+                self.whc.set_lower_limit(rounded_value)
+                self.save_parameter('WATER_LEVEL_CONTROL_HYSTERESIS_CONTROLLER_LOWER_LIMIT', rounded_value)
             
     def handle_intialization_step(self, value_name, value):
         rounded_value = round(value, 1)
@@ -867,6 +907,10 @@ class MainSoftwareThread(QtCore.QThread):
             self.hhc.set_upper_limit(rounded_value)
         elif value_name == "minHysteresisValue_humidity_spinBox":
             self.hhc.set_lower_limit(rounded_value)
+        elif value_name == "maxHysteresisValue_waterLevelControl_spinBox":
+            self.whc.set_upper_limit(rounded_value)
+        elif value_name == "minHysteresisValue_waterLevelControl_spinBox":
+            self.whc.set_lower_limit(rounded_value)
     
     def handle_initialization_done(self, parameter, value):
         # funzione che viene chiamata da MainWindow quando ha completato l'emit di tutti i parametri da default di GUI
@@ -886,6 +930,13 @@ class MainSoftwareThread(QtCore.QThread):
             self.hhc.set_control_mode("AUTO")
         if value_name == "humidifierON_radioBtn":
             self.hhc.set_control_mode("forceON")
+            
+        if value_name == "evalveOFF_radioBtn":
+            self.whc.set_control_mode("forceOFF")
+        if value_name == "evalveAUTO_radioBtn":
+            self.whc.set_control_mode("AUTO")
+        if value_name == "evalveON_radioBtn":
+            self.whc.set_control_mode("forceON")
             
         if value_name == "removeErrors_from_T_plots":
             self.remove_erroneous_values_from_T_plot = value
@@ -912,6 +963,7 @@ class MainSoftwareThread(QtCore.QThread):
         current_humidities_temperatures = {k: v for d in new_data for k, v in d.items() if k.startswith("HTP")}
         current_inductors_feedbacks = {k: v for d in new_data for k, v in d.items() if k.startswith("IND")} #{'IND_CCW': 1, 'IND_CW': 1}
         current_external_temperature = {k: v for d in new_data for k, v in d.items() if k.startswith("EXTT")} #{'EXTT': 25.2}
+        current_weight = {k: v for d in new_data for k, v in d.items() if k.startswith("WGT")} 
         
         
         # TEMPERATURE CONTROLLER SECTION
@@ -975,14 +1027,32 @@ class MainSoftwareThread(QtCore.QThread):
             if self.current_humidifier_output_control != self.hhc.get_output_control():
                 self.current_humidifier_output_control = self.hhc.get_output_control()
                 self.queue_command("HUMER01", self.current_humidifier_output_control) # @<HUMER01, True># @<HUMER01, False>#
-        '''    
+        '''
+        
+        # WATER LEVEL CONTROL - CONTROLLER SECTION
+        self.whc.update(list(current_weight.values()))
+        current_state = self.whc.get_output_control()
+
+        if current_state != self._last_output_state_whc:
+            self._last_output_change_time_whc = time.time()
+            self._last_output_state_whc = current_state
+
+        # Se è cambiato e il nuovo stato è stabile da X secondi
+        if (
+            self._last_output_state_whc != self._debounced_heater_output_whc and
+            self._last_output_change_time_whc is not None and
+            (time.time() - self._last_output_change_time_whc) >= self._debounce_duration
+        ):
+            self._debounced_heater_output_whc = self._last_output_state_whc
+            self.queue_command("ELV01", self._debounced_heater_output_whc)
+            self.main_software_thread_log_message('INFO', f"⚙️ Debounced Water Electro-valve state sent: {self._debounced_heater_output_whc}")    
             
         # Emit the data to update the view        
         # Collecting all values into a single list
         # questo all_values è semplicemente una lista [17.8, 17.9, 18.0, 17.9, 17.8, 17.9] dove SO IO ad ogni posto cosa è associato...passiamo solo i valori (non bellissimo...)
         # i mean value servono per pubblicare il valore che il controllore usa per fare effettivamente il controllo e lo metto nella sezione di isteresi
         # list() se passi un dizionario, mentre [] se vuoi aggiugnere alla lista elementi singoli
-        if current_temperatures and current_humidities:
+        if current_temperatures and current_humidities and current_weight:
             # all_values for MAIN VIEW page
             all_values = []
             all_values = list(current_temperatures.values()) + \
@@ -990,9 +1060,12 @@ class MainSoftwareThread(QtCore.QThread):
                         list(current_humidities_temperatures.values()) + \
                         [self.thc.get_mean_value()] + \
                         [self.hhc.get_mean_value()] + \
-			[self.thc.get_output_control()] + \
+			            [self.thc.get_output_control()] + \
                         [self.hhc.get_output_control()] + \
-			list(current_external_temperature.values())
+			            list(current_external_temperature.values()) + \
+                        list(current_weight.values()) + \
+                        [self.whc.get_mean_value()] + \
+                        [self.whc.get_output_control()]
                         
             self.update_view.emit(all_values)
             
@@ -1052,6 +1125,7 @@ class MainSoftwareThread(QtCore.QThread):
                 self.save_data_to_files('Humidity', current_humidities) #{'HUM01': 52.5}
                 self.save_data_to_files('Heater', {'Heater_Status': self.thc.get_output_control()})  # need to pass a dictionary
                 self.save_data_to_files('Humidifier', {'Humidifier_status': self.hhc.get_output_control()}) 
+                self.save_data_to_files('Water_Weight', current_weight) 
                 self.last_saving_time = datetime.now()
                 self.main_software_thread_log_message('SAVING', f"Saved data! {self.last_saving_time}")
                 
@@ -1132,6 +1206,8 @@ class MainSoftwareThread(QtCore.QThread):
             folder_path = os.path.join(machine_statistics_folder_path, 'Heater')
         elif data_type == 'Humidifier':
             folder_path = os.path.join(machine_statistics_folder_path, 'Humidifier')
+        elif data_type == 'Water_Weight':
+            folder_path = os.path.join(machine_statistics_folder_path, 'Water_Weight')
         else:
             raise ValueError("Invalid path configuration")	
             
@@ -1169,6 +1245,8 @@ class MainSoftwareThread(QtCore.QThread):
         TEMPERATURE_HYSTERESIS_CONTROLLER_LOWER_LIMIT
         HUMIDITY_HYSTERESIS_CONTROLLER_UPPER_LIMIT
         HUMIDITY_HYSTERESIS_CONTROLLER_LOWER_LIMIT
+        WATER_LEVEL_CONTROL_HYSTERESIS_CONTROLLER_UPPER_LIMIT
+        WATER_LEVEL_CONTROL_HYSTERESIS_CONTROLLER_LOWER_LIMIT
         TEMPERATURE_HYSTERESIS_CONTROLLER_TIME_ON
         TEMPERATURE_HYSTERESIS_CONTROLLER_TIME_OFF
         HUMIDITY_HYSTERESIS_CONTROLLER_TIME_ON
@@ -1211,6 +1289,24 @@ class MainSoftwareThread(QtCore.QThread):
             # set GUI
             self.update_spinbox_value.emit("maxHysteresisValue_humidity_spinBox", hhc_upper_limit)
             self.update_spinbox_value.emit("minHysteresisValue_humidity_spinBox", hhc_lower_limit)
+            
+        # WATER LEVEL CONTROL SPINBOX MIN/MAX
+        whc_upper_limit = self.load_parameter('WATER_LEVEL_CONTROL_HYSTERESIS_CONTROLLER_UPPER_LIMIT')
+        whc_lower_limit = self.load_parameter('WATER_LEVEL_CONTROL_HYSTERESIS_CONTROLLER_LOWER_LIMIT')
+
+        if (whc_upper_limit is None) or (whc_lower_limit is None):
+            # do nothing, leave default values
+            pass        
+        elif (whc_upper_limit < whc_lower_limit):
+            # check for errors in parameters
+            pass
+        else:
+            # set SW
+            self.whc.set_upper_limit(whc_upper_limit)
+            self.whc.set_lower_limit(whc_lower_limit)
+            # set GUI
+            self.update_spinbox_value.emit("maxHysteresisValue_waterLevelControl_spinBox", whc_upper_limit)
+            self.update_spinbox_value.emit("minHysteresisValue_waterLevelControl_spinBox", whc_lower_limit)
 
         # TEMPERATURE TIMINGS
         thc_time_on = self.load_parameter('TEMPERATURE_HYSTERESIS_CONTROLLER_TIME_ON')
@@ -1830,6 +1926,9 @@ class MainWindow(QtWidgets.QMainWindow):
             self.ui.humidifierOFF_radioBtn,
             self.ui.humidifierAUTO_radioBtn,
             self.ui.humidifierON_radioBtn,
+            self.ui.evalveOFF_radioBtn,
+            self.ui.evalveAUTO_radioBtn,
+            self.ui.evalveON_radioBtn,
             self.ui.removeErrors_from_T_plots,
             self.ui.removeErrors_from_H_plots,
         ]
@@ -1847,12 +1946,19 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui.maxHysteresisValue_humidity_spinBox.valueChanged.connect(lambda value: self.emit_float_spinbox_signal(self.ui.maxHysteresisValue_humidity_spinBox.objectName(), value))
         self.ui.minHysteresisValue_humidity_spinBox.valueChanged.connect(lambda value: self.emit_float_spinbox_signal(self.ui.minHysteresisValue_humidity_spinBox.objectName(), value))
         
+        # Water Level Control Hysteresis
+        self.ui.maxHysteresisValue_waterLevelControl_spinBox.valueChanged.connect(lambda value: self.emit_float_spinbox_signal(self.ui.maxHysteresisValue_waterLevelControl_spinBox.objectName(), value))
+        self.ui.minHysteresisValue_waterLevelControl_spinBox.valueChanged.connect(lambda value: self.emit_float_spinbox_signal(self.ui.minHysteresisValue_waterLevelControl_spinBox.objectName(), value))
+        
         # Connect to send initialization values to the mainSoftwareThread
         self.emit_initialization_values(self.ui.maxHysteresisValue_temperature_spinBox.objectName(), self.ui.maxHysteresisValue_temperature_spinBox.value())
         self.emit_initialization_values(self.ui.minHysteresisValue_temperature_spinBox.objectName(), self.ui.minHysteresisValue_temperature_spinBox.value())
         
         self.emit_initialization_values(self.ui.maxHysteresisValue_humidity_spinBox.objectName(), self.ui.maxHysteresisValue_humidity_spinBox.value())
         self.emit_initialization_values(self.ui.minHysteresisValue_humidity_spinBox.objectName(), self.ui.minHysteresisValue_humidity_spinBox.value())
+        
+        self.emit_initialization_values(self.ui.maxHysteresisValue_waterLevelControl_spinBox.objectName(), self.ui.maxHysteresisValue_waterLevelControl_spinBox.value())
+        self.emit_initialization_values(self.ui.minHysteresisValue_waterLevelControl_spinBox.objectName(), self.ui.minHysteresisValue_waterLevelControl_spinBox.value())
         
         # signaling that ManWindow initialization procedure has been completed
         self.initialization_done.emit("GUI_initialization_procedure", True)
@@ -1894,6 +2000,12 @@ class MainWindow(QtWidgets.QMainWindow):
             else:
                 self.ui.humidifierStatus.setText(f"OFF")
             self.ui.externalTemperature.setText(f"{all_data[10]} °C")
+            self.ui.waterTankWeight_1.setText(f"{all_data[11]} kg")
+            self.ui.waterLevelControlVal.setText(f"{all_data[12]} kg")
+            if all_data[13] == True:
+                self.ui.evalveStatus.setText(f"Filling Water ON!")
+            else:
+                self.ui.evalveStatus.setText(f"OFF")
             #self.ui.temperature4_2.setText(f"{all_data[3]} °C") PER TEMPERATURA DA UMIDITA
             
     def update_statistics_data(self, all_data):
