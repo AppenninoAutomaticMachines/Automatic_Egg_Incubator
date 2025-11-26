@@ -2,6 +2,8 @@ PIN 11 --> pneumatica (relay 3)
 PIN 12 --> heater (relay 1)
 PIN 10 --> elettrovalvola acqua (relay 4)
 
+RICARICA TUTTO! MODIFICATO ANCHE ARDUINO
+
 
 VIDEO:
 incubatrice V2
