@@ -77,9 +77,10 @@ timeout = 0.1
     "WGT"  = WEIGHT è il valore da una certa cella di carico. La cella di carico 1 misura il peso della vaschetta di acqua
     
     "ELV01" = tag che riguarda il comando alla ELECTRO VALVE 01 = valvola per riempire il contenitore dell'acqua
+    "PWM01" = è un valore INTERO da 0 a 255 che è il valore di PWM che Arduino deve impostare in uscita per far funzionare SSR con regolatore PID per la temperatura
 """
 identifiers = ["TMP", "HUM", "HTP", "IND", "EXTT", "WGT"]  # Global variable
-command_tags = ["HTR01", "HUMER01", "STPR01", "ELV01"]
+command_tags = ["HTR01", "HUMER01", "STPR01", "ELV01", "PWM01"]
 
 
 class SerialThread(QtCore.QThread):
@@ -411,6 +412,13 @@ class MainSoftwareThread(QtCore.QThread):
         self.arduino_readings_timestamp  = time.time() # per ricordarmi l'istante di tempo in cui arduino manda i dati
         
         self.command_list = [] # List to hold the pending commands
+
+        # === PID Controller with Automatic Timing === #
+        self.pid_temperature_is_activated = False # by default hysteresis controller is active!
+
+        self.pid_temperature = PIDController()
+        self.pid_temperature.set_output_limits(0, 100)  # PID outputs 0–100%
+        self.pid_temperature.set_reference_value(37.8) 
         
         # State variables to handle inputs from MainWindow
         self.current_button = None # notifica del pulsante premuto
@@ -639,24 +647,24 @@ class MainSoftwareThread(QtCore.QThread):
         ]
 
     def saturate_values(self, values, valid_range):
-    """
-    Applica una saturazione (clamping) ai valori della lista.
-    - Se un valore è dentro valid_range → viene mantenuto.
-    - Se è fuori → viene sostituito col valore limite più vicino.
-    
-    Args:
-        values: lista di valori numerici
-        valid_range: tupla (min_val, max_val)
+        """
+        Applica una saturazione (clamping) ai valori della lista.
+        - Se un valore è dentro valid_range → viene mantenuto.
+        - Se è fuori → viene sostituito col valore limite più vicino.
+        
+        Args:
+            values: lista di valori numerici
+            valid_range: tupla (min_val, max_val)
 
-    Returns:
-        Lista con i valori saturati.
-    """
-    min_val, max_val = valid_range
+        Returns:
+            Lista con i valori saturati.
+        """
+        min_val, max_val = valid_range
 
-    return [
-        min(max(val, min_val), max_val)
-        for val in values
-    ]
+        return [
+            min(max(val, min_val), max_val)
+            for val in values
+        ]
             
     def queue_command(self, cmd, value):
         self.command_list.append((cmd, value))
@@ -1000,32 +1008,68 @@ class MainSoftwareThread(QtCore.QThread):
         
         filtered_temperatures = self.filter_temperatures(list(current_temperatures.values()))
         if not filtered_temperatures:
-            self.main_software_thread_log_message('WARNING', 'filtered_temperature list is empty! fault in the sensors')         
-        self.thc.update(filtered_temperatures)
-        #print(list(current_temperatures.values()))
+            self.main_software_thread_log_message('WARNING', 'filtered_temperature list is empty! fault in the sensors')       
 
-        '''
-            chatGPT: adding debounce logic.
-            La scelta migliore è implementarlo nel codice che controlla l’output dell’heater, non all’interno della classe Heater
-            La classe Heater dovrebbe occuparsi solo del controllo logico / PID.
-            La decisione di inviare o meno un comando sulla seriale è una responsabilità applicativa, 
-            quindi deve stare nel codice che usa Heater, cioè fuori da essa, per mantenere una buona separazione delle responsabilità (principio SOLID: Single Responsibility).
-        '''
-        current_state = self.thc.get_output_control()
+        if self.pid_temperature_is_activated:
+            # === PID Controller with Automatic Timing === #
+            # nel caso di controllo ad isteresi avevo fatto tutto internamente...ma qui PID rimane general purpose. Il setpoint è uno e calcolato fuori dal PID.
 
-        if current_state != self._last_output_state_thc:
-            self._last_output_change_time_thc = time.time()
-            self._last_output_state_thc = current_state
+            # Ensure values is a list for consistency
+            if not isinstance(filtered_temperatures, list):
+                _values = [filtered_temperatures]
+            
+            if not _values:
+                self.pid_temperature.set_control_mode("forceOFF") # FOR SAFETY!! no values in input, means no good temperatures are passed, then OFF the actuator
+            else:   
+                self.pid_temperature.set_control_mode("AUTO")    
 
-        # Se è cambiato e il nuovo stato è stabile da X secondi
-        if (
-            self._last_output_state_thc != self._debounced_heater_output_thc and
-            self._last_output_change_time_thc is not None and
-            (time.time() - self._last_output_change_time_thc) >= self._debounce_duration
-        ):
-            self._debounced_heater_output_thc = self._last_output_state_thc
-            self.queue_command("HTR01", self._debounced_heater_output_thc)
-            self.main_software_thread_log_message('INFO', f"⚙️ Debounced Heater state sent: {self._debounced_heater_output_thc}")
+                # Calculate the mean of the values
+                _mean_value = round(sum(_values) / len(_values), 1)
+
+
+            if self.pid_temperature.update(_mean_value, dt_threshold = 2):
+                """
+                    Ricorda che se per qualche motivo il PID è settato forceOFF ok, _mean_value non verrà aggiornato, ma la classe del PID non considera più quel valore, perché
+                    forza a 0 l'uscita e fa return diretto.
+                    # PID update will only actually compute if at least dt_threshold seconds have passed since the last update. This method returns True when update is done
+                    In questo modo abbiamo un comando mandato verso arduino una volta ogni 2 secondi. SIcuramente sufficiente per calcolare correttametne l'output, considerando le dinamiche di temperatura
+                """
+
+                # Arduino-friendly PWM value
+                pwm = self.pid_temperature.get_output_for_arduino()
+                
+                # in questo modo inviamo ad Arduino un comando al secondo....dovrebbe essere ok da gestire.
+                self.queue_command("PWM01", pwm)
+                self.main_software_thread_log_message('INFO', f"⚙️ Heater PWM value sent: {pwm}")
+
+
+        else:
+            # === Hysteresis temperature controller is active === #
+            self.thc.update(filtered_temperatures)
+            #print(list(current_temperatures.values()))
+
+            '''
+                chatGPT: adding debounce logic.
+                La scelta migliore è implementarlo nel codice che controlla l’output dell’heater, non all’interno della classe Heater
+                La classe Heater dovrebbe occuparsi solo del controllo logico / PID.
+                La decisione di inviare o meno un comando sulla seriale è una responsabilità applicativa, 
+                quindi deve stare nel codice che usa Heater, cioè fuori da essa, per mantenere una buona separazione delle responsabilità (principio SOLID: Single Responsibility).
+            '''
+            current_state = self.thc.get_output_control()
+
+            if current_state != self._last_output_state_thc:
+                self._last_output_change_time_thc = time.time()
+                self._last_output_state_thc = current_state
+
+            # Se è cambiato e il nuovo stato è stabile da X secondi
+            if (
+                self._last_output_state_thc != self._debounced_heater_output_thc and
+                self._last_output_change_time_thc is not None and
+                (time.time() - self._last_output_change_time_thc) >= self._debounce_duration
+            ):
+                self._debounced_heater_output_thc = self._last_output_state_thc
+                self.queue_command("HTR01", self._debounced_heater_output_thc)
+                self.main_software_thread_log_message('INFO', f"⚙️ Debounced Heater state sent: {self._debounced_heater_output_thc}")
 
         # Check for persistent errors
         self.check_errors(current_temperatures)               
@@ -1210,6 +1254,7 @@ class MainSoftwareThread(QtCore.QThread):
             file.write(f"Message: {message}\n")
             file.write(f"-----------------\n\n")
         '''
+    
     def save_data_to_files(self, data_type, data_dictionary): #passo un dictionary di temperature/humidities, dimensione variabile per gestire più o meno sensori dinamicamente
         now = datetime.now()
         current_date = now.strftime('%Y-%m-%d')
@@ -1262,18 +1307,18 @@ class MainSoftwareThread(QtCore.QThread):
     # === GESTIONE PARAMETRI === #
     def parameters_initialization_from_file(self):
         '''
-        TEMPERATURE_HYSTERESIS_CONTROLLER_UPPER_LIMIT
-        TEMPERATURE_HYSTERESIS_CONTROLLER_LOWER_LIMIT
-        HUMIDITY_HYSTERESIS_CONTROLLER_UPPER_LIMIT
-        HUMIDITY_HYSTERESIS_CONTROLLER_LOWER_LIMIT
-        WATER_LEVEL_CONTROL_HYSTERESIS_CONTROLLER_UPPER_LIMIT
-        WATER_LEVEL_CONTROL_HYSTERESIS_CONTROLLER_LOWER_LIMIT
-        TEMPERATURE_HYSTERESIS_CONTROLLER_TIME_ON
-        TEMPERATURE_HYSTERESIS_CONTROLLER_TIME_OFF
-        HUMIDITY_HYSTERESIS_CONTROLLER_TIME_ON
-        HUMIDITY_HYSTERESIS_CONTROLLER_TIME_OFF
-        TURNS_COUNTER
-        ROTATION_INTERVAL
+            TEMPERATURE_HYSTERESIS_CONTROLLER_UPPER_LIMIT
+            TEMPERATURE_HYSTERESIS_CONTROLLER_LOWER_LIMIT
+            HUMIDITY_HYSTERESIS_CONTROLLER_UPPER_LIMIT
+            HUMIDITY_HYSTERESIS_CONTROLLER_LOWER_LIMIT
+            WATER_LEVEL_CONTROL_HYSTERESIS_CONTROLLER_UPPER_LIMIT
+            WATER_LEVEL_CONTROL_HYSTERESIS_CONTROLLER_LOWER_LIMIT
+            TEMPERATURE_HYSTERESIS_CONTROLLER_TIME_ON
+            TEMPERATURE_HYSTERESIS_CONTROLLER_TIME_OFF
+            HUMIDITY_HYSTERESIS_CONTROLLER_TIME_ON
+            HUMIDITY_HYSTERESIS_CONTROLLER_TIME_OFF
+            TURNS_COUNTER
+            ROTATION_INTERVAL
         '''
         # TEMPERATURE SPINBOX MIN/MAX
         thc_upper_limit = self.load_parameter('TEMPERATURE_HYSTERESIS_CONTROLLER_UPPER_LIMIT')
@@ -1360,7 +1405,6 @@ class MainSoftwareThread(QtCore.QThread):
             self.eggTurnerMotor.setFunctionInterval(rotation_interval * 60) # Set the rotation interval
             self.update_spinbox_value.emit("rotation_interval_spinBox", rotation_interval) # aggiorno la visualizzazione
 
-
     def _load_all_parameters(self):
         if os.path.exists(self.parameters_file_path):
             try:
@@ -1428,7 +1472,155 @@ class MainSoftwareThread(QtCore.QThread):
             print(f"Backup creato: {backup_filename}")
         except Exception as e:
             print(f"Errore durante il backup: {e}")
-            
+
+    # === PID Controller with Automatic Timing === #
+    class PIDController:
+        def __init__(self, kp=0.0, ki=0.0, kd=0.0,
+                    reference=0.0,
+                    output_min=float("-inf"),
+                    output_max=float("inf")):
+
+            # Gains
+            self.kp = kp
+            self.ki = ki
+            self.kd = kd
+
+            # Setpoint
+            self.reference = reference
+
+            # Output limits
+            self.output_min = output_min
+            self.output_max = output_max
+
+            # Internal state
+            self.integral = 0.0
+            self.prev_error = None
+            self.output = 0.0
+
+            # Time tracking
+            self.last_time = None
+
+            self.forceON = False
+            self.forceOFF = False
+
+        # --------------------------
+        # Configuration methods
+        # --------------------------
+        def set_gains(self, kp, ki, kd):
+            self.kp = kp
+            self.ki = ki
+            self.kd = kd
+
+        def set_reference_value(self, ref_value):
+            self.reference = ref_value
+
+        def set_output_limits(self, min_value, max_value):
+            self.output_min = min_value
+            self.output_max = max_value
+
+        def set_control_mode(self, control_mode):
+            if control_mode == "forceON":
+                self.forceON = True
+                self.forceOFF = False
+            if control_mode == "forceOFF":
+                self.forceON = False
+                self.forceOFF = True
+            if control_mode == "AUTO":
+                self.forceON = False
+                self.forceOFF = False
+
+        # --------------------------
+        # Update cycle
+        # --------------------------
+        def update(self, current_value, dt_threshold):
+            """
+            Compute PID output with automatic dt measurement,
+            clamping, and anti-windup.
+
+            dt_threshold = SECONDS → PID updates only if at least 1s have passed since last update.
+            """
+
+            now = time.time()
+
+            # ---- Calculate dt automatically ----
+            if self.last_time is None:
+                dt = 0.0  # first call; no action possible
+            else:
+                dt = now - self.last_time
+
+            # Only proceed if enough time has passed
+            if dt < dt_threshold:
+                # Not enough time elapsed; return previous output
+                return False
+
+            self.last_time = now
+
+            if self.forceON: 
+                self.output = self.output_max  
+                return True            
+            elif self.forceOFF:  
+                self.output = self.output_min      
+                return True         
+            else: # AUTO  
+                pass 
+
+            error = self.reference - current_value
+
+            # ----- Derivative term -----
+            if self.prev_error is None or dt == 0:
+                derivative = 0.0
+            else:
+                derivative = (error - self.prev_error) / dt
+
+            # ----- Integral term (pre-windup) -----
+            if dt > 0:
+                self.integral += error * dt
+
+            # Raw output before clamping
+            raw_output = (
+                self.kp * error +
+                self.ki * self.integral +
+                self.kd * derivative
+            )
+
+            # ----- Output clamping -----
+            clamped_output = max(self.output_min, min(raw_output, self.output_max))
+
+            # ----- Anti-windup -----
+            if raw_output != clamped_output and dt > 0:
+                # Undo integrator accumulation
+                self.integral -= error * dt
+
+            self.output = clamped_output
+            self.prev_error = error
+
+            return True
+
+        def get_output(self):
+            return self.output    
+
+        def get_output_for_arduino(self):
+            """
+            Adding a dedicated method that converts the PID output to an Arduino-friendly 8-bit PWM value (0–255). 
+            This is just a linear mapping from your existing output_min/output_max range to [0, 255].
+
+            Convert the PID output to an integer 0–255 for Arduino PWM.
+            Assumes self.output_min and self.output_max define the PID output range.
+            """
+            # Clip output to expected range just in case
+            output_clamped = max(self.output_min, min(self.output, self.output_max))
+
+            # Map output to 0–255
+            pwm_value = int((output_clamped - self.output_min) / 
+                            (self.output_max - self.output_min) * 255)
+
+            # Clip again to ensure it stays within 0–255
+            pwm_value = max(0, min(pwm_value, 255))
+
+            return pwm_value    
+
+
+
     class HysteresisController:
         def __init__(self, lower_limit, upper_limit):            
             self.lower_limit = lower_limit
