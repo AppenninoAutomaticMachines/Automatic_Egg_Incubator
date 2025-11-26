@@ -15,36 +15,41 @@
 #define ENABLE_HEATER true
 #define ENABLE_HUMIDIFIER true
 #define ENABLE_WATER_ELECTROVALVE true
-
-/* PIN ARDUINO */
-#define ONE_WIRE_BUS 4
-#define ONE_WIRE_BUS_EXTERNAL_TEMPERATURE 22
 #define TEMPERATURE_PRECISION 9 // DS18B20 digital termometer provides 9-bit to 12-bit Celsius temperature measurements
-#define HEATER_PIN 12
-#define HUMIDIFIER_PIN 11
-#define WATER_ELECTROVALVE_PIN 10
-#define FREE_OUTPUT_RELAY_PC817_2 23
-#define CCW_INDUCTOR_PIN 9 // induttore finecorsa SINISTRO (vista posteriore)
-#define CW_INDUCTOR_PIN 8 // induttore finecorsa DESTRO (vista posteriore)
-#define DHT_PIN 3   //Pin a cui è connesso il sensore
-
-#define STEPPER_MOTOR_STEP_PIN 6
-#define STEPPER_MOTOR_DIRECTION_PIN 5
-#define STEPPER_MOTOR_MS1_PIN 2
-#define STEPPER_MOTOR_MS2_PIN 2
-#define STEPPER_MOTOR_MS3_PIN 2
-
 #define NUMBER_OF_LIGHTS 3
+#if !defined(DEVICE_DISCONNECTED)
+#define DEVICE_DISCONNECTED -127
+#endif
+#define DEVICE_ERROR 85
+
+/* ARDUINO MEGA PWM from 0 - 13 + 0 and 1 tx and rx in case of serial communication is needed */
+/* PIN ARDUINO */
+#define DHT_PIN 3   //Pin a cui è connesso il sensore
+#define ONE_WIRE_BUS 4
+#define STEPPER_MOTOR_DIRECTION_PIN 5
+#define STEPPER_MOTOR_STEP_PIN 6
+#define FREE_PC817_PIN 7
+#define CW_INDUCTOR_PIN 8 // induttore finecorsa DESTRO (vista posteriore)
+#define CCW_INDUCTOR_PIN 9 // induttore finecorsa SINISTRO (vista posteriore)
+#define WATER_ELECTROVALVE_PIN 10 // relay 4
+#define HUMIDIFIER_PIN 11 // relay 3
+#define HEATER_PIN 12 // relay 1
+#define HEATER_PWM_PIN 13
+
+#define ONE_WIRE_BUS_EXTERNAL_TEMPERATURE 22
+#define FREE_OUTPUT_RELAY_PC817_2 23
 #define PIN_RED_LIGHT 25
 #define PIN_ORANGE_LIGHT 27
 #define PIN_GREEN_LIGHT 29
 #define PIN_BUZZER 31
+#define LOADCELL_DOUT_PIN = 33;
+#define LOADCELL_SCK_PIN = 35;
 
-#if !defined(DEVICE_DISCONNECTED)
-#define DEVICE_DISCONNECTED -127
-#endif
 
-#define DEVICE_ERROR 85
+#define STEPPER_MOTOR_MS1_PIN 2
+#define STEPPER_MOTOR_MS2_PIN 2
+#define STEPPER_MOTOR_MS3_PIN 2
+
 
 /* ALIVE su SERIALE */
 /* se vedo che per più di 3.5s non ricevo segnale seriale, allora 1) allarme  2) inibisco i controlli degli attuatori.
@@ -153,8 +158,6 @@ float temp_fromDHT22; //Variabile in cui verrà inserita la temperatura
 /* END DHT22 HUMIDITY SENSOR */
 
 /* HX711 WEIGHT CONTROL LOAD CELL */
-const int LOADCELL_DOUT_PIN = 33;
-const int LOADCELL_SCK_PIN = 35;
 HX711 scale;
 
 float waterWeight;
@@ -196,6 +199,9 @@ String receivedCommands[20];
 
 
 void setup() {
+  pinMode(HEATER_PWM_PIN, OUTPUT);
+  digitalWrite(HEATER_PWM_PIN, LOW);
+
   pinMode(HEATER_PIN, OUTPUT);
   digitalWrite(HEATER_PIN, LOW);
 
@@ -394,6 +400,14 @@ void loop() {
           } else if (value == "False") {
             digitalWrite(WATER_ELECTROVALVE_PIN, LOW);
           }
+          // Sposta la generazione ACK qui, fuori dal parsing
+          if(uid.length() > 0){
+              pendingACK = "<" + tag + ", " + value + ", " + uid + ">";
+          }
+        }
+
+        if (tag == "PWM01") {
+          analogWrite(HEATER_PWM_PIN, value);
           // Sposta la generazione ACK qui, fuori dal parsing
           if(uid.length() > 0){
               pendingACK = "<" + tag + ", " + value + ", " + uid + ">";
