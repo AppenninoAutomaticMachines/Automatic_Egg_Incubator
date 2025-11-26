@@ -13,6 +13,7 @@ PC817 circuitry
 
 
 DA FARE:
+- continuare gestione PID: GUI + verifica + lato arduino
 - weight control per acqua
 - PID + led per indicazione duty cycle (schedina LED) + visualizzazione in py_gui, autotaratura   duty cycle % --> T_media
 - ramping per start dell'incubata + lay horizontal automatico n gg prima della schiusa
