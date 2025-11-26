@@ -422,7 +422,7 @@ class MainSoftwareThread(QtCore.QThread):
         self.THRESHOLD = 0.5  # Acceptable variation from the valid range
         self.VALID_RANGE_TEMPERATURE = (5.0, 45.0)  # Expected temperature range
         self.VALID_RANGE_HUMIDITY = (0.0, 100.0) # Expected humidity range
-        self.VALID_RANGE_WATER_LEVEL = (0.0, 5.0) # Expected humidity range
+        self.VALID_RANGE_WATER_LEVEL = (0.0, 5.0) # Expected water level range
 
         # ANTI-DEBOUNCE for thc temperature hysteresis controller
         self._last_output_change_time_thc = None
@@ -623,12 +623,40 @@ class MainSoftwareThread(QtCore.QThread):
                 self.warned_sensors.add(sensor)  # Segnala il warning solo una volta
             
     def filter_temperatures(self, temperatures):
-        """Remove outliers and keep only valid temperature values."""
+        """
+        La funzione prende in ingresso temperatures (lista di valori) e restituisce una nuova lista contenente solo i 
+        valori di temperatura che passano due controlli: 
+        - non sono vicini a valori di errore conosciuti 
+        - e rientrano nell'intervallo 
+        di temperatura valido. Ecco il comportamento passo-passo.
+        Remove outliers and keep only valid temperature values.
+        """
+
         return [
             temp for temp in temperatures
             if not any(abs(temp - iv) < self.THRESHOLD for iv in self.INVALID_VALUES)
             and self.VALID_RANGE_TEMPERATURE[0] <= temp <= self.VALID_RANGE_TEMPERATURE[1]
         ]
+
+    def saturate_values(self, values, valid_range):
+    """
+    Applica una saturazione (clamping) ai valori della lista.
+    - Se un valore è dentro valid_range → viene mantenuto.
+    - Se è fuori → viene sostituito col valore limite più vicino.
+    
+    Args:
+        values: lista di valori numerici
+        valid_range: tupla (min_val, max_val)
+
+    Returns:
+        Lista con i valori saturati.
+    """
+    min_val, max_val = valid_range
+
+    return [
+        min(max(val, min_val), max_val)
+        for val in values
+    ]
             
     def queue_command(self, cmd, value):
         self.command_list.append((cmd, value))
@@ -1021,16 +1049,9 @@ class MainSoftwareThread(QtCore.QThread):
             self.queue_command("HUMER01", self._debounced_heater_output_hhc)
             self.main_software_thread_log_message('INFO', f"⚙️ Debounced Humidifier state sent: {self._debounced_heater_output_hhc}")
         
-        '''
-        if current_humidities:
-            self.hhc.update(list(current_humidities.values()))
-            if self.current_humidifier_output_control != self.hhc.get_output_control():
-                self.current_humidifier_output_control = self.hhc.get_output_control()
-                self.queue_command("HUMER01", self.current_humidifier_output_control) # @<HUMER01, True># @<HUMER01, False>#
-        '''
-        
         # WATER LEVEL CONTROL - CONTROLLER SECTION
-        self.whc.update(list(current_weight.values()))
+        saturated_weights = self.saturate_values(list(current_weight.values()), self.VALID_RANGE_WATER_LEVEL)
+        self.whc.update(saturated_weights)
         current_state = self.whc.get_output_control()
 
         if current_state != self._last_output_state_whc:
