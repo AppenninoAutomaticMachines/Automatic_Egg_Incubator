@@ -159,7 +159,7 @@ float temp_fromDHT22; //Variabile in cui verrà inserita la temperatura
 
 /* HX711 WEIGHT CONTROL LOAD CELL */
 HX711 scale;
-
+float calibration_factor = 420.0;
 float waterWeight;
 /* END DHT22 HUMIDITY SENSOR */
 
