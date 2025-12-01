@@ -416,7 +416,7 @@ class MainSoftwareThread(QtCore.QThread):
         # === PID Controller with Automatic Timing === #
         self.pid_temperature_is_activated = False # by default hysteresis controller is active!
 
-        self.pid_temperature = PIDController()
+        self.pid_temperature = self.PIDController()
         self.pid_temperature.set_output_limits(0, 100)  # PID outputs 0–100%
         self.pid_temperature.set_reference_value(37.8) 
         
@@ -1093,8 +1093,9 @@ class MainSoftwareThread(QtCore.QThread):
             self.queue_command("HUMER01", self._debounced_heater_output_hhc)
             self.main_software_thread_log_message('INFO', f"⚙️ Debounced Humidifier state sent: {self._debounced_heater_output_hhc}")
         
-        # WATER LEVEL CONTROL - CONTROLLER SECTION
-        saturated_weights = self.saturate_values(list(current_weight.values()), self.VALID_RANGE_WATER_LEVEL)
+        # WATER LEVEL CONTROL - CONTROLLER SECTION        
+        weights_kg = [round(w / 1000, 1) for w in list(current_weight.values())] # from grams to kg
+        saturated_weights = self.saturate_values(weights_kg, self.VALID_RANGE_WATER_LEVEL)
         self.whc.update(saturated_weights)
         current_state = self.whc.get_output_control()
 
@@ -1117,7 +1118,7 @@ class MainSoftwareThread(QtCore.QThread):
         # questo all_values è semplicemente una lista [17.8, 17.9, 18.0, 17.9, 17.8, 17.9] dove SO IO ad ogni posto cosa è associato...passiamo solo i valori (non bellissimo...)
         # i mean value servono per pubblicare il valore che il controllore usa per fare effettivamente il controllo e lo metto nella sezione di isteresi
         # list() se passi un dizionario, mentre [] se vuoi aggiugnere alla lista elementi singoli
-        if current_temperatures and current_humidities and current_weight:
+        if current_temperatures and current_humidities and weights_kg:
             # all_values for MAIN VIEW page
             all_values = []
             all_values = list(current_temperatures.values()) + \
@@ -1128,7 +1129,7 @@ class MainSoftwareThread(QtCore.QThread):
 			            [self.thc.get_output_control()] + \
                         [self.hhc.get_output_control()] + \
 			            list(current_external_temperature.values()) + \
-                        list(current_weight.values()) + \
+                        weights_kg + \
                         [self.whc.get_mean_value()] + \
                         [self.whc.get_output_control()]
                         
