@@ -167,7 +167,7 @@ int32_t calibration_offset = -79845;
 */
 float calibration_scale = 420.0f; // to be extra explicit: In Arduino/C/C++, the f at the end of a number makes it a float literal instead of a double. .f tells the compiler the number is a float.
 float waterWeight;
-/* END DHT22 HUMIDITY SENSOR */
+/* END HX711 WEIGHT CONTROL LOAD CELL */
 
 
 
@@ -253,11 +253,9 @@ void setup() {
 
   /* HX 711 initializing water scale */
   scale.begin(LOADCELL_DOUT_PIN, LOADCELL_SCK_PIN);
-  waterWeight = scale.read();
-
-  scale.set_scale(420.f); 
-  scale.tare();	// DA TOGLIERE
-  waterWeight = scale.read();
+  scale.set_offset(calibration_offset);
+  scale.set_scale(calibration_scale);
+  //scale.tare();
 
   sensors.begin();
 
