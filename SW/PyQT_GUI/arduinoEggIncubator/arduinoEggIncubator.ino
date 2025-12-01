@@ -440,7 +440,7 @@ void loop() {
       eggsTurnerStepperMotor.stopMotor();
       digitalWrite(HEATER_PIN, LOW);
       digitalWrite(HUMIDIFIER_PIN, LOW);
-
+      digitalWrite(WATER_ELECTROVALVE_PIN, LOW);
     }
   }
 
