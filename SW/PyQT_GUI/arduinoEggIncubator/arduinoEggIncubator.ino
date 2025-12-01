@@ -42,8 +42,8 @@
 #define PIN_ORANGE_LIGHT 27
 #define PIN_GREEN_LIGHT 29
 #define PIN_BUZZER 31
-#define LOADCELL_DOUT_PIN = 33;
-#define LOADCELL_SCK_PIN = 35;
+#define LOADCELL_DOUT_PIN 33
+#define LOADCELL_SCK_PIN 35
 
 
 #define STEPPER_MOTOR_MS1_PIN 2
@@ -411,7 +411,8 @@ void loop() {
         }
 
         if (tag == "PWM01") {
-          analogWrite(HEATER_PWM_PIN, value);
+          int pwm_value = value.toInt();
+          analogWrite(HEATER_PWM_PIN, pwm_value);
           // Sposta la generazione ACK qui, fuori dal parsing
           if(uid.length() > 0){
               pendingACK = "<" + tag + ", " + value + ", " + uid + ">";
