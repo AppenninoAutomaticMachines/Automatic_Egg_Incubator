@@ -441,6 +441,7 @@ void loop() {
       digitalWrite(HEATER_PIN, LOW);
       digitalWrite(HUMIDIFIER_PIN, LOW);
       digitalWrite(WATER_ELECTROVALVE_PIN, LOW);
+      analogWrite(HEATER_PWM_PIN, 0);
     }
   }
 
@@ -483,8 +484,8 @@ void loop() {
 
     /* ADDING HERE ALSO WATER SCALE READING */
     //scale.power_up();	
-    waterWeight = scale.get_units(5);
-    waterWeight = round(waterWeight * 10.0) / 10.0; // arrotondamento ad una cifra decimale
+    //waterWeight = scale.get_units(5);
+    //waterWeight = round(waterWeight * 10.0) / 10.0; // arrotondamento ad una cifra decimale
     //scale.power_down();	
   }   
   /* END TEMPERATURES SECTION */
