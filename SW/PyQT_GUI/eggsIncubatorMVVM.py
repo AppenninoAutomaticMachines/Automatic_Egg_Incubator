@@ -1640,7 +1640,6 @@ class MainSoftwareThread(QtCore.QThread):
 
             self.current_value = current_value_loc
             error = self.reference - self.current_value
-            print(error)
 
             # ----- Derivative term -----
             if self.prev_error is None or dt == 0:
