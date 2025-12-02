@@ -414,11 +414,11 @@ class MainSoftwareThread(QtCore.QThread):
         self.command_list = [] # List to hold the pending commands
 
         # === PID Controller with Automatic Timing === #
-        self.pid_temperature_is_activated = False # by default hysteresis controller is active!
-
         self.pid_temperature = self.PIDController()
         self.pid_temperature.set_output_limits(0, 100)  # PID outputs 0–100%
         self.pid_temperature.set_reference_value(37.8) 
+        self.pid_temperature_is_activated = False # by default hysteresis controller is active!
+        self.pwm = 0 #value to store output for arduino 
         
         # State variables to handle inputs from MainWindow
         self.current_button = None # notifica del pulsante premuto
@@ -932,6 +932,19 @@ class MainSoftwareThread(QtCore.QThread):
             else:
                 self.whc.set_lower_limit(rounded_value)
                 self.save_parameter('WATER_LEVEL_CONTROL_HYSTERESIS_CONTROLLER_LOWER_LIMIT', rounded_value)
+                
+        elif spinbox_name == "setPointTemperature_PID_spinBox":
+            self.pid_temperature.set_reference_value(rounded_value)
+            self.save_parameter('TEMPERATURE_PID_SET_POINT', rounded_value)
+        elif spinbox_name == "Kp_spinBox":
+            self.pid_temperature.set_gain_Kp(rounded_value)
+            self.save_parameter('TEMPERATURE_PID_KP_GAIN', rounded_value)
+        elif spinbox_name == "Ki_spinBox":
+            self.pid_temperature.set_gain_Ki(rounded_value)
+            self.save_parameter('TEMPERATURE_PID_KI_GAIN', rounded_value)
+        elif spinbox_name == "Kd_spinBox":
+            self.pid_temperature.set_gain_Kd(rounded_value)
+            self.save_parameter('TEMPERATURE_PID_KD_GAIN', rounded_value)
             
     def handle_intialization_step(self, value_name, value):
         rounded_value = round(value, 1)
@@ -947,6 +960,14 @@ class MainSoftwareThread(QtCore.QThread):
             self.whc.set_upper_limit(rounded_value)
         elif value_name == "minHysteresisValue_waterLevelControl_spinBox":
             self.whc.set_lower_limit(rounded_value)
+        elif value_name == "setPointTemperature_PID_spinBox":
+            self.pid_temperature.set_reference_value(rounded_value)
+        elif value_name == "Kp_spinBox":
+            self.pid_temperature.set_gain_Kp(rounded_value)
+        elif value_name == "Ki_spinBox":
+            self.pid_temperature.set_gain_Ki(rounded_value)
+        elif value_name == "Kd_spinBox":
+            self.pid_temperature.set_gain_Kd(rounded_value)
     
     def handle_initialization_done(self, parameter, value):
         # funzione che viene chiamata da MainWindow quando ha completato l'emit di tutti i parametri da default di GUI
@@ -981,6 +1002,11 @@ class MainSoftwareThread(QtCore.QThread):
         if value_name == "removeErrors_from_H_plots":
             self.remove_erroneous_values_from_H_plot = value
             self.main_software_thread_log_message('INFO', f"{value_name} + {value}")
+            
+        if value_name == "hysteresisActive_radioBtn":
+            self.pid_temperature_is_activated = False
+        if value_name == "PIDActive_radioBtn":
+            self.pid_temperature_is_activated = True
             
             
     def process_serial_data(self, new_data):
@@ -1017,6 +1043,8 @@ class MainSoftwareThread(QtCore.QThread):
             # Ensure values is a list for consistency
             if not isinstance(filtered_temperatures, list):
                 _values = [filtered_temperatures]
+            else:
+                _values = filtered_temperatures
             
             if not _values:
                 self.pid_temperature.set_control_mode("forceOFF") # FOR SAFETY!! no values in input, means no good temperatures are passed, then OFF the actuator
@@ -1026,7 +1054,6 @@ class MainSoftwareThread(QtCore.QThread):
                 # Calculate the mean of the values
                 _mean_value = round(sum(_values) / len(_values), 1)
 
-
             if self.pid_temperature.update(_mean_value, dt_threshold = 2):
                 """
                     Ricorda che se per qualche motivo il PID è settato forceOFF ok, _mean_value non verrà aggiornato, ma la classe del PID non considera più quel valore, perché
@@ -1034,13 +1061,13 @@ class MainSoftwareThread(QtCore.QThread):
                     # PID update will only actually compute if at least dt_threshold seconds have passed since the last update. This method returns True when update is done
                     In questo modo abbiamo un comando mandato verso arduino una volta ogni 2 secondi. SIcuramente sufficiente per calcolare correttametne l'output, considerando le dinamiche di temperatura
                 """
-
+                print("Ciao")
                 # Arduino-friendly PWM value
-                pwm = self.pid_temperature.get_output_for_arduino()
+                self.pwm = self.pid_temperature.get_output_for_arduino()
                 
                 # in questo modo inviamo ad Arduino un comando al secondo....dovrebbe essere ok da gestire.
-                self.queue_command("PWM01", pwm)
-                self.main_software_thread_log_message('INFO', f"⚙️ Heater PWM value sent: {pwm}")
+                self.queue_command("PWM01", self.pwm)
+                self.main_software_thread_log_message('INFO', f"⚙️ Heater PWM value sent: {self.pwm}")
 
 
         else:
@@ -1120,18 +1147,23 @@ class MainSoftwareThread(QtCore.QThread):
         # list() se passi un dizionario, mentre [] se vuoi aggiugnere alla lista elementi singoli
         if current_temperatures and current_humidities and weights_kg:
             # all_values for MAIN VIEW page
-            all_values = []
-            all_values = list(current_temperatures.values()) + \
-                        list(current_humidities.values()) + \
-                        list(current_humidities_temperatures.values()) + \
-                        [self.thc.get_mean_value()] + \
-                        [self.hhc.get_mean_value()] + \
-			            [self.thc.get_output_control()] + \
-                        [self.hhc.get_output_control()] + \
-			            list(current_external_temperature.values()) + \
-                        weights_kg + \
-                        [self.whc.get_mean_value()] + \
-                        [self.whc.get_output_control()]
+            all_values = (
+                list(current_temperatures.values()) +               # [0 1 2 3] Temperature interne
+                list(current_humidities.values()) +                 # [4] Umidità interna
+                list(current_humidities_temperatures.values()) +    # [5] Umidità/temperatura combinate
+                [self.thc.get_mean_value()] +                       # [6] Media THC
+                [self.hhc.get_mean_value()] +                       # [7] Media HHC
+                [self.thc.get_output_control()] +                   # [8] Output controllo THC
+                [self.hhc.get_output_control()] +                   # [9] Output controllo HHC
+                list(current_external_temperature.values()) +       # [10] Temperature esterne
+                weights_kg +                                        # [11] Peso totale o lista pesi kg
+                [self.whc.get_mean_value()] +                       # [12] Media WHC
+                [self.whc.get_output_control()] +                   # [13] Output controllo WHC
+                [self.pid_temperature.get_current_value()] +        # [14] Valore di controllo usato dal PIDController per fare i conti
+                [
+                    self.pwm if self.pid_temperature_is_activated else 0.0
+                ]                                                   # [15] Valore PWM del sistema per arduino
+            )
                         
             self.update_view.emit(all_values)
             
@@ -1320,6 +1352,10 @@ class MainSoftwareThread(QtCore.QThread):
             HUMIDITY_HYSTERESIS_CONTROLLER_TIME_OFF
             TURNS_COUNTER
             ROTATION_INTERVAL
+            TEMPERATURE_PID_SET_POINT
+            TEMPERATURE_PID_KP_GAIN
+            TEMPERATURE_PID_KI_GAIN
+            TEMPERATURE_PID_KD_GAIN
         '''
         # TEMPERATURE SPINBOX MIN/MAX
         thc_upper_limit = self.load_parameter('TEMPERATURE_HYSTERESIS_CONTROLLER_UPPER_LIMIT')
@@ -1405,6 +1441,30 @@ class MainSoftwareThread(QtCore.QThread):
         if rotation_interval is not None:
             self.eggTurnerMotor.setFunctionInterval(rotation_interval * 60) # Set the rotation interval
             self.update_spinbox_value.emit("rotation_interval_spinBox", rotation_interval) # aggiorno la visualizzazione
+            
+        # PID control
+        temperature_PID_setPoint = self.load_parameter('TEMPERATURE_PID_SET_POINT')
+        if temperature_PID_setPoint is not None:
+            self.pid_temperature.set_reference_value(temperature_PID_setPoint)
+            self.update_spinbox_value.emit("setPointTemperature_PID_spinBox", temperature_PID_setPoint) # aggiorno la visualizzazione
+            
+        # PID control
+        temperature_PID_Kp_gain = self.load_parameter('TEMPERATURE_PID_KP_GAIN')
+        if temperature_PID_Kp_gain is not None:
+            self.pid_temperature.set_gain_Kp(temperature_PID_Kp_gain)
+            self.update_spinbox_value.emit("Kp_spinBox", temperature_PID_Kp_gain) # aggiorno la visualizzazione
+            
+        # PID control
+        temperature_PID_Ki_gain = self.load_parameter('TEMPERATURE_PID_KI_GAIN')
+        if temperature_PID_Ki_gain is not None:
+            self.pid_temperature.set_gain_Ki(temperature_PID_Ki_gain)
+            self.update_spinbox_value.emit("Ki_spinBox", temperature_PID_Ki_gain) # aggiorno la visualizzazione
+            
+        # PID control
+        temperature_PID_Kd_gain = self.load_parameter('TEMPERATURE_PID_KD_GAIN')
+        if temperature_PID_Kd_gain is not None:
+            self.pid_temperature.set_gain_Kd(temperature_PID_Kd_gain)
+            self.update_spinbox_value.emit("Kd_spinBox", temperature_PID_Kd_gain) # aggiorno la visualizzazione
 
     def _load_all_parameters(self):
         if os.path.exists(self.parameters_file_path):
@@ -1480,6 +1540,9 @@ class MainSoftwareThread(QtCore.QThread):
                     reference=0.0,
                     output_min=float("-inf"),
                     output_max=float("inf")):
+            
+            # Current value - valore che viene dal feedback
+            self.current_value = 0.0
 
             # Gains
             self.kp = kp
@@ -1511,6 +1574,15 @@ class MainSoftwareThread(QtCore.QThread):
             self.kp = kp
             self.ki = ki
             self.kd = kd
+            
+        def set_gain_Kp(self, value):
+            self.kp = value
+            
+        def set_gain_Ki(self, value):
+            self.ki = value
+            
+        def set_gain_Kd(self, value):
+            self.kd = value
 
         def set_reference_value(self, ref_value):
             self.reference = ref_value
@@ -1533,7 +1605,7 @@ class MainSoftwareThread(QtCore.QThread):
         # --------------------------
         # Update cycle
         # --------------------------
-        def update(self, current_value, dt_threshold):
+        def update(self, current_value_loc, dt_threshold):
             """
             Compute PID output with automatic dt measurement,
             clamping, and anti-windup.
@@ -1545,6 +1617,7 @@ class MainSoftwareThread(QtCore.QThread):
 
             # ---- Calculate dt automatically ----
             if self.last_time is None:
+                self.last_time = now
                 dt = 0.0  # first call; no action possible
             else:
                 dt = now - self.last_time
@@ -1565,7 +1638,9 @@ class MainSoftwareThread(QtCore.QThread):
             else: # AUTO  
                 pass 
 
-            error = self.reference - current_value
+            self.current_value = current_value_loc
+            error = self.reference - self.current_value
+            print(error)
 
             # ----- Derivative term -----
             if self.prev_error is None or dt == 0:
@@ -1597,8 +1672,11 @@ class MainSoftwareThread(QtCore.QThread):
 
             return True
 
+        def get_current_value(self):
+            return self.current_value    
+        
         def get_output(self):
-            return self.output    
+            return self.output 
 
         def get_output_for_arduino(self):
             """
@@ -2144,7 +2222,9 @@ class MainWindow(QtWidgets.QMainWindow):
             self.ui.evalveAUTO_radioBtn,
             self.ui.evalveON_radioBtn,
             self.ui.removeErrors_from_T_plots,
-            self.ui.removeErrors_from_H_plots
+            self.ui.removeErrors_from_H_plots,
+            self.ui.hysteresisActive_radioBtn,
+            self.ui.PIDActive_radioBtn
         ]
         for radio_button in radio_buttons:
             radio_button.toggled.connect(lambda state, btn=radio_button: self.emit_radio_button_signal(btn.objectName(), state))
@@ -2164,6 +2244,12 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui.maxHysteresisValue_waterLevelControl_spinBox.valueChanged.connect(lambda value: self.emit_float_spinbox_signal(self.ui.maxHysteresisValue_waterLevelControl_spinBox.objectName(), value))
         self.ui.minHysteresisValue_waterLevelControl_spinBox.valueChanged.connect(lambda value: self.emit_float_spinbox_signal(self.ui.minHysteresisValue_waterLevelControl_spinBox.objectName(), value))
         
+        # PID control
+        self.ui.setPointTemperature_PID_spinBox.valueChanged.connect(lambda value: self.emit_float_spinbox_signal(self.ui.setPointTemperature_PID_spinBox.objectName(), value))
+        self.ui.Kp_spinBox.valueChanged.connect(lambda value: self.emit_float_spinbox_signal(self.ui.Kp_spinBox.objectName(), value))
+        self.ui.Ki_spinBox.valueChanged.connect(lambda value: self.emit_float_spinbox_signal(self.ui.Ki_spinBox.objectName(), value))
+        self.ui.Kd_spinBox.valueChanged.connect(lambda value: self.emit_float_spinbox_signal(self.ui.Kd_spinBox.objectName(), value))
+        
         # Connect to send initialization values to the mainSoftwareThread
         self.emit_initialization_values(self.ui.maxHysteresisValue_temperature_spinBox.objectName(), self.ui.maxHysteresisValue_temperature_spinBox.value())
         self.emit_initialization_values(self.ui.minHysteresisValue_temperature_spinBox.objectName(), self.ui.minHysteresisValue_temperature_spinBox.value())
@@ -2174,6 +2260,11 @@ class MainWindow(QtWidgets.QMainWindow):
         self.emit_initialization_values(self.ui.maxHysteresisValue_waterLevelControl_spinBox.objectName(), self.ui.maxHysteresisValue_waterLevelControl_spinBox.value())
         self.emit_initialization_values(self.ui.minHysteresisValue_waterLevelControl_spinBox.objectName(), self.ui.minHysteresisValue_waterLevelControl_spinBox.value())
         
+        # PID control
+        self.emit_initialization_values(self.ui.setPointTemperature_PID_spinBox.objectName(), self.ui.setPointTemperature_PID_spinBox.value())
+        self.emit_initialization_values(self.ui.Kp_spinBox.objectName(), self.ui.Kp_spinBox.value())
+        self.emit_initialization_values(self.ui.Ki_spinBox.objectName(), self.ui.Ki_spinBox.value())
+        self.emit_initialization_values(self.ui.Kd_spinBox.objectName(), self.ui.Kd_spinBox.value())
         
         # signaling that ManWindow initialization procedure has been completed
         self.initialization_done.emit("GUI_initialization_procedure", True)
@@ -2221,6 +2312,9 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.ui.evalveStatus.setText(f"Filling Water ON!")
             else:
                 self.ui.evalveStatus.setText(f"OFF")
+            self.ui.PID_CurrentValue.setText(f"{all_data[14]} °C")
+            self.ui.PID_DutyCycle.setText(f"{all_data[15]} %")
+            
             #self.ui.temperature4_2.setText(f"{all_data[3]} °C") PER TEMPERATURA DA UMIDITA
             
     def update_statistics_data(self, all_data):
