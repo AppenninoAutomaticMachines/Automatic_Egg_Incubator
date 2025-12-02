@@ -2144,7 +2144,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.ui.evalveAUTO_radioBtn,
             self.ui.evalveON_radioBtn,
             self.ui.removeErrors_from_T_plots,
-            self.ui.removeErrors_from_H_plots,
+            self.ui.removeErrors_from_H_plots
         ]
         for radio_button in radio_buttons:
             radio_button.toggled.connect(lambda state, btn=radio_button: self.emit_radio_button_signal(btn.objectName(), state))
@@ -2173,6 +2173,7 @@ class MainWindow(QtWidgets.QMainWindow):
         
         self.emit_initialization_values(self.ui.maxHysteresisValue_waterLevelControl_spinBox.objectName(), self.ui.maxHysteresisValue_waterLevelControl_spinBox.value())
         self.emit_initialization_values(self.ui.minHysteresisValue_waterLevelControl_spinBox.objectName(), self.ui.minHysteresisValue_waterLevelControl_spinBox.value())
+        
         
         # signaling that ManWindow initialization procedure has been completed
         self.initialization_done.emit("GUI_initialization_procedure", True)
