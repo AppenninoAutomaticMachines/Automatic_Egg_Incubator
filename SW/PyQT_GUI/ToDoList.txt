@@ -11,6 +11,7 @@ PC817 circuitry
 
 
 DA FARE:
+- mentre gira il motore non leggere il peso, perché richiede molto tempo. 
 - continuare gestione PID: GUI + verifica + lato arduino
 - calibrazione della bilancia
 - weight control per acqua
