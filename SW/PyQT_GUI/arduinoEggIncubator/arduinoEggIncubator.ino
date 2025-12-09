@@ -68,9 +68,6 @@ bool deviceOrderingActive = true; // di base prova ad ordinare con i sensori che
 float marginFactor = 5; // fattore moltiplicativo per aspettare un po' più di delay.
 unsigned long startGetTemperatures, endGetTemperatures;
 
-// INCUBATOR
-#define TEMPERATURE_IDENTIFICATION_PROCEDURE true // se a true visualizzazione nel monitor seriale della temperatura e del sensore associato
-
 OneWire oneWire(ONE_WIRE_BUS);
 DallasTemperature sensors(&oneWire);
 DeviceAddress Thermometer[NUMBER_OF_TEMPERATURES_SENSORS_ON_ONE_WIRE_BUS];
@@ -167,6 +164,30 @@ int32_t calibration_offset = -79845;
 */
 float calibration_scale = 420.0f; // to be extra explicit: In Arduino/C/C++, the f at the end of a number makes it a float literal instead of a double. .f tells the compiler the number is a float.
 float waterWeight;
+float waterWeight_prev; // MEMORIA: ricorda il valore precedente, per streammare in uscita l'ultimo valore misurato
+
+/*
+  La lettura del sensore è decisamente molto lunga, in termini di tempo. Quindi se leggiamo il peso mentre il motore gira si vede molto l'interruzione del treno di step a causa della lettura.
+  Sicuramente non posso fare una lettura del peso in simultanea con la temperatura. 
+  E' necessario fare delle letture molto meno frequenti (magari con una periodicità multipla rispetto alle letture di temperatura).
+
+  09/12/2025
+  Faccio così: la lettura delle temperature avviene circa a 2 Hz.
+  Metto qui una variabile che conta quante letture di temperature vengono fatte. Una volta ogni n letture di temperature, allora faccio anche la lettura del peso.
+  Siccome devo comunque inviare in uscita un valore di peso (per la comunicazione seriale) mando l'ultimo più aggiornato.
+
+  Per evitare che la lettura del peso influenzi la rotazione, prendo questa contromisura:
+  1) SE IL MOTORE FUNZIONA --> saturazione alla lettura massima di 5.0 kg: così RPY se ne accorge e lui stesso comanda a FALSE l'elettrovalvola. Nello stesso momento, bypasso la chiamata
+    alla lettura dell'adc (per risparmiare tempo) + metto in sleep mode.
+  2) SE IL MOTORE SI FERMA --> riprendo la lettura normale a n Hz (multiplo intero della lettura delle temperature), così RPY si ribecca e decide se deve aprire l'elettrovalvola o no.
+
+*/
+
+int temperatureReadings_limitForWeightMeasurement = 5; /* variabile che dice ogni quante letture di temperatura dobbiamo fare una lettura del peso
+                                                          ES. limite 5 letture  *  0.5 s/lettura = 2.5s intervallo di tempo fra due letture di peso */
+int temperatureReadings_counter = 0;
+bool enable_weightMeasurement = false;
+float waterWeight_saturated = 5.0; // 5.0 kg LIMIT VALUE for this load cell                                                       
 /* END HX711 WEIGHT CONTROL LOAD CELL */
 
 
@@ -482,13 +503,29 @@ void loop() {
     lastTempRequest = millis();
     endGetTemperatures = millis();
 
-    /* ADDING HERE ALSO WATER SCALE READING */
-    //scale.power_up();	
-    //waterWeight = scale.get_units(5);
-    //waterWeight = round(waterWeight * 10.0) / 10.0; // arrotondamento ad una cifra decimale
-    //scale.power_down();	
+    temperatureReadings_counter ++;
   }   
   /* END TEMPERATURES SECTION */
+
+  /* HX 711 WATER WEIGHT MEASUREMENT - LOAD CELL */
+  if (temperatureReadings_counter >= temperatureReadings_limitForWeightMeasurement){
+    // ogni n letture di temperatura abilitiamo la lettura del peso
+    temperatureReadings_counter = 0; // reset counter
+
+    // prima di leggere, fare un check se il motore sta andando o no.
+    enable_weightMeasurement = !(eggsTurnerStepperMotor.isMovingBackward() || eggsTurnerStepperMotor.isMovingForward()); // The line sets enable_weightMeasurement to true only when the stepper motor is NOT moving.
+    if (enable_weightMeasurement){
+      // motore non va, allora possiamo leggere il dato dall'ADC (MOLTO TIME CONSUMING!)
+      scale.power_up();	
+      waterWeight = scale.get_units(5);
+      waterWeight = round(waterWeight * 10.0) / 10.0; // arrotondamento ad una cifra decimale
+      scale.power_down();
+    }
+    else{
+      // il motore sta funzionando: saturazione a 5.0 kg + esclusione del codice di lettura della load cell.
+      waterWeight = waterWeight_saturated;
+    }
+  }    
 
   /* DHT22 HUMIDITY SENSOR */
   /* DHT22 sensor */    
