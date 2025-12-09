@@ -1,4 +1,9 @@
 RICARICA TUTTO! MODIFICATO ANCHE ARDUINO
+verificare lettura peso periodica e che non influenza il mtoore
+verificare salvataggio dei dati per general purpose
+verificare invio meno invasivo del pwm
+verificare che con PID attivo posso comunque comandare manualmente il relè
+
 
 
 VIDEO:
@@ -11,6 +16,7 @@ PC817 circuitry
 
 
 DA FARE:
+- persistente il radio button del PID, perché se spengo in PID devo ripartire in PID
 - mentre gira il motore non leggere il peso, perché richiede molto tempo. 
 - continuare gestione PID: GUI + verifica + lato arduino
 - calibrazione della bilancia
