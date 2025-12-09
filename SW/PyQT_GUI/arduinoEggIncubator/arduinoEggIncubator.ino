@@ -164,8 +164,6 @@ int32_t calibration_offset = -79845;
 */
 float calibration_scale = 420.0f; // to be extra explicit: In Arduino/C/C++, the f at the end of a number makes it a float literal instead of a double. .f tells the compiler the number is a float.
 float waterWeight;
-float waterWeight_prev; // MEMORIA: ricorda il valore precedente, per streammare in uscita l'ultimo valore misurato
-
 /*
   La lettura del sensore è decisamente molto lunga, in termini di tempo. Quindi se leggiamo il peso mentre il motore gira si vede molto l'interruzione del treno di step a causa della lettura.
   Sicuramente non posso fare una lettura del peso in simultanea con la temperatura. 
