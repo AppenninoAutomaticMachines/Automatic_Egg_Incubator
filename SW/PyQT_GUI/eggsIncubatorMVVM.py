@@ -1071,10 +1071,22 @@ class MainSoftwareThread(QtCore.QThread):
                 print("Ciao")
                 # Arduino-friendly PWM value
                 self.pwm = self.pid_temperature.get_output_for_arduino()
+
+                PWM_DELTA_THRESHOLD = 0.5   # soglia di variazione minima - robustezza alla variazione per i FLOAT
+
+                last = getattr(self, "last_pwm_sent", None) # al primo giro last_pwm_sent non esiste, quindi restituisce None e il primo comando verrà inviato. 
+                                                            # Da qui in poi last_pwm_sent esiste e viene assegnato
                 
+                # Controllo variazione significativa
+                if last is None or abs(self.pwm - last) >= PWM_DELTA_THRESHOLD:
+                    self.queue_command("PWM01", self.pwm)
+                    self.main_software_thread_log_message('INFO', f"⚙️ Heater PWM value sent: {self.pwm}")
+                    self.last_pwm_sent = self.pwm
+                '''
                 # in questo modo inviamo ad Arduino un comando al secondo....dovrebbe essere ok da gestire.
                 self.queue_command("PWM01", self.pwm)
                 self.main_software_thread_log_message('INFO', f"⚙️ Heater PWM value sent: {self.pwm}")
+                '''
 
         # === Hysteresis temperature controller is active === #
         ''' NOTA: lui cicla sempre!
