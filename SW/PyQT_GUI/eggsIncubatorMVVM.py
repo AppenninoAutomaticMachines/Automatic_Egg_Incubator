@@ -409,6 +409,9 @@ class MainSoftwareThread(QtCore.QThread):
         
         self.saving_interval = 1 # default: every minute
         self.last_saving_time = datetime.now()
+
+        self.saving_interval_generalPurposeSaving = 1 # default: every second
+        self.last_saving_time_generalPurposeSaving = datetime.now()
         self.arduino_readings_timestamp  = time.time() # per ricordarmi l'istante di tempo in cui arduino manda i dati
         
         self.command_list = [] # List to hold the pending commands
@@ -426,6 +429,7 @@ class MainSoftwareThread(QtCore.QThread):
         
         # TEMPERATURE CONTROLLER
         # Constants
+        self.configured_heater_power = 20; # WATT
         self.INVALID_VALUES = [-127.0, 85.0]  # Known error values
         self.THRESHOLD = 0.5  # Acceptable variation from the valid range
         self.VALID_RANGE_TEMPERATURE = (5.0, 45.0)  # Expected temperature range
@@ -508,6 +512,10 @@ class MainSoftwareThread(QtCore.QThread):
         water_weight_actuator_folder_path = os.path.join(machine_statistics_folder_path, 'Water_Weight')
         if not os.path.exists(water_weight_actuator_folder_path):
             os.makedirs(water_weight_actuator_folder_path)
+
+        general_purpose_folder_path = os.path.join(machine_statistics_folder_path, 'General_Purpose')
+        if not os.path.exists(general_purpose_folder_path):
+            os.makedirs(general_purpose_folder_path)
             
         # Create a Log folder if it doesn't exist
         self.main_software_thread_log_folder_path = os.path.join(script_dir, 'MainSoftwareThread_Log')
@@ -1048,11 +1056,10 @@ class MainSoftwareThread(QtCore.QThread):
             
             if not _values:
                 self.pid_temperature.set_control_mode("forceOFF") # FOR SAFETY!! no values in input, means no good temperatures are passed, then OFF the actuator
+                _mean_value = 0.0 # va popolato comuque! perché viene usato dopo...
             else:   
-                self.pid_temperature.set_control_mode("AUTO")    
-
-                # Calculate the mean of the values
-                _mean_value = round(sum(_values) / len(_values), 1)
+                self.pid_temperature.set_control_mode("AUTO")                    
+                _mean_value = round(sum(_values) / len(_values), 1) # Calculate the mean of the values
 
             if self.pid_temperature.update(_mean_value, dt_threshold = 2):
                 """
@@ -1069,34 +1076,38 @@ class MainSoftwareThread(QtCore.QThread):
                 self.queue_command("PWM01", self.pwm)
                 self.main_software_thread_log_message('INFO', f"⚙️ Heater PWM value sent: {self.pwm}")
 
+        # === Hysteresis temperature controller is active === #
+        ''' NOTA: lui cicla sempre!
+        1) perché così a video vedo cosa farebbe lui/vedo la sua temperatura di controllo aggiornarsi col valore medio
+        2) posso usare i comandi di force ON/OFF, utile questa cosa per fare l'identificazione del modello termico dell'incubatrice 
+            (a patto di attivare PID + cablare heater sull'uscita del RELE' e non dell'SSR)
+            2.1) questo mi permette di loggare nel file quando va/non va il riscaldatore e quindi fare opportuna identificazione del modello
+        '''
+        self.thc.update(filtered_temperatures)
+        #print(list(current_temperatures.values()))
 
-        else:
-            # === Hysteresis temperature controller is active === #
-            self.thc.update(filtered_temperatures)
-            #print(list(current_temperatures.values()))
+        '''
+            chatGPT: adding debounce logic.
+            La scelta migliore è implementarlo nel codice che controlla l’output dell’heater, non all’interno della classe Heater
+            La classe Heater dovrebbe occuparsi solo del controllo logico / PID.
+            La decisione di inviare o meno un comando sulla seriale è una responsabilità applicativa, 
+            quindi deve stare nel codice che usa Heater, cioè fuori da essa, per mantenere una buona separazione delle responsabilità (principio SOLID: Single Responsibility).
+        '''
+        current_state = self.thc.get_output_control()
 
-            '''
-                chatGPT: adding debounce logic.
-                La scelta migliore è implementarlo nel codice che controlla l’output dell’heater, non all’interno della classe Heater
-                La classe Heater dovrebbe occuparsi solo del controllo logico / PID.
-                La decisione di inviare o meno un comando sulla seriale è una responsabilità applicativa, 
-                quindi deve stare nel codice che usa Heater, cioè fuori da essa, per mantenere una buona separazione delle responsabilità (principio SOLID: Single Responsibility).
-            '''
-            current_state = self.thc.get_output_control()
+        if current_state != self._last_output_state_thc:
+            self._last_output_change_time_thc = time.time()
+            self._last_output_state_thc = current_state
 
-            if current_state != self._last_output_state_thc:
-                self._last_output_change_time_thc = time.time()
-                self._last_output_state_thc = current_state
-
-            # Se è cambiato e il nuovo stato è stabile da X secondi
-            if (
-                self._last_output_state_thc != self._debounced_heater_output_thc and
-                self._last_output_change_time_thc is not None and
-                (time.time() - self._last_output_change_time_thc) >= self._debounce_duration
-            ):
-                self._debounced_heater_output_thc = self._last_output_state_thc
-                self.queue_command("HTR01", self._debounced_heater_output_thc)
-                self.main_software_thread_log_message('INFO', f"⚙️ Debounced Heater state sent: {self._debounced_heater_output_thc}")
+        # Se è cambiato e il nuovo stato è stabile da X secondi
+        if (
+            self._last_output_state_thc != self._debounced_heater_output_thc and
+            self._last_output_change_time_thc is not None and
+            (time.time() - self._last_output_change_time_thc) >= self._debounce_duration
+        ):
+            self._debounced_heater_output_thc = self._last_output_state_thc
+            self.queue_command("HTR01", self._debounced_heater_output_thc)
+            self.main_software_thread_log_message('INFO', f"⚙️ Debounced Heater state sent: {self._debounced_heater_output_thc}")
 
         # Check for persistent errors
         self.check_errors(current_temperatures)               
@@ -1230,6 +1241,35 @@ class MainSoftwareThread(QtCore.QThread):
                 
                 end_time = time.perf_counter()
                 #print(f"Time requested for saving data [milli-seconds]: {(end_time - start_time)*1000}")
+
+        # GENERAL PURPOSE savings: may need to have a different saving time intervals
+        '''
+            For example, in case of thermal system identification procedure I need to probe the system temperature @ 0.1Hz - 1Hz, that is, in the most demanding case, 
+            1x saving every second (that is much more frequent that once every minute of the previous case).
+            So I need to use another branch.
+
+        '''
+        time_difference_generalPurposeSaving = datetime.now() - self.last_saving_time_generalPurposeSaving
+        if (time_difference_generalPurposeSaving >= timedelta(seconds = self.last_saving_time_generalPurposeSaving)):
+            
+            # GENERAL_PURPOSE_1: IDENTIFICAZIONE DEL MODELLO TERMICO DELL'INCUBATRICE
+            if self.pid_temperature_is_activated:
+                ''' 
+                    Questa parte mi serve per salvare i dati per fare l'identificazione del modello termico dell'incubatrice.
+                    Avrò bisogno di salvare la temperatura media, che mi sono creato quando è attivo il PID. Allora, anziché ricostruirmela ancora, 
+                    la prendo direttamente da lì. Per quello condiziono questa parte con lo stesso flag che crea quella variabile.                    
+                    Se dovessi aver bisogno di altri general purpose, allora li farò dedicati volta per volta
+                '''
+                #{'PWR': 20.0, 'T': 23.1, 'Tamb': 12.5, 'HEATER_STATUS': 0}
+                general_purpose_list = {
+                    "PWR": self.configured_heater_power,
+                    "T": _mean_value,
+                    "Tamb": current_external_temperature.values(),
+                    "HTR_STATE": self.thc.get_output_control()
+                }
+                self.save_data_to_files('General_Purpose', general_purpose_list)
+                self.last_saving_time_generalPurposeSaving = datetime.now()
+                self.main_software_thread_log_message('SAVING', f"General Purpose Saved data! {self.last_saving_time_generalPurposeSaving}")
 
     def write_log_section_header(self):
         """
