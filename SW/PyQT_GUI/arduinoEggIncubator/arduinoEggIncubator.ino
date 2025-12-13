@@ -9,6 +9,7 @@
 
 
 /* General CONSTANTS */
+#define SERIAL_PRINT_CHECK false
 #define SERIAL_SPEED 115200
 #define NUMBER_OF_TEMPERATURES_SENSORS_ON_ONE_WIRE_BUS 4 //sensori di temperatura
 #define DEFAULT_DEBOUNCE_TIME 25 //ms
@@ -66,7 +67,7 @@ bool serial_communication_is_ok = false;
 // GENERAL
 bool deviceOrderingActive = true; // di base prova ad ordinare con i sensori che conosciamo.
 float marginFactor = 5; // fattore moltiplicativo per aspettare un po' più di delay.
-unsigned long startGetTemperatures, endGetTemperatures;
+unsigned long startGetTemperatures;
 
 OneWire oneWire(ONE_WIRE_BUS);
 DallasTemperature sensors(&oneWire);
@@ -180,12 +181,11 @@ float waterWeight;
   2) SE IL MOTORE SI FERMA --> riprendo la lettura normale a n Hz (multiplo intero della lettura delle temperature), così RPY si ribecca e decide se deve aprire l'elettrovalvola o no.
 
 */
+const unsigned long waterWeight_timeInterval = 10000; // measure every 10s
+unsigned long last_waterWeight_measurementTime; 
 
-int temperatureReadings_limitForWeightMeasurement = 5; /* variabile che dice ogni quante letture di temperatura dobbiamo fare una lettura del peso
-                                                          ES. limite 5 letture  *  0.5 s/lettura = 2.5s intervallo di tempo fra due letture di peso */
-int temperatureReadings_counter = 0;
 bool enable_weightMeasurement = false;
-float waterWeight_saturated = 5.0; // 5.0 kg LIMIT VALUE for this load cell                                                       
+float waterWeight_saturated = 5000.0; // 5000.0 grams = 5.0 kg LIMIT VALUE for this load cell                                                       
 /* END HX711 WEIGHT CONTROL LOAD CELL */
 
 
@@ -221,6 +221,10 @@ char bufferChar[35];
 char fbuffChar[10];
 
 String receivedCommands[20];
+
+
+
+unsigned long last_cycle_time, cycle_time;
 
 
 void setup() {
@@ -350,6 +354,12 @@ void setup() {
 
   last_serial_alive_time = millis();
   dht.begin();
+
+  cycle_time = millis();
+  last_cycle_time = cycle_time;
+
+  last_waterWeight_measurementTime = millis();
+  waterWeight = waterWeight_saturated; // initialization: otherwise first waterWeight comes 10s after startup, then would be 0g.
 }
 
 void loop() {    
@@ -472,6 +482,10 @@ void loop() {
   */
   if(millis() - lastTempRequest >= (conversionTime_DS18B20_sensors * marginFactor)){
     startGetTemperatures = millis(); // per calcolare quanto tempo impiego a fetchare tutte le temperature dai sensori.
+    if (SERIAL_PRINT_CHECK){
+      Serial.print("Time passed btw two T readings: ");
+      Serial.print(millis()-lastTempRequest);
+    }
     for(uint8_t index = 0; index < numberOfDevices; index++){
       /* Memorize all temperatures in an ordered array */
       temperatures[index] = sensors.getTempC(Thermometer[index]);
@@ -499,25 +513,28 @@ void loop() {
     }      
 
     lastTempRequest = millis();
-    endGetTemperatures = millis();
 
-    temperatureReadings_counter ++;
+    if (SERIAL_PRINT_CHECK){
+      Serial.print(" Time needed to read temperatures: ");
+      Serial.println(lastTempRequest - startGetTemperatures);
+    }
   }   
   /* END TEMPERATURES SECTION */
 
   /* HX 711 WATER WEIGHT MEASUREMENT - LOAD CELL */
-  if (temperatureReadings_counter >= temperatureReadings_limitForWeightMeasurement){
-    // ogni n letture di temperatura abilitiamo la lettura del peso
-    temperatureReadings_counter = 0; // reset counter
+  if ((millis() - last_waterWeight_measurementTime) >= waterWeight_timeInterval){
+    // ogni 10s leggiamo la cella di carico
 
     // prima di leggere, fare un check se il motore sta andando o no.
-    enable_weightMeasurement = !(eggsTurnerStepperMotor.isMovingBackward() || eggsTurnerStepperMotor.isMovingForward()); // The line sets enable_weightMeasurement to true only when the stepper motor is NOT moving.
+    // NOTA: abilitiamo la letura del peso ok ua volta ogni 10, ma anche in fase con la lettura delle temperature
+    enable_weightMeasurement = (!(eggsTurnerStepperMotor.isMovingBackward() || eggsTurnerStepperMotor.isMovingForward())) && gotTemperatures; // The line sets enable_weightMeasurement to true only when the stepper motor is NOT moving.
     if (enable_weightMeasurement){
       // motore non va, allora possiamo leggere il dato dall'ADC (MOLTO TIME CONSUMING!)
       scale.power_up();	
       waterWeight = scale.get_units(5);
       waterWeight = round(waterWeight * 10.0) / 10.0; // arrotondamento ad una cifra decimale
       scale.power_down();
+      last_waterWeight_measurementTime = millis();
     }
     else{
       // il motore sta funzionando: saturazione a 5.0 kg + esclusione del codice di lettura della load cell.
@@ -749,6 +766,13 @@ void loop() {
   }
   listofDataToSend_numberOfData = 0;
 
+  if (SERIAL_PRINT_CHECK){
+    cycle_time = millis() - last_cycle_time;
+    last_cycle_time = millis();
+    if (cycle_time > 20){
+        Serial.println(cycle_time);
+    }    
+  }
   delay(1);
 
   /* reset command section */
