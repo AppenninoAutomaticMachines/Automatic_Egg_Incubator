@@ -15,6 +15,7 @@ from collections import deque
 import uuid
 import json
 import shutil
+import math
 
 '''
     SALVATAGGIO DEI PARAMETRI:
@@ -1035,6 +1036,13 @@ class MainSoftwareThread(QtCore.QThread):
         current_external_temperature = {k: v for d in new_data for k, v in d.items() if k.startswith("EXTT")} #{'EXTT': 25.2}
         current_weight = {k: v for d in new_data for k, v in d.items() if k.startswith("WGT")} 
         
+        '''
+        MI dimentico sempre il formato dei dati, ecco un print:
+        #print(list(current_temperatures.values()))  [11.9, 11.6, 11.3, 11.1]
+        #print(current_temperatures) {'TMP01': 11.9, 'TMP02': 11.6, 'TMP03': 11.3, 'TMP04': 11.1}
+        #print(type(current_temperatures)) <class 'dict'>
+        '''
+        
         
         # TEMPERATURE CONTROLLER SECTION
         # faccio l'update qui: ogni votla che arrivano dati nuovi li elaboro, anche nel controllore
@@ -1096,7 +1104,9 @@ class MainSoftwareThread(QtCore.QThread):
             2.1) questo mi permette di loggare nel file quando va/non va il riscaldatore e quindi fare opportuna identificazione del modello
         '''
         self.thc.update(filtered_temperatures)
-        #print(list(current_temperatures.values()))
+        #print(list(current_temperatures.values()))  [11.9, 11.6, 11.3, 11.1]
+        #print(current_temperatures) {'TMP01': 11.9, 'TMP02': 11.6, 'TMP03': 11.3, 'TMP04': 11.1}
+        #print(type(current_temperatures)) <class 'dict'>
 
         '''
             chatGPT: adding debounce logic.
@@ -1144,7 +1154,9 @@ class MainSoftwareThread(QtCore.QThread):
             self.main_software_thread_log_message('INFO', f"⚙️ Debounced Humidifier state sent: {self._debounced_heater_output_hhc}")
         
         # WATER LEVEL CONTROL - CONTROLLER SECTION        
-        weights_kg = [round(w / 1000, 1) for w in list(current_weight.values())] # from grams to kg
+        #weights_kg = [round(w / 1000, 1) for w in list(current_weight.values())] # from grams to kg   - ROUNDING - non mi piace molto
+        weights_kg = [math.trunc(w / 1000 * 10) / 10 for w in current_weight.values()]
+        
         saturated_weights = self.saturate_values(weights_kg, self.VALID_RANGE_WATER_LEVEL)
         self.whc.update(saturated_weights)
         current_state = self.whc.get_output_control()
@@ -1273,13 +1285,13 @@ class MainSoftwareThread(QtCore.QThread):
                     Se dovessi aver bisogno di altri general purpose, allora li farò dedicati volta per volta
                 '''
                 #{'PWR': 20.0, 'T': 23.1, 'Tamb': 12.5, 'HEATER_STATUS': 0}
-                general_purpose_list = {
+                general_purpose_dict = {
                     "PWR": self.configured_heater_power,
-                    "T": _mean_value,
-                    "Tamb": current_external_temperature.values(),
+                    "T": self.pid_temperature.get_current_value(),
+                    "Tamb": current_external_temperature["EXTT"], # siccome sto creando un dict io a mano, qui devo estrarre il valore effettivo del sensore. Non è proprio uguale a sopra...
                     "HTR_STATE": self.thc.get_output_control()
                 }
-                self.save_data_to_files('General_Purpose', general_purpose_list)
+                self.save_data_to_files('General_Purpose', general_purpose_dict)
                 self.last_saving_time_generalPurposeSaving = datetime.now()
                 self.main_software_thread_log_message('SAVING', f"General Purpose Saved data! {self.last_saving_time_generalPurposeSaving}")
 
@@ -1359,6 +1371,8 @@ class MainSoftwareThread(QtCore.QThread):
             folder_path = os.path.join(machine_statistics_folder_path, 'Humidifier')
         elif data_type == 'Water_Weight':
             folder_path = os.path.join(machine_statistics_folder_path, 'Water_Weight')
+        elif data_type == 'General_Purpose':
+            folder_path = os.path.join(machine_statistics_folder_path, 'General_Purpose')
         else:
             raise ValueError("Invalid path configuration")	
             
