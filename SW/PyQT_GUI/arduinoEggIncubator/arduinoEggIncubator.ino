@@ -127,6 +127,7 @@ stepperMotor eggsTurnerStepperMotor(STEPPER_MOTOR_STEP_PIN, STEPPER_MOTOR_DIRECT
 
 bool move = false;
 bool direction = false; 
+bool stepperIsMoving = false;
 
 bool stepperMotor_moveCCW_automatic_var = false;
 bool stepperMotor_moveCW_automatic_var = false;
@@ -184,7 +185,6 @@ float waterWeight;
 const unsigned long waterWeight_timeInterval = 10000; // measure every 10s
 unsigned long last_waterWeight_measurementTime; 
 
-bool enable_weightMeasurement = false;
 float waterWeight_saturated = 5000.0; // 5000.0 grams = 5.0 kg LIMIT VALUE for this load cell                                                       
 /* END HX711 WEIGHT CONTROL LOAD CELL */
 
@@ -522,23 +522,21 @@ void loop() {
   /* END TEMPERATURES SECTION */
 
   /* HX 711 WATER WEIGHT MEASUREMENT - LOAD CELL */
-  if ((millis() - last_waterWeight_measurementTime) >= waterWeight_timeInterval){
-    // ogni 10s leggiamo la cella di carico
-
-    // prima di leggere, fare un check se il motore sta andando o no.
-    // NOTA: abilitiamo la letura del peso ok ua volta ogni 10, ma anche in fase con la lettura delle temperature
-    enable_weightMeasurement = (!(eggsTurnerStepperMotor.isMovingBackward() || eggsTurnerStepperMotor.isMovingForward())) && gotTemperatures; // The line sets enable_weightMeasurement to true only when the stepper motor is NOT moving.
-    if (enable_weightMeasurement){
-      // motore non va, allora possiamo leggere il dato dall'ADC (MOLTO TIME CONSUMING!)
-      scale.power_up();	
-      waterWeight = scale.get_units(5);
-      waterWeight = round(waterWeight * 10.0) / 10.0; // arrotondamento ad una cifra decimale
-      scale.power_down();
-      last_waterWeight_measurementTime = millis();
-    }
-    else{
-      // il motore sta funzionando: saturazione a 5.0 kg + esclusione del codice di lettura della load cell.
-      waterWeight = waterWeight_saturated;
+  if (stepperIsMoving){
+    waterWeight = waterWeight_saturated;
+  }
+  else{
+    if ((millis() - last_waterWeight_measurementTime) >= waterWeight_timeInterval){
+      // facciamo passare almeno 10s per la lettura della cella di carico
+      // NOTA: abilitiamo la letura del peso ok una volta ogni 10, ma anche in fase con la lettura delle temperature
+      if (gotTemperatures){
+        // motore non va, allora possiamo leggere il dato dall'ADC (MOLTO TIME CONSUMING!)
+        scale.power_up();	
+        waterWeight = scale.get_units(5);
+        waterWeight = round(waterWeight * 10.0) / 10.0; // arrotondamento ad una cifra decimale
+        scale.power_down();
+        last_waterWeight_measurementTime = millis();
+      }
     }
   }    
 
@@ -568,6 +566,7 @@ void loop() {
 
   /* STEPPER MOTOR CONTROL SECTION */
   eggsTurnerStepperMotor.periodicRun();
+  stepperIsMoving = eggsTurnerStepperMotor.isMovingBackward() || eggsTurnerStepperMotor.isMovingForward();
 
   
   // direzione oraria = forward = clock wise rotation direction (vista posteriore incubatrice)
