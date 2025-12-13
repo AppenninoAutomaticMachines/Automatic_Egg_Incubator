@@ -1262,7 +1262,7 @@ class MainSoftwareThread(QtCore.QThread):
 
         '''
         time_difference_generalPurposeSaving = datetime.now() - self.last_saving_time_generalPurposeSaving
-        if (time_difference_generalPurposeSaving >= timedelta(seconds = self.last_saving_time_generalPurposeSaving)):
+        if (time_difference_generalPurposeSaving >= timedelta(seconds = self.saving_interval_generalPurposeSaving)):
             
             # GENERAL_PURPOSE_1: IDENTIFICAZIONE DEL MODELLO TERMICO DELL'INCUBATRICE
             if self.pid_temperature_is_activated:
