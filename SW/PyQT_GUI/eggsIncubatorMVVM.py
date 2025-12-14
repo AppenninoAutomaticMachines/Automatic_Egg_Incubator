@@ -433,7 +433,7 @@ class MainSoftwareThread(QtCore.QThread):
         self.configured_heater_power = 0.158; # WATT
         self.INVALID_VALUES = [-127.0, 85.0]  # Known error values
         self.THRESHOLD = 0.5  # Acceptable variation from the valid range
-        self.VALID_RANGE_TEMPERATURE = (5.0, 45.0)  # Expected temperature range
+        self.VALID_RANGE_TEMPERATURE = (5.0, 80.0)  # Expected temperature range
         self.VALID_RANGE_HUMIDITY = (0.0, 100.0) # Expected humidity range
         self.VALID_RANGE_WATER_LEVEL = (0.0, 5.0) # Expected water level range
 
