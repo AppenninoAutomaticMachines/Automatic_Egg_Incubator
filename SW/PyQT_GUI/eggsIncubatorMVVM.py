@@ -430,7 +430,7 @@ class MainSoftwareThread(QtCore.QThread):
         
         # TEMPERATURE CONTROLLER
         # Constants
-        self.configured_heater_power = 20; # WATT
+        self.configured_heater_power = 0.158; # WATT
         self.INVALID_VALUES = [-127.0, 85.0]  # Known error values
         self.THRESHOLD = 0.5  # Acceptable variation from the valid range
         self.VALID_RANGE_TEMPERATURE = (5.0, 45.0)  # Expected temperature range
@@ -1076,7 +1076,6 @@ class MainSoftwareThread(QtCore.QThread):
                     # PID update will only actually compute if at least dt_threshold seconds have passed since the last update. This method returns True when update is done
                     In questo modo abbiamo un comando mandato verso arduino una volta ogni 2 secondi. SIcuramente sufficiente per calcolare correttametne l'output, considerando le dinamiche di temperatura
                 """
-                print("Ciao")
                 # Arduino-friendly PWM value
                 self.pwm = self.pid_temperature.get_output_for_arduino()
 
@@ -1291,6 +1290,12 @@ class MainSoftwareThread(QtCore.QThread):
                     "Tamb": current_external_temperature["EXTT"], # siccome sto creando un dict io a mano, qui devo estrarre il valore effettivo del sensore. Non è proprio uguale a sopra...
                     "HTR_STATE": self.thc.get_output_control()
                 }
+                
+                '''
+                    Formato di salvataggio del file:
+                        Timestamp,PWR,T,Tamb,HTR_STATE
+                        2025-12-14 10:16:54,0.158,0.0,11.8,False
+                '''
                 self.save_data_to_files('General_Purpose', general_purpose_dict)
                 self.last_saving_time_generalPurposeSaving = datetime.now()
                 self.main_software_thread_log_message('SAVING', f"General Purpose Saved data! {self.last_saving_time_generalPurposeSaving}")
