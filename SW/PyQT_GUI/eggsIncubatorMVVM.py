@@ -418,11 +418,35 @@ class MainSoftwareThread(QtCore.QThread):
         self.command_list = [] # List to hold the pending commands
 
         # === PID Controller with Automatic Timing === #
+        # SYSTEM PARAMETERS
+
+        '''
+        CHAT GPT
         self.pid_temperature = self.PIDController()
         self.pid_temperature.set_output_limits(0, 100)  # PID outputs 0–100%
         self.pid_temperature.set_reference_value(37.8) 
+        '''
+
+        # COPILOT       
+        Kp = 11.28
+        Ki = 0.000995    # [1/s]
+        Kd = 0.0         # non usiamo il derivativo
+        Ts = 1.0         # [s] ciclo PID
+        K_process = 271.62  # °C per unità (u in [0..1]) dal fit
+        Tamb = 12.7         # °C (aggiornalo se lo misuri)
+
+        pid = PIDController(kp=Kp, ki=Ki, kd=Kd,
+                            reference=37.8,
+                            output_min=0.0, output_max=1.0)
+
+        # Abilita il feedforward termico
+        pid.set_feedforward_params(K_process=K_process, ambient_value=Tamb, enable=True)
+
+
+
         self.pid_temperature_is_activated = False # by default hysteresis controller is active!
         self.pwm = 0 #value to store output for arduino 
+
         
         # State variables to handle inputs from MainWindow
         self.current_button = None # notifica del pulsante premuto
@@ -949,8 +973,9 @@ class MainSoftwareThread(QtCore.QThread):
             self.pid_temperature.set_gain_Kp(rounded_value)
             self.save_parameter('TEMPERATURE_PID_KP_GAIN', rounded_value)
         elif spinbox_name == "Ki_spinBox":
-            self.pid_temperature.set_gain_Ki(rounded_value)
-            self.save_parameter('TEMPERATURE_PID_KI_GAIN', rounded_value)
+            computed_value = rounded_value * 1e-4
+            self.pid_temperature.set_gain_Ki(computed_value)
+            self.save_parameter('TEMPERATURE_PID_KI_GAIN', computed_value)
         elif spinbox_name == "Kd_spinBox":
             self.pid_temperature.set_gain_Kd(rounded_value)
             self.save_parameter('TEMPERATURE_PID_KD_GAIN', rounded_value)
@@ -1037,7 +1062,7 @@ class MainSoftwareThread(QtCore.QThread):
         current_weight = {k: v for d in new_data for k, v in d.items() if k.startswith("WGT")} 
         
         '''
-        MI dimentico sempre il formato dei dati, ecco un print:
+        Mi dimentico sempre il formato dei dati, ecco un print:
         #print(list(current_temperatures.values()))  [11.9, 11.6, 11.3, 11.1]
         #print(current_temperatures) {'TMP01': 11.9, 'TMP02': 11.6, 'TMP03': 11.3, 'TMP04': 11.1}
         #print(type(current_temperatures)) <class 'dict'>
@@ -1069,7 +1094,9 @@ class MainSoftwareThread(QtCore.QThread):
                 self.pid_temperature.set_control_mode("AUTO")                    
                 _mean_value = round(sum(_values) / len(_values), 1) # Calculate the mean of the values
 
-            if self.pid_temperature.update(_mean_value, dt_threshold = 2):
+            pid_temperature.update_ambient(current_external_temperature["EXTT"])
+            updated = pid_temperature.update(current_value_loc=_mean_value, dt_threshold=Ts)
+            if updated:
                 """
                     Ricorda che se per qualche motivo il PID è settato forceOFF ok, _mean_value non verrà aggiornato, ma la classe del PID non considera più quel valore, perché
                     forza a 0 l'uscita e fa return diretto.
@@ -1606,6 +1633,7 @@ class MainSoftwareThread(QtCore.QThread):
             print(f"Errore durante il backup: {e}")
 
     # === PID Controller with Automatic Timing === #
+    ''' CHAT GPT
     class PIDController:
         def __init__(self, kp=0.0, ki=0.0, kd=0.0,
                     reference=0.0,
@@ -1768,6 +1796,219 @@ class MainSoftwareThread(QtCore.QThread):
 
             return pwm_value    
 
+    '''
+    # COPILOT PID CONTROLLER #
+    
+class PIDController:
+    def __init__(self, kp=0.0, ki=0.0, kd=0.0,
+                 reference=0.0,
+                 output_min=0.0,         # [0..1] per PWM
+                 output_max=1.0):        # [0..1] per PWM
+        
+        # Current value - valore che viene dal feedback
+        self.current_value = 0.0
+
+        # Gains (Ki espresso in [1/s])
+        self.kp = kp
+        self.ki = ki
+        self.kd = kd
+
+        # Setpoint
+        self.reference = reference
+
+        # Output limits (normalizzati: 0..1 -> PWM 0..255)
+        self.output_min = output_min
+        self.output_max = output_max
+
+        # Internal state
+        self.integral = 0.0
+        self.prev_error = None
+        self.prev_output = 0.0
+        self.output = 0.0
+
+        # Time tracking
+        self.last_time = None
+
+        # Modalità
+        self.forceON = False
+        self.forceOFF = False
+
+        # -----------------------------
+        # Feedforward termico
+        # -----------------------------
+        self.ff_enabled = False
+        self.K_process = 1.0      # °C per unità di comando (u in [0,1])
+        self.ambient_value = 0.0  # Tamb (°C)
+
+    # --------------------------
+    # Configuration methods
+    # --------------------------
+    def set_gains(self, kp, ki, kd):
+        self.kp = kp
+        self.ki = ki
+        self.kd = kd
+
+    def set_gain_Kp(self, value):
+        self.kp = value
+
+    def set_gain_Ki(self, value):
+        self.ki = value
+
+    def set_gain_Kd(self, value):
+        self.kd = value
+
+    def set_reference_value(self, ref_value):
+        self.reference = ref_value
+
+    def set_output_limits(self, min_value, max_value):
+        self.output_min = min_value
+        self.output_max = max_value
+
+    def set_control_mode(self, control_mode):
+        if control_mode == "forceON":
+            self.forceON = True
+            self.forceOFF = False
+        elif control_mode == "forceOFF":
+            self.forceON = False
+            self.forceOFF = True
+        elif control_mode == "AUTO":
+            # Bumpless transfer: ricalibra l'integrale per evitare salti
+            # Iterm = (output_desiderato - ff - Kp*e)/Ki
+            # se Ki==0, non toccare l'integrale
+            self.forceON = False
+            self.forceOFF = False
+            if self.ki > 0.0 and self.prev_error is not None:
+                ff = self._compute_feedforward()
+                desired_u = self.output  # resta dove sei
+                self.integral = max(self.output_min, min(self.output_max,
+                                    desired_u)) - ff - self.kp * self.prev_error
+                # L'integrale è in unità "u"; l'aggiornamento in update terrà conto di dt
+
+    def set_feedforward_params(self, K_process, ambient_value, enable=True):
+        """
+        Imposta i parametri del feedforward termico.
+        K_process: °C per unità (u in [0..1])
+        ambient_value: temperatura ambiente (°C)
+        enable: abilita/disabilita feedforward
+        """
+        self.K_process = float(K_process)
+        self.ambient_value = float(ambient_value)
+        self.ff_enabled = bool(enable)
+
+    def update_ambient(self, ambient_value):
+        """Aggiorna la temperatura ambiente in tempo reale (opzionale)."""
+        self.ambient_value = float(ambient_value)
+
+    # --------------------------
+    # Update cycle
+    # --------------------------
+    def update(self, current_value_loc, dt_threshold):
+        """
+        Compute PID+FF output con misura automatica di dt,
+        clamping e anti-windup.
+        
+        dt_threshold = secondi → il PID aggiorna solo se sono passati almeno dt_threshold secondi.
+        """
+
+        now = time.time()
+
+        # ---- Calculate dt automatically ----
+        if self.last_time is None:
+            self.last_time = now
+            dt = 0.0  # first call; no action possible
+        else:
+            dt = now - self.last_time
+
+        # Only proceed if enough time has passed
+        if dt < dt_threshold:
+            # Non abbastanza tempo: ritorna output precedente
+            return False
+
+        self.last_time = now
+
+        # Modalità manuali
+        if self.forceON:
+            self.output = self.output_max
+            self.prev_output = self.output
+            return True
+        elif self.forceOFF:
+            self.output = self.output_min
+            self.prev_output = self.output
+            return True
+        # altrimenti AUTO
+
+        # Feedback e errore
+        self.current_value = float(current_value_loc)
+        error = self.reference - self.current_value
+
+        # Salva per bumpless transfer
+        self.prev_error = error
+
+        # ----- Derivative term (KD può essere lasciato a 0) -----
+        if dt <= 0 or self.prev_error is None:
+            derivative = 0.0
+        else:
+            # Derivata sull'errore (attenzione al rumore del sensore)
+            derivative = (error - self.prev_error) / dt
+
+        # ----- Feedforward termico -----
+        ff = self._compute_feedforward()
+
+        # ----- Integral term (condizionale per anti-windup) -----
+        # integriamo dopo aver verificato saturazione più avanti
+
+        # Uscita non clippata (posizionale): FF + P + I + D
+        raw_output_noI = ff + self.kp * error + self.kd * derivative
+        raw_output = raw_output_noI + self.ki * self.integral
+
+        # Clamping
+        clamped_output = max(self.output_min, min(raw_output, self.output_max))
+        saturated = (clamped_output != raw_output)
+
+        # Anti-windup: integra solo se non saturo
+        # oppure se l'integrazione spinge fuori dalla saturazione
+        if dt > 0:
+            if (not saturated):
+                self.integral += error * dt
+            else:
+                # se saturo alto e l'errore è negativo, o saturo basso e l'errore è positivo, integra
+                if (raw_output > self.output_max and error < 0) or \
+                   (raw_output < self.output_min and error > 0):
+                    self.integral += error * dt
+                # altrimenti non integra (condizionale)
+
+        # Ricalcolo output con integrale aggiornato
+        raw_output = raw_output_noI + self.ki * self.integral
+        self.output = max(self.output_min, min(raw_output, self.output_max))
+        self.prev_output = self.output
+
+        return True
+
+    # --------------------------
+    # Helpers
+    # --------------------------
+    def _compute_feedforward(self):
+        if not self.ff_enabled or self.K_process <= 0.0:
+            return 0.0
+        # u_ff = (Tsp - Tamb) / K_process  → clamp [0..1]
+        u_ff = (self.reference - self.ambient_value) / self.K_process
+        return max(self.output_min, min(u_ff, self.output_max))
+
+    def get_current_value(self):
+        return self.current_value    
+
+    def get_output(self):
+        return self.output
+
+    def get_output_for_arduino(self):
+        """
+        Converte l'uscita normalizzata [0..1] in PWM 0–255 per Arduino.
+        Usa i limiti output_min/output_max per scalare.
+        """
+        output_clamped = max(self.output_min, min(self.output, self.output_max))
+        pwm_value = int(round((output_clamped - self.output_min) /
+                              (self.output_max - self.output_min) * 255.0))
+               pwm_value = max(0, min(pwm_value, 255))
 
 
     class HysteresisController:
