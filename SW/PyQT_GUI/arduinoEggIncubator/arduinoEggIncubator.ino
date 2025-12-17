@@ -107,7 +107,14 @@ unsigned int deviceError_externalTemperatureSensor;
 float temperature_externalTemperatureSensor; 
 /* END TEMPERATURES SECTION */
 
+/* HEATER SECTION */
+// PWM con time proportioning window
+const unsigned long WINDOW_MS = 5000; // Finestra di 10 s (consigliato: 5–10 s)
+const unsigned long FAILSAFE_MS = 30000;
 
+float u_cmd = 0.0f;                    // Duty normalizzato [0..1]
+unsigned long windowStart = 0;
+unsigned long lastCmdMs = 0;
 
 /* CCW_LS */
 antiDebounceInput ccw_inductor_input(CCW_INDUCTOR_PIN, DEFAULT_DEBOUNCE_TIME);
@@ -360,6 +367,9 @@ void setup() {
 
   last_waterWeight_measurementTime = millis();
   waterWeight = waterWeight_saturated; // initialization: otherwise first waterWeight comes 10s after startup, then would be 0g.
+
+  windowStart = millis();
+  lastCmdMs = millis();
 }
 
 void loop() {    
@@ -439,9 +449,24 @@ void loop() {
           }
         }
 
+        /* PER CASO CON PWM diretto e NON NORMALIZZATO 
         if (tag == "PWM01") {
           int pwm_value = value.toInt();
           analogWrite(HEATER_PWM_PIN, pwm_value);
+          // Sposta la generazione ACK qui, fuori dal parsing
+          if(uid.length() > 0){
+              pendingACK = "<" + tag + ", " + value + ", " + uid + ">";
+          }
+        }
+        */
+
+        if (tag == "PWM01") {
+          /* per caso in cui mi arriva da RPY il valore normalizzato [0..1]*/
+          float u = value.toFloat();
+          if (u < 0.0f) u = 0.0f;
+          if (u > 1.0f) u = 1.0f;
+
+          u_cmd = u;
           // Sposta la generazione ACK qui, fuori dal parsing
           if(uid.length() > 0){
               pendingACK = "<" + tag + ", " + value + ", " + uid + ">";
@@ -520,6 +545,18 @@ void loop() {
     }
   }   
   /* END TEMPERATURES SECTION */
+
+  /* HEATER SECTION */
+  unsigned long now = millis();
+
+  // --- Gestione finestra non-bloccante ---
+  if (now - windowStart >= WINDOW_MS) {
+    windowStart = now;
+  }
+  unsigned long onTime = (unsigned long)(u_cmd * WINDOW_MS);
+  bool heaterOn = ((now - windowStart) < onTime);
+  digitalWrite(HEATER_PWM_PIN, heaterOn ? HIGH : LOW);
+
 
   /* HX 711 WATER WEIGHT MEASUREMENT - LOAD CELL */
   if (stepperIsMoving){
