@@ -433,7 +433,7 @@ class MainSoftwareThread(QtCore.QThread):
         self.Ki = 0.000995    # [1/s]
         self.Kd = 0.0         # non usiamo il derivativo
         self.Ts = 1.0         # [s] ciclo PID
-        self.K_process = 271.62  # °C per unità (u in [0..1]) dal fit
+        self.K_process = 271.62  # °C per unità (u in [0..1]) dal fit - lavorare su questo per il ff
         self.Tamb = 12.7         # °C (aggiornalo se lo misuri)
 
         self.pid_temperature = self.PIDController(kp=self.Kp, ki=self.Ki, kd=self.Kd,
