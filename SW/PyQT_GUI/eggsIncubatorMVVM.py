@@ -2085,8 +2085,9 @@ class MainSoftwareThread(QtCore.QThread):
                     f" Ki {self.ki}"
                     f" Integral action: {self.ki * self.integral}"  
                     f" Output: {self.output}"
-                    f" ff_tot: {ff_total}"
-                    f" U_trim: {self.u_trim}"                      
+                    f" ff: {self.ff}" 
+                    f" U_trim: {self.u_trim}"   
+                    f" ff_tot: {ff_total}"                   
                     )
 
             return True
