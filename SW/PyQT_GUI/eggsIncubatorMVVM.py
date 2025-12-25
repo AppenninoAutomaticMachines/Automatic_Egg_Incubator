@@ -1117,6 +1117,7 @@ class MainSoftwareThread(QtCore.QThread):
                 # Arduino-friendly PWM value
                 #self.pwm = self.pid_temperature.get_output_for_arduino() #[0..255]
                 self.pwm = self.pid_temperature.get_normalized_output() #[0..1]
+                '''
                 print(
                       f"Kp {self.pid_temperature.kp}"  
                       f" Ki {self.pid_temperature.ki}"
@@ -1124,6 +1125,7 @@ class MainSoftwareThread(QtCore.QThread):
                       f" Output: {self.pid_temperature.output}"
                       f" ff: {self.pid_temperature.ff}"                      
                       )
+                '''
                 #print(f"{self.pwm}")
 
             PWM_DELTA_THRESHOLD = 0.005   # soglia di variazione minima - robustezza alla variazione per i FLOAT
@@ -1861,6 +1863,22 @@ class MainSoftwareThread(QtCore.QThread):
             self.K_process = 1.0      # °C per unità di comando (u in [0,1])
             self.ambient_value = 0.0  # Tamb (°C)
 
+            # Aggiungere un trim del feedforward (bias adattivo, molto lento)            
+            self.u_trim = 0.0         # bias adattivo del feedforward
+            self.T_trim = 3600.0      # [s] costante di tempo del trim (es. 1 h)
+            self.trim_min = -0.2      # limiti di sicurezza sul bias
+            self.trim_max =  0.2
+
+            # Filtrare la misura (EMA 10–20 s) e usare deadband coerente
+            # exponential moving average filter - l'errore letto diventa continuo e non più a gradini di 0.1°C
+            self.meas_alpha = 0.2    # filtro EMA (costante ~10–20 s con Ts=2 s)
+            self._y_filt    = None
+
+            self.int_deadband = 0.08 # °C, coerente con misura filtrata
+            self.int_db_gain  = 0.20 # integra al 20% dentro la deadband
+
+
+
         # --------------------------
         # Configuration methods
         # --------------------------
@@ -1958,52 +1976,121 @@ class MainSoftwareThread(QtCore.QThread):
                 return True
             # altrimenti AUTO
 
-            # Feedback e errore
-            self.current_value = float(current_value_loc)
+            
+            # -----------------------------
+            # Lettura misura con EMA (opzionale)
+            # -----------------------------
+            meas_alpha = getattr(self, 'meas_alpha', None)  # None → disabilitato
+            y_meas = float(current_value_loc)
+            if meas_alpha is not None:
+                # stato filtro
+                if getattr(self, '_y_filt', None) is None:
+                    self._y_filt = y_meas
+                else:
+                    self._y_filt = meas_alpha * y_meas + (1.0 - meas_alpha) * self._y_filt
+                self.current_value = self._y_filt
+            else:
+                self.current_value = y_meas
+
+            # -----------------------------
+            # Errori e derivative
+            # -----------------------------
+            beta = getattr(self, 'beta', 1.0)  # setpoint weighting sul P
             error = self.reference - self.current_value
+            e_P   = beta * self.reference - self.current_value
 
-            # Salva per bumpless transfer
-            self.prev_error = error
-
-            # ----- Derivative term (KD può essere lasciato a 0) -----
-            if dt <= 0 or self.prev_error is None:
+            prev_err = getattr(self, 'prev_error', None)
+            if dt <= 0.0 or prev_err is None:
                 derivative = 0.0
             else:
-                # Derivata sull'errore (attenzione al rumore del sensore)
-                derivative = (error - self.prev_error) / dt
+                derivative = (error - prev_err) / dt
 
-            # ----- Feedforward termico -----
-            self.ff = self._compute_feedforward()
+            # -----------------------------
+            # Feedforward = nominale + trim lento
+            # -----------------------------
+            self.ff = self._compute_feedforward()  # nominale
+            u_trim   = getattr(self, 'u_trim', 0.0)
+            T_trim   = getattr(self, 'T_trim', 0.0)
+            trim_min = getattr(self, 'trim_min', -0.2)
+            trim_max = getattr(self, 'trim_max',  +0.2)
 
-            # ----- Integral term (condizionale per anti-windup) -----
-            # integriamo dopo aver verificato saturazione più avanti
+            ff_total = self.ff + u_trim
 
-            # Uscita non clippata (posizionale): FF + P + I + D
-            raw_output_noI = self.ff + self.kp * error + self.kd * derivative
-            raw_output = raw_output_noI + self.ki * self.integral
+            # -----------------------------
+            # Uscita non clippata: FF + P + I + D
+            # -----------------------------
+            raw_output_noI = ff_total + self.kp * e_P + self.kd * derivative
+            raw_output     = raw_output_noI + self.ki * self.integral
 
             # Clamping
             clamped_output = max(self.output_min, min(raw_output, self.output_max))
-            saturated = (clamped_output != raw_output)
+            saturated      = (clamped_output != raw_output)
 
-            # Anti-windup: integra solo se non saturo
-            # oppure se l'integrazione spinge fuori dalla saturazione
-            if dt > 0:
-                if (not saturated):
-                    self.integral += error * dt
+            # -----------------------------
+            # Soft-deadband sull'integrale
+            # -----------------------------
+            int_deadband = getattr(self, 'int_deadband', 0.10)  # °C
+            int_db_gain  = getattr(self, 'int_db_gain',  0.20)  # fattore 0..1 dentro la deadband
+
+            if int_deadband is None or int_deadband <= 0.0:
+                w_int = 1.0
+            else:
+                abs_e = abs(error)
+                if abs_e >= int_deadband:
+                    w_int = 1.0
                 else:
-                    # se saturo alto e l'errore è negativo, o saturo basso e l'errore è positivo, integra
+                    # rampa lineare: a 0 → 0, a deadband → int_db_gain
+                    # (micro-integrazione per memorizzare il bias anche con errore quantizzato)
+                    eps  = 1e-9
+                    w_int = int_db_gain * (abs_e / max(int_deadband, eps))
+
+            # -----------------------------
+            # Anti-windup + integrazione pesata
+            # -----------------------------
+            if dt > 0.0:
+                if not saturated:
+                    self.integral += w_int * error * dt
+                else:
+                    # integra solo se l'errore tende a far rientrare dalla saturazione
                     if (raw_output > self.output_max and error < 0) or \
                     (raw_output < self.output_min and error > 0):
-                        self.integral += error * dt
-                    # altrimenti non integra (condizionale)
+                        self.integral += w_int * error * dt
+                    # altrimenti non integra
 
-            # Ricalcolo output con integrale aggiornato
-            raw_output = raw_output_noI + self.ki * self.integral
+            # -----------------------------
+            # Adattamento TRIM (molto lento)
+            # -----------------------------
+            # Avvicina (FF+trim) all'uscita applicata indipendentemente dall'errore (utile anche quando errore=0)
+            if dt > 0.0 and T_trim and T_trim > 0.0:
+                u_trim += (clamped_output - raw_output_noI) * (dt / T_trim)
+                # limiti di sicurezza
+                if u_trim < trim_min: u_trim = trim_min
+                if u_trim > trim_max: u_trim = trim_max
+                self.u_trim = u_trim  # salva back
+
+            # -----------------------------
+            # Ricalcolo finale output con integral aggiornato
+            # -----------------------------
+            ff_total = self.ff + getattr(self, 'u_trim', 0.0)
+            raw_output_noI = ff_total + self.kp * e_P + self.kd * derivative
+            raw_output     = raw_output_noI + self.ki * self.integral
+
             self.output = max(self.output_min, min(raw_output, self.output_max))
             self.prev_output = self.output
+            self.prev_error  = error  # aggiorno qui, dopo avere usato prev_err
+
+            # DEBUGGING
+            print(
+                    f"Kp {self.kp}"  
+                    f" Ki {self.ki}"
+                    f" Integral action: {self.ki * self.integral}"  
+                    f" Output: {self.output}"
+                    f" ff_tot: {ff_total}"
+                    f" U_trim: {self.u_trim}"                      
+                    )
 
             return True
+
 
         # --------------------------
         # Helpers
