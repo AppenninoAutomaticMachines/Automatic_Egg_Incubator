@@ -6,7 +6,7 @@ from eggsIncubatorGUI import Ui_MainWindow  # Import the UI class directly
 import serial
 import re
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 import csv
 import time
 import queue
@@ -66,8 +66,9 @@ log_message('ERROR', 'This is an error message.')
 '''
 
 # ARDUINO serial communication - setup #
-portSetup = "/dev/ttyUSB0"
+
 portSetup = "/dev/ttyACM0"
+portSetup = "/dev/ttyUSB0"
 
 baudrateSetup = 115200
 timeout = 0.1
@@ -393,8 +394,11 @@ class SerialThread(QtCore.QThread):
 class MainSoftwareThread(QtCore.QThread):
     update_view = QtCore.pyqtSignal(list)  # Signal to update the view (MainWindow)
     update_statistics = QtCore.pyqtSignal(list) # Signal to update the Statistics View Window
+    update_days_statistics = QtCore.pyqtSignal(list) # Signal to update the Statistics View Window
     update_spinbox_value = QtCore.pyqtSignal(str, float)  # Signal to update spinbox (name, value)
+    update_int_spinbox_value = QtCore.pyqtSignal(str, int)  # Signal to update spinbox (name, value)
     update_motor = QtCore.pyqtSignal(list) # Signal to update the motor view
+    update_date_edit = QtCore.pyqtSignal(str, object)
     
     def __init__(self):
         super().__init__()
@@ -403,6 +407,8 @@ class MainSoftwareThread(QtCore.QThread):
         self.serial_thread = SerialThread()
         self.serial_thread.data_received.connect(self.process_serial_data)
         self.current_data = []  # Holds the most recent data received from SerialThread
+        
+        self._last_today = date.today()
         
         self.alive_to_arduino_state = False
         self.alive_to_arduino_time_interval_sec = 2 # invio un ack ad arduino 2 secondi
@@ -416,6 +422,20 @@ class MainSoftwareThread(QtCore.QThread):
         self.arduino_readings_timestamp  = time.time() # per ricordarmi l'istante di tempo in cui arduino manda i dati
         
         self.command_list = [] # List to hold the pending commands
+        
+        # Incubation Days statistics
+        self.incubation_start_date = None 
+        self.incubation_start_date_previous = None 
+        # print(self.incubation_start_date)      # 2025-12-27
+        # type(self.incubation_start_date)       # <class 'datetime.date'>
+        self.incubation_duration_days = 0
+        self.incubation_duration_days_previous = 0
+        self.days_passed = 0
+        self.days_passed_previous = 0
+        self.days_left = 0
+        self.days_left_previous = 0
+        self.incubation_end_date = None
+        self.incubation_end_date_previous = None
 
         # === PID Controller with Automatic Timing === #
         # SYSTEM PARAMETERS
@@ -558,7 +578,7 @@ class MainSoftwareThread(QtCore.QThread):
         self.parameters = {} # dictionary storing all parameters in program memory
         self._load_all_parameters() # loading already existing parameters in the file
 
-    def run(self):
+    def run(self):   
         self.write_log_section_header()
         self.main_software_thread_log_message('INFO', f"Starting serial Thread")
         # Start the SerialThread
@@ -630,8 +650,73 @@ class MainSoftwareThread(QtCore.QThread):
                 self.last_alive_to_arduino_time = time.time()
                 self.alive_to_arduino_state = not self.alive_to_arduino_state
                 self.queue_command("ALIVE", self.alive_to_arduino_state)
+                
+            # statistiche giorni di incubata - controllo dei giorni passati
+            # if time or cambia start date or cambia duration
+            today = date.today()
+            if ( 
+                self.incubation_start_date_previous != self.incubation_start_date
+                or self.incubation_duration_days_previous != self.incubation_duration_days
+                or today != self._last_today
+                ):
+                # se cambio manualmente la data di inzio o la durata di incubata si aggiorna la visualizzazione. Oppure appena passa la mezzanotte, ovvero cambia il giorno.
+                self.incubation_start_date_previous = self.incubation_start_date
+                self.incubation_duration_days_previous = self.incubation_duration_days
+                self._last_today = today                    
+                self.update_incubation_state()
               
             time.sleep(0.1)
+            
+    def update_incubation_state(self, today: date | None = None):
+        """
+        Aggiorna:
+        - days_passed
+        - days_left
+        - incubation_end_date
+        """
+
+        # sicurezza: dati non pronti
+        if self.incubation_start_date is None or self.incubation_duration_days <= 0:
+            self.days_passed = 0
+            self.days_left = 0
+            self.incubation_end_date = None
+            return
+
+        if today is None:
+            today = date.today()
+
+        # data finale
+        self.incubation_end_date = (
+            self.incubation_start_date + timedelta(days=self.incubation_duration_days)
+        )
+
+        # giorni passati
+        self.days_passed = max(
+            0,
+            (today - self.incubation_start_date).days
+        )
+
+        # giorni rimanenti
+        self.days_left = max(
+            0,
+            (self.incubation_end_date - today).days
+        )
+        
+        if self.incubation_end_date_previous != self.incubation_end_date:
+            self.update_date_edit.emit("endDate_dateTimeBox", self.incubation_end_date)
+        
+        if (self.days_passed_previous != self.days_passed) or (self.days_left_previous != self.days_left):
+            all_values = []
+            all_values.append(self.days_passed)
+            all_values.append(self.days_left)            
+            self.update_days_statistics.emit(all_values)
+            
+        self.incubation_end_date_previous = self.incubation_end_date
+        self.days_passed_previous = self.days_passed
+        self.days_left_previous = self.days_left
+        
+            
+        
             
     def check_errors(self,sensor_data):
         """Verifica errori, aggiorna il contatore e traccia il tempo degli errori persistenti."""
@@ -986,6 +1071,9 @@ class MainSoftwareThread(QtCore.QThread):
             #self.save_parameter('TEMPERATURE_PID_KD_GAIN', rounded_value)
             self.multiplier = rounded_value
             print(f"Multiplier now is: -{self.multiplier}")
+        elif spinbox_name == "days_duration_spinBox":            
+            self.incubation_duration_days = int(value)
+            self.save_parameter('INCUBATION_DURATION_DAYS', int(value))            
             
     def handle_intialization_step(self, value_name, value):
         rounded_value = round(value, 1)
@@ -1010,10 +1098,22 @@ class MainSoftwareThread(QtCore.QThread):
             self.pid_temperature.set_gain_Ki(computed_value)
         elif value_name == "Kd_spinBox":
             self.pid_temperature.set_gain_Kd(rounded_value)
+        elif value_name == "days_duration_spinBox":
+            self.incubation_duration_days = value
     
     def handle_initialization_done(self, parameter, value):
         # funzione che viene chiamata da MainWindow quando ha completato l'emit di tutti i parametri da default di GUI
         self.initialization_from_GUI_completed = True
+        
+    def on_date_received(self, name, value):
+        if name == "incubationStartDate":
+            self.incubation_start_date = value
+            self.save_parameter('INCUBATION_START_DATE', self.incubation_start_date.isoformat())
+            """
+                Questo è come viene salvato: "INCUBATION_START_DATE": "2025-12-26"
+            """
+            # devo anche aggiornare la visualizzazione della start date!
+            self.update_date_edit.emit("startDate_dateTimeBox", self.incubation_start_date)
             
     def handle_radio_button_toggle(self, value_name, value):
         if value_name == "heaterOFF_radioBtn":
@@ -1476,6 +1576,8 @@ class MainSoftwareThread(QtCore.QThread):
             TEMPERATURE_PID_KP_GAIN
             TEMPERATURE_PID_KI_GAIN
             TEMPERATURE_PID_KD_GAIN
+            INCUBATION_START_DATE - isoformat d/M/yy
+            INCUBATION_DURATION_DAYS - days
         '''
         # TEMPERATURE SPINBOX MIN/MAX
         thc_upper_limit = self.load_parameter('TEMPERATURE_HYSTERESIS_CONTROLLER_UPPER_LIMIT')
@@ -1585,7 +1687,22 @@ class MainSoftwareThread(QtCore.QThread):
         if temperature_PID_Kd_gain is not None:
             self.pid_temperature.set_gain_Kd(temperature_PID_Kd_gain)
             self.update_spinbox_value.emit("Kd_spinBox", temperature_PID_Kd_gain) # aggiorno la visualizzazione
-
+            
+        # data for incubation DAYS statistics
+        incubation_start_date = self.load_parameter('INCUBATION_START_DATE')
+        if incubation_start_date is not None:
+            self.incubation_start_date = date.fromisoformat(incubation_start_date) 
+            """
+                print(f"self.incubation_start_date {self.incubation_start_date}  incubation_start_date {incubation_start_date}")
+                self.incubation_start_date 2025-12-27  incubation_start_date 2025-12-27
+            """
+            self.update_date_edit.emit("startDate_dateTimeBox", date.fromisoformat(incubation_start_date))
+            
+        incubation_duration_days = self.load_parameter('INCUBATION_DURATION_DAYS') # type(incubation_duration_days) = int, viene caricato come intero
+        if incubation_duration_days is not None:
+            self.incubation_duration_days = incubation_duration_days
+            self.update_int_spinbox_value.emit("days_duration_spinBox", incubation_duration_days)
+            
     def _load_all_parameters(self):
         if os.path.exists(self.parameters_file_path):
             try:
@@ -2615,6 +2732,7 @@ class MainWindow(QtWidgets.QMainWindow):
     initialization_step = QtCore.pyqtSignal(str, float)
     initialization_done = QtCore.pyqtSignal(str, bool)
     radio_button_toggled = QtCore.pyqtSignal(str, bool)
+    date_changed = QtCore.pyqtSignal(str, object)   # object = datetime.date - CALENDAR WIDGET
     
     def __init__(self, main_software_thread):
         super().__init__()
@@ -2623,7 +2741,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.main_software_thread = main_software_thread
         self.main_software_thread.update_view.connect(self.update_display_data)
         self.main_software_thread.update_statistics.connect(self.update_statistics_data)
+        self.main_software_thread.update_days_statistics.connect(self.update_days_statistics_data)
         self.main_software_thread.update_motor.connect(self.update_display_motor_data)
+        self.main_software_thread.update_date_edit.connect(self.update_date_edit)
         
         # Connect signals to main software thread slots
         self.button_clicked.connect(self.main_software_thread.handle_button_click)
@@ -2631,7 +2751,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.initialization_step.connect(self.main_software_thread.handle_intialization_step)
         self.initialization_done.connect(self.main_software_thread.handle_initialization_done) # signals that MainWindow has completed the initialization procedure (all emit signals have been sent)
         self.main_software_thread.update_spinbox_value.connect(self.update_spinbox)
+        self.main_software_thread.update_int_spinbox_value.connect(self.update_int_spinbox)
         self.radio_button_toggled.connect(self.main_software_thread.handle_radio_button_toggle)
+        self.date_changed.connect(self.main_software_thread.on_date_received)
 
 
         # Connect buttons to handlers that emit signals
@@ -2690,7 +2812,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui.setPointTemperature_PID_spinBox.valueChanged.connect(lambda value: self.emit_float_spinbox_signal(self.ui.setPointTemperature_PID_spinBox.objectName(), value))
         self.ui.Kp_spinBox.valueChanged.connect(lambda value: self.emit_float_spinbox_signal(self.ui.Kp_spinBox.objectName(), value))
         self.ui.Ki_spinBox.valueChanged.connect(lambda value: self.emit_float_spinbox_signal(self.ui.Ki_spinBox.objectName(), value))
-        self.ui.Kd_spinBox.valueChanged.connect(lambda value: self.emit_float_spinbox_signal(self.ui.Kd_spinBox.objectName(), value))
+        self.ui.Kd_spinBox.valueChanged.connect(lambda value: self.emit_float_spinbox_signal(self.ui.Kd_spinBox.objectName(), value))        
+        self.ui.days_duration_spinBox.valueChanged.connect(lambda value: self.emit_float_spinbox_signal(self.ui.days_duration_spinBox.objectName(), value))
+        
+        self.ui.calendarWidget.selectionChanged.connect(self.on_calendar_selection_changed)
         
         # Connect to send initialization values to the mainSoftwareThread
         self.emit_initialization_values(self.ui.maxHysteresisValue_temperature_spinBox.objectName(), self.ui.maxHysteresisValue_temperature_spinBox.value())
@@ -2707,6 +2832,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.emit_initialization_values(self.ui.Kp_spinBox.objectName(), self.ui.Kp_spinBox.value())
         self.emit_initialization_values(self.ui.Ki_spinBox.objectName(), self.ui.Ki_spinBox.value())
         self.emit_initialization_values(self.ui.Kd_spinBox.objectName(), self.ui.Kd_spinBox.value())
+        
+        
+        self.emit_initialization_values(self.ui.days_duration_spinBox.objectName(), self.ui.days_duration_spinBox.value())
         
         # signaling that ManWindow initialization procedure has been completed
         self.initialization_done.emit("GUI_initialization_procedure", True)
@@ -2727,6 +2855,18 @@ class MainWindow(QtWidgets.QMainWindow):
         
     def emit_radio_button_signal(self, radio_button_name, state):
         self.radio_button_toggled.emit(radio_button_name, state)
+        
+    def on_calendar_selection_changed(self):
+        qdate = self.ui.calendarWidget.selectedDate() # qdate = PyQt5.QtCore.QDate(2025, 12, 26)
+        py_date = qdate.toPyDate() # ← chiave  py_date = 2025-12-26
+        self.date_changed.emit("incubationStartDate", py_date)
+        
+    def update_date_edit(self, date_edit_name, date):
+        qdate = QtCore.QDate(date.year, date.month, date.day)
+        
+        date_edit = getattr(self.ui, date_edit_name, None)  # Get the spinbox dynamically
+        if date_edit: # ensure it exists
+            date_edit.setDate(qdate)
 
     def update_display_data(self, all_data):
         # Update the temperature labels in the GUI
@@ -2779,6 +2919,14 @@ class MainWindow(QtWidgets.QMainWindow):
             
         pass
     
+    def update_days_statistics_data(self, all_data):
+        # da implementare la parte di update delle statistiche
+        if len(all_data) > 0:
+            self.ui.daysPassed.setText(f"{all_data[0]}")
+            self.ui.daysLeft.setText(f"{all_data[1]}")
+            
+        pass
+    
     def format_time(self, value, unit = None, simple_format = False):
         """
             Unit argument is optional:
@@ -2827,7 +2975,17 @@ class MainWindow(QtWidgets.QMainWindow):
     def update_spinbox(self, spinbox_name, value):
         """ Update the spinbox in the GUI safely from another thread """
         spinbox = getattr(self.ui, spinbox_name, None)  # Get the spinbox dynamically
-
+        if spinbox:  # Ensure the spinbox exists
+            spinbox.setValue(value)  # Set the new value safely in the GUI thread
+            
+    def update_int_spinbox(self, spinbox_name, value):
+        """ 
+            Questa funzione è leggermente diversa dal caso prima, perché il valore passato in questo caso dal main thread al thread della GUI
+            è di tipo INT! questo è definito nel punto un cui si definiscno i segnali di comunicazione fra i due thread. 
+                update_spinbox_value = QtCore.pyqtSignal(str, float) --> fa un cast a float in automatico quando invia i sengali da un thread all'altro
+                update_int_spinbox_value = QtCore.pyqtSignal(str, int) --> fa un cast a int in automatico
+        """
+        spinbox = getattr(self.ui, spinbox_name, None)  # Get the spinbox dynamically
         if spinbox:  # Ensure the spinbox exists
             spinbox.setValue(value)  # Set the new value safely in the GUI thread
     '''       
