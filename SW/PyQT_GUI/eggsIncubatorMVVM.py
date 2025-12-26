@@ -399,6 +399,7 @@ class MainSoftwareThread(QtCore.QThread):
     update_int_spinbox_value = QtCore.pyqtSignal(str, int)  # Signal to update spinbox (name, value)
     update_motor = QtCore.pyqtSignal(list) # Signal to update the motor view
     update_date_edit = QtCore.pyqtSignal(str, object)
+    update_radio_button_exclusive = QtCore.pyqtSignal(str, bool) #Se i radio button fanno parte dello stesso gruppo (stesso layout o QButtonGroup), PyQt gestisce automaticamente l’esclusività: selezionare uno li deselezionerà tutti gli altri del gruppo.
     
     def __init__(self):
         super().__init__()
@@ -1147,8 +1148,11 @@ class MainSoftwareThread(QtCore.QThread):
             
         if value_name == "hysteresisActive_radioBtn":
             self.pid_temperature_is_activated = False
+            self.save_parameter('PID_HEATING_MODE_IS_SELECTED', self.pid_temperature_is_activated)
+            
         if value_name == "PIDActive_radioBtn":
             self.pid_temperature_is_activated = True
+            self.save_parameter('PID_HEATING_MODE_IS_SELECTED', self.pid_temperature_is_activated)
             
             
     def process_serial_data(self, new_data):
@@ -1578,6 +1582,7 @@ class MainSoftwareThread(QtCore.QThread):
             TEMPERATURE_PID_KD_GAIN
             INCUBATION_START_DATE - isoformat d/M/yy
             INCUBATION_DURATION_DAYS - days
+            PID_HEATING_MODE_IS_SELECTED - bool True/False
         '''
         # TEMPERATURE SPINBOX MIN/MAX
         thc_upper_limit = self.load_parameter('TEMPERATURE_HYSTERESIS_CONTROLLER_UPPER_LIMIT')
@@ -1702,6 +1707,13 @@ class MainSoftwareThread(QtCore.QThread):
         if incubation_duration_days is not None:
             self.incubation_duration_days = incubation_duration_days
             self.update_int_spinbox_value.emit("days_duration_spinBox", incubation_duration_days)
+            
+        pid_heating_mode_is_selected = self.load_parameter('PID_HEATING_MODE_IS_SELECTED')
+        if pid_heating_mode_is_selected is not None:
+            # persistenza nella modalità di riscaldamento scelta
+            self.pid_temperature_is_activated = pid_heating_mode_is_selected
+            self.update_radio_button_exclusive.emit('PIDActive_radioBtn', self.pid_temperature_is_activated)
+            
             
     def _load_all_parameters(self):
         if os.path.exists(self.parameters_file_path):
@@ -2754,6 +2766,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.main_software_thread.update_int_spinbox_value.connect(self.update_int_spinbox)
         self.radio_button_toggled.connect(self.main_software_thread.handle_radio_button_toggle)
         self.date_changed.connect(self.main_software_thread.on_date_received)
+        self.main_software_thread.update_radio_button_exclusive.connect(self.update_radio_button_exclusive)
 
 
         # Connect buttons to handlers that emit signals
@@ -2988,6 +3001,11 @@ class MainWindow(QtWidgets.QMainWindow):
         spinbox = getattr(self.ui, spinbox_name, None)  # Get the spinbox dynamically
         if spinbox:  # Ensure the spinbox exists
             spinbox.setValue(value)  # Set the new value safely in the GUI thread
+            
+    def update_radio_button_exclusive(self, radio_button_name, value):
+        radio_button = getattr(self.ui, radio_button_name, None)  # Get the spinbox dynamically
+        if radio_button:  # Ensure the spinbox exists
+            radio_button.setChecked(value)  # Set the new value safely in the GUI thread
     '''       
     def handle_radio_button(self):
         sender = self.sender()
