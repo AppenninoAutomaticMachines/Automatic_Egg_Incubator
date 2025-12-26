@@ -16,21 +16,13 @@ PC817 circuitry
 
 
 DA FARE:
-- provato a mettere il repo GIT in Visual Studio Code
 - persistente il radio button del PID, perché se spengo in PID devo ripartire in PID
 - mentre gira il motore non leggere il peso, perché richiede molto tempo. 
 - continuare gestione PID: GUI + verifica + lato arduino
 - calibrazione della bilancia
 - weight control per acqua
-- PID + led per indicazione duty cycle (schedina LED) + visualizzazione in py_gui, autotaratura   duty cycle % --> T_media
 - ramping per start dell'incubata + lay horizontal automatico n gg prima della schiusa
 - warning light
-- statistica che mostra da quanti giorni è attiva l'incubata, calcoli
-- selettore per modalità riscaldamento con SSR
-- miglioramento: salvo solo se il parametroè effettivamente diverso...non sempre
-
-- visualizzazione statistiche incubata
-
 
 interruttore per modalità automatica senza raspberry emergenza + che attiva anche una sonda singola di temperatura da aggiungere.
 
@@ -88,6 +80,7 @@ Durata dell'incubata (file persistente)
 |                        |
 ▼                        ▼
 // --------------------- //
+FATTO: statistica che mostra da quanti giorni è attiva l'incubata, calcoli
 FATTO: fare bash per rpi che con 2click rilancia il tutto
 FATTO: modifica con matplotlib, siccome la versione attuale di RPY non gesisce pandas
 FATTO: montato schermo + supporto tastiera e mouse + raspberry
