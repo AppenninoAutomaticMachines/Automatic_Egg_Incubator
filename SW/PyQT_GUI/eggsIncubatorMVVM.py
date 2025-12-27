@@ -66,9 +66,8 @@ log_message('ERROR', 'This is an error message.')
 '''
 
 # ARDUINO serial communication - setup #
-
-portSetup = "/dev/ttyACM0"
 portSetup = "/dev/ttyUSB0"
+portSetup = "/dev/ttyACM0"
 
 baudrateSetup = 115200
 timeout = 0.1
@@ -2191,7 +2190,8 @@ class MainSoftwareThread(QtCore.QThread):
             # -----------------------------
             # Avvicina (FF+trim) all'uscita applicata indipendentemente dall'errore (utile anche quando errore=0)
             if dt > 0.0 and T_trim and T_trim > 0.0:
-                u_trim += (clamped_output - raw_output_noI) * (dt / T_trim)
+                #u_trim += (clamped_output - raw_output_noI) * (dt / T_trim)
+                u_trim += (raw_output_noI - clamped_output) * (dt / T_trim)
                 # limiti di sicurezza
                 if u_trim < trim_min: u_trim = trim_min
                 if u_trim > trim_max: u_trim = trim_max
@@ -2211,12 +2211,13 @@ class MainSoftwareThread(QtCore.QThread):
             # DEBUGGING
             print(
                     f"Kp {self.kp}"  
-                    f" Ki {self.ki}"
-                    f" Integral action: {self.ki * self.integral}"  
+                    f" Ki {round(self.ki, 4)}"
+                    f" Integral action: {round(self.ki * self.integral, 3)}"  
                     f" Output: {self.output}"
-                    f" ff: {self.ff}" 
+                    f" ff: {round(self.ff, 4)}" 
                     f" U_trim: {self.u_trim}"   
-                    f" ff_tot: {ff_total}"                   
+                    f" ff_tot: {round(ff_total, 4)}" 
+                    f" e: {e_P}"                  
                     )
 
             return True
@@ -2233,7 +2234,7 @@ class MainSoftwareThread(QtCore.QThread):
             return max(self.output_min, min(u_ff, self.output_max))
 
         def get_current_value(self):
-            return self.current_value    
+            return round(self.current_value, 1)   
 
         def get_output(self):
             return self.output
