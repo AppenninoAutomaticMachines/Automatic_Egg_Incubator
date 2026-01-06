@@ -16,6 +16,8 @@ PC817 circuitry
 
 
 DA FARE:
+- capire perché se sono in CW reached, la lettura del peso non va ancora
+
 - il duty cycle cambia troppo velocemente (se il time proportionong vwindow è di 10s, forse ha senso fare l'update del pid ogni 10s?)
 - fare un plot del duty cycle richiesto
 
