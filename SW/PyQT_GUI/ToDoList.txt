@@ -16,6 +16,9 @@ PC817 circuitry
 
 
 DA FARE:
+- il duty cycle cambia troppo velocemente (se il time proportionong vwindow è di 10s, forse ha senso fare l'update del pid ogni 10s?)
+- fare un plot del duty cycle richiesto
+
 - persistente il radio button del PID, perché se spengo in PID devo ripartire in PID
 - mentre gira il motore non leggere il peso, perché richiede molto tempo. 
 - continuare gestione PID: GUI + verifica + lato arduino
