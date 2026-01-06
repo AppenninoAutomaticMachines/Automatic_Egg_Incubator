@@ -109,7 +109,7 @@ float temperature_externalTemperatureSensor;
 
 /* HEATER SECTION */
 // PWM con time proportioning window
-const unsigned long WINDOW_MS = 5000; // Finestra di 10 s (consigliato: 5–10 s)
+const unsigned long WINDOW_MS = 10000; // Finestra di 10 s (consigliato: 5–10 s)
 const unsigned long FAILSAFE_MS = 30000;
 
 float u_cmd = 0.0f;                    // Duty normalizzato [0..1]
