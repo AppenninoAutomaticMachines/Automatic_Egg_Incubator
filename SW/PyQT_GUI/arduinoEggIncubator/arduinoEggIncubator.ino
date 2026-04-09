@@ -7,7 +7,6 @@
 #include <DHT.h>
 #include "HX711.h"
 
-
 /* General CONSTANTS */
 #define SERIAL_PRINT_CHECK false
 #define SERIAL_SPEED 115200
