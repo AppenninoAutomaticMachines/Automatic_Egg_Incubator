@@ -24,16 +24,16 @@
 
 /* ARDUINO MEGA PWM from 0 - 13 + 0 and 1 tx and rx in case of serial communication is needed */
 /* PIN ARDUINO */
-#define DHT_PIN 3   //Pin a cui è connesso il sensore
-#define ONE_WIRE_BUS 4
+#define DHT_PIN 24   //Pin a cui è connesso il sensore
+#define ONE_WIRE_BUS 26
 #define STEPPER_MOTOR_DIRECTION_PIN 5
 #define STEPPER_MOTOR_STEP_PIN 6
 #define FREE_PC817_PIN 7
-#define CW_INDUCTOR_PIN 8 // induttore finecorsa DESTRO (vista posteriore)
-#define CCW_INDUCTOR_PIN 9 // induttore finecorsa SINISTRO (vista posteriore)
-#define WATER_ELECTROVALVE_PIN 10 // relay 4
-#define HUMIDIFIER_PIN 11 // relay 3
-#define HEATER_PIN 12 // relay 1
+#define CW_INDUCTOR_PIN 45 // induttore finecorsa DESTRO (vista posteriore)
+#define CCW_INDUCTOR_PIN 43 // induttore finecorsa SINISTRO (vista posteriore)
+#define WATER_ELECTROVALVE_PIN 41 // relay 4
+#define HUMIDIFIER_PIN 39 // relay 3
+#define HEATER_PIN 37 // relay 1
 #define HEATER_PWM_PIN 13
 
 #define ONE_WIRE_BUS_EXTERNAL_TEMPERATURE 22
