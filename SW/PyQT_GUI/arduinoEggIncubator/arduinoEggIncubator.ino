@@ -21,6 +21,7 @@
 #define DEVICE_DISCONNECTED -127
 #endif
 #define DEVICE_ERROR 85
+#define DC_MOTOR_ACTIVATED true
 
 /* ARDUINO MEGA PWM from 0 - 13 + 0 and 1 tx and rx in case of serial communication is needed */
 /* PIN ARDUINO */
@@ -44,6 +45,12 @@
 #define PIN_BUZZER 31
 #define LOADCELL_DOUT_PIN 33
 #define LOADCELL_SCK_PIN 35
+
+#define DC_MOTOR_1_IN1 11 //L980N pin IN1
+#define DC_MOTOR_1_IN2 10 //L980N pin IN2
+#define DC_MOTOR_2_IN1 9  //L980N pin IN3
+#define DC_MOTOR_2_IN2 8  //L980N pin IN4
+#define MOTOR_SPEED 50    // Duty cycle: 0 (fermo) … 255 (massima velocità)
 
 
 #define STEPPER_MOTOR_MS1_PIN 2
@@ -135,21 +142,35 @@ bool move = false;
 bool direction = false; 
 bool stepperIsMoving = false;
 
-bool stepperMotor_moveCCW_automatic_var = false;
-bool stepperMotor_moveCW_automatic_var = false;
-bool stepperMotor_stop_automatic_var = false;
+// DC MOTOR CONFIGURATION
+// --- STATI MOTORE ---
+typedef enum {
+  STOPPED_STATUS  = 0,
+  CW_STATUS       = 1,   // Orario
+  CCW_STATUS      = 2    // Antiorario
+} MotorState;
 
-bool stepperMotor_moveCCW_cmd = false;
-trigger stepperMotor_moveCCW_cmd_trigger;
+MotorState current_DC_motorState_1 = STOPPED_STATUS; // DC motor 1
+MotorState current_DC_motorState_2 = STOPPED_STATUS; // DC motor 2 FOR FUTURE EXPANSION
 
-bool stepperMotor_moveCW_cmd = false;
-trigger stepperMotor_moveCW_cmd_trigger;
+// MOTOR COMMON SECTION
+bool motor_moveCCW_automatic_var = false;
+bool motor_moveCW_automatic_var = false;
+bool motor_stop_automatic_var = false;
 
-bool stepperMotor_stop_cmd = false;
-trigger stepperMotor_stop_cmd_trigger;
+bool motor_moveCCW_cmd = false;
+trigger motor_moveCCW_cmd_trigger;
+
+bool motor_moveCW_cmd = false;
+trigger motor_moveCW_cmd_trigger;
+
+bool motor_stop_cmd = false;
+trigger motor_stop_cmd_trigger;
 
 byte eggsTurnerState = 0;
-bool stepperAutomaticControl_var = false;
+bool motorAutomaticControl_var = false;
+
+
 /* END MOTORS SECTION */
 
 /* DHT22 HUMIDITY SENSOR */
@@ -263,6 +284,22 @@ void setup() {
 
   pinMode(STEPPER_MOTOR_MS3_PIN, OUTPUT);
   digitalWrite(STEPPER_MOTOR_MS3_PIN, LOW);
+
+  // DC MOTOR
+  pinMode(DC_MOTOR_1_IN1, OUTPUT);
+  digitalWrite(DC_MOTOR_1_IN1, LOW);
+
+  pinMode(DC_MOTOR_1_IN2, OUTPUT);
+  digitalWrite(DC_MOTOR_1_IN2, LOW);
+
+  pinMode(DC_MOTOR_2_IN1, OUTPUT);
+  digitalWrite(DC_MOTOR_2_IN1, LOW);
+
+  pinMode(DC_MOTOR_2_IN2, OUTPUT);
+  digitalWrite(DC_MOTOR_2_IN2, LOW);
+
+  // Motore fermo all'avvio
+  motorStop(DC_MOTOR_1_IN1, DC_MOTOR_1_IN2);
 
   pinMode(CCW_INDUCTOR_PIN, INPUT);
   pinMode(CW_INDUCTOR_PIN, INPUT);
@@ -420,15 +457,17 @@ void loop() {
         }
 
         if (tag == "STPR01") {
+          // BRUTTO, ma riciclo il comando STPR, è per lo stepper, ma per non cambiare tutto lo uso anche per DC motor
           if (value == "MCCW") {
-            stepperMotor_moveCCW_automatic_var = true;
-            stepperMotor_moveCCW_cmd = true;
+            motor_moveCCW_automatic_var = true;
+            if (DC_MOTOR_ACTIVATED)
+            motor_moveCCW_cmd = true;
           } else if (value == "MCW") {
-            stepperMotor_moveCW_automatic_var = true;
-            stepperMotor_moveCW_cmd = true;
+            motor_moveCW_automatic_var = true;
+            motor_moveCW_cmd = true;
           } else if (value == "STOP") {
-            stepperMotor_stop_automatic_var = true;
-            stepperMotor_stop_cmd = true;
+            motor_stop_automatic_var = true;
+            motor_stop_cmd = true;
           }
           // Sposta la generazione ACK qui, fuori dal parsing
           if(uid.length() > 0){
@@ -558,7 +597,7 @@ void loop() {
 
 
   /* HX 711 WATER WEIGHT MEASUREMENT - LOAD CELL */
-  if (stepperIsMoving){
+  if (stepperIsMoving && (!DC_MOTOR_ACTIVATED)){
     waterWeight = waterWeight_saturated;
   }
   else{
@@ -601,10 +640,11 @@ void loop() {
   }
 
   /* STEPPER MOTOR CONTROL SECTION */
-  eggsTurnerStepperMotor.periodicRun();
-  stepperIsMoving = eggsTurnerStepperMotor.isMovingBackward() || eggsTurnerStepperMotor.isMovingForward();
-
-  
+  if (!DC_MOTOR_ACTIVATED){
+    eggsTurnerStepperMotor.periodicRun();
+    stepperIsMoving = eggsTurnerStepperMotor.isMovingBackward() || eggsTurnerStepperMotor.isMovingForward();
+  }
+    
   // direzione oraria = forward = clock wise rotation direction (vista posteriore incubatrice)
   switch(eggsTurnerState){
     case 0:
@@ -627,7 +667,13 @@ void loop() {
         listofDataToSend[listofDataToSend_numberOfData] = "<IND_CCW, 1>"; 
         listofDataToSend_numberOfData++;
 
-        eggsTurnerStepperMotor.stopMotor();       
+        if (DC_MOTOR_ACTIVATED){
+          motorStop(DC_MOTOR_1_IN1, DC_MOTOR_1_IN2);
+        }
+        else{
+          eggsTurnerStepperMotor.stopMotor(); 
+        }
+              
         eggsTurnerState = 20;
       }
       else if(cw_inductor_input.getInputState()){ // se leggo già induttore. Sono già azzerato.  Devo però notificarlo a RPI!
@@ -635,36 +681,73 @@ void loop() {
         listofDataToSend[listofDataToSend_numberOfData] = "<IND_CW, 1>";
         listofDataToSend_numberOfData++;
         
-        eggsTurnerStepperMotor.stopMotor();       
+        if (DC_MOTOR_ACTIVATED){
+          motorStop(DC_MOTOR_1_IN1, DC_MOTOR_1_IN2);
+        }
+        else{
+          eggsTurnerStepperMotor.stopMotor(); 
+        }
+
         eggsTurnerState = 20;
       }
       else{
-        eggsTurnerStepperMotor.moveBackward(STEPPER_MOTOR_SPEED_DEFAULT);
+        // azzeramento di default lo si fa in senso ANTIORARIO CCW
+        if (DC_MOTOR_ACTIVATED){
+          motorCCW(DC_MOTOR_1_IN1, DC_MOTOR_1_IN2);
+          current_DC_motorState_1 = CCW_STATUS;
+        }
+        else{
+          eggsTurnerStepperMotor.moveBackward(STEPPER_MOTOR_SPEED_DEFAULT);
+        }
+        
         eggsTurnerState = 10;
       }        
       break;
     case 10: // WAIT_TO_REACH_LEFT_SIDE_INDUCTOR
       if(ccw_inductor_input.getInputState()){
         // home position is reached - full left
-        eggsTurnerStepperMotor.stopMotor();
+        if (DC_MOTOR_ACTIVATED){
+          motorStop(DC_MOTOR_1_IN1, DC_MOTOR_1_IN2);
+        }
+        else{
+          eggsTurnerStepperMotor.stopMotor(); 
+        }
         eggsTurnerState = 20;
       }
       break;
     case 20: 
-      if(stepperAutomaticControl_var){
+      if(motorAutomaticControl_var){
         /* FULLY AUTOMATIC MODE in arduino side*/
         // WAIT_FOR_TURN_EGGS_COMMAND_STATE --> wait for RPI command
-        if(stepperMotor_moveCCW_automatic_var){
-          eggsTurnerStepperMotor.moveBackward(STEPPER_MOTOR_SPEED_DEFAULT);
+
+        if(motor_moveCCW_automatic_var){
+          if (DC_MOTOR_ACTIVATED){
+            motorCCW(DC_MOTOR_1_IN1, DC_MOTOR_1_IN2);
+            current_DC_motorState_1 = CCW_STATUS;
+          }
+          else{
+            eggsTurnerStepperMotor.moveBackward(STEPPER_MOTOR_SPEED_DEFAULT);
+          }            
           eggsTurnerState = 50;
         }
-        if(stepperMotor_moveCW_automatic_var){
-          eggsTurnerStepperMotor.moveForward(STEPPER_MOTOR_SPEED_DEFAULT);
+        if(motor_moveCW_automatic_var){
+          if (DC_MOTOR_ACTIVATED){
+            motorCW(DC_MOTOR_1_IN1, DC_MOTOR_1_IN2);
+            current_DC_motorState_1 = CW_STATUS;
+          }
+          else{
+            eggsTurnerStepperMotor.moveForward(STEPPER_MOTOR_SPEED_DEFAULT);
+          } 
           eggsTurnerState = 30;
         }
-        if(stepperMotor_stop_automatic_var){
-          eggsTurnerStepperMotor.stopMotor();
-        }
+        if(motor_stop_automatic_var){
+          if (DC_MOTOR_ACTIVATED){
+            motorStop(DC_MOTOR_1_IN1, DC_MOTOR_1_IN2);
+          }
+          else{
+            eggsTurnerStepperMotor.stopMotor();
+          }
+        }        
       }
       else{
         /* MANUAL MODE - tutti i comandi vengono da RPI */
@@ -673,22 +756,32 @@ void loop() {
       break;
     case 30: // WAIT_TO_REACH_RIGHT_SIDE_INDUCTOR
         if(cw_inductor_input.getInputState()){
-          eggsTurnerStepperMotor.stopMotor();
+          if (DC_MOTOR_ACTIVATED){
+            motorStop(DC_MOTOR_1_IN1, DC_MOTOR_1_IN2);
+          }
+          else{
+            eggsTurnerStepperMotor.stopMotor();
+          }
           eggsTurnerState = 20;
         }
       break;
     case 50: // WAIT_TO_REACH_LEFT_SIDE_INDUCTOR
         if(ccw_inductor_input.getInputState()){
-          eggsTurnerStepperMotor.stopMotor();
+          if (DC_MOTOR_ACTIVATED){
+            motorStop(DC_MOTOR_1_IN1, DC_MOTOR_1_IN2);
+          }
+          else{
+            eggsTurnerStepperMotor.stopMotor();
+          }
           eggsTurnerState = 20;
         }
       break;
     case 100:
-      stepperMotor_moveCCW_cmd_trigger.periodicRun(stepperMotor_moveCCW_cmd);
-      stepperMotor_moveCW_cmd_trigger.periodicRun(stepperMotor_moveCW_cmd);
-      stepperMotor_stop_cmd_trigger.periodicRun(stepperMotor_stop_cmd);
+      motor_moveCCW_cmd_trigger.periodicRun(motor_moveCCW_cmd);
+      motor_moveCW_cmd_trigger.periodicRun(motor_moveCW_cmd);
+      motor_stop_cmd_trigger.periodicRun(motor_stop_cmd);
 
-      if(stepperMotor_moveCCW_cmd_trigger.catchRisingEdge()){
+      if(motor_moveCCW_cmd_trigger.catchRisingEdge()){
         if(ccw_inductor_input.getInputState()){
           // se leggo già, allora non fare nulla (meccanicamente impossibile..io a mano che ciapino). Devo solo notificarlo a RPY
           // home position is reached - full CCW
@@ -697,10 +790,16 @@ void loop() {
         }
         else{
           /* MECHANICAL SAFETY - abilito il movimento solo se NON sto già leggendo */
-          eggsTurnerStepperMotor.moveBackward(STEPPER_MOTOR_SPEED_DEFAULT);
+          if (DC_MOTOR_ACTIVATED){
+            motorCCW(DC_MOTOR_1_IN1, DC_MOTOR_1_IN2);
+            current_DC_motorState_1 = CCW_STATUS;
+          }
+          else{
+            eggsTurnerStepperMotor.moveBackward(STEPPER_MOTOR_SPEED_DEFAULT);
+          } 
         }
       }
-      else if(stepperMotor_moveCW_cmd_trigger.catchRisingEdge()){
+      else if(motor_moveCW_cmd_trigger.catchRisingEdge()){
         if(cw_inductor_input.getInputState()){
           // se leggo già, allora non fare nulla (meccanicamente impossibile..io a mano che ciapino). Devo solo notificarlo a RPY
           // home position is reached - full CW
@@ -709,20 +808,70 @@ void loop() {
         }
         else{
           /* MECHANICAL SAFETY - abilito il movimento solo se NON sto già leggendo */
-          eggsTurnerStepperMotor.moveForward(STEPPER_MOTOR_SPEED_DEFAULT);
+          if (DC_MOTOR_ACTIVATED){
+            motorCW(DC_MOTOR_1_IN1, DC_MOTOR_1_IN2);
+            current_DC_motorState_1 = CW_STATUS;
+          }
+          else{
+            eggsTurnerStepperMotor.moveForward(STEPPER_MOTOR_SPEED_DEFAULT);
+          } 
         }
       }
-      else if(stepperMotor_stop_cmd_trigger.catchRisingEdge()){
-        eggsTurnerStepperMotor.stopMotor();
+      else if(motor_stop_cmd_trigger.catchRisingEdge()){
+        if (DC_MOTOR_ACTIVATED){
+            motorStop(DC_MOTOR_1_IN1, DC_MOTOR_1_IN2);
+          }
+          else{
+            eggsTurnerStepperMotor.stopMotor();
+          }
       }
 
       /* MECHANICAL SAFETY */
       
-      if(ccw_inductor_input.getInputState() and eggsTurnerStepperMotor.isMovingBackward()){
-        eggsTurnerStepperMotor.stopMotor();
+      if(ccw_inductor_input.getInputState() 
+          and 
+          (
+            (
+              (!DC_MOTOR_ACTIVATED)
+              and
+              eggsTurnerStepperMotor.isMovingBackward()
+            )
+            or
+            (
+              DC_MOTOR_ACTIVATED
+              and
+              current_DC_motorState_1 == CCW_STATUS
+            )
+          )
+        ){
+        if (DC_MOTOR_ACTIVATED){
+          motorStop(DC_MOTOR_1_IN1, DC_MOTOR_1_IN2);
+        }
+        else{
+          eggsTurnerStepperMotor.stopMotor();
+        }
       }
-      if(cw_inductor_input.getInputState() and eggsTurnerStepperMotor.isMovingForward()){
-        eggsTurnerStepperMotor.stopMotor();
+      if(cw_inductor_input.getInputState() 
+          and 
+          (
+            (
+              (!DC_MOTOR_ACTIVATED)
+              and
+              eggsTurnerStepperMotor.isMovingForward()
+            )
+            or
+            (
+              DC_MOTOR_ACTIVATED
+              and
+              current_DC_motorState_1 == CW_STATUS
+            )
+          )
+        ){if (DC_MOTOR_ACTIVATED){
+          motorStop(DC_MOTOR_1_IN1, DC_MOTOR_1_IN2);
+        }
+        else{
+          eggsTurnerStepperMotor.stopMotor();
+        }
       }
       
       break;
@@ -811,13 +960,13 @@ void loop() {
   delay(1);
 
   /* reset command section */
-  stepperMotor_moveCCW_automatic_var = false;
-  stepperMotor_moveCW_automatic_var = false;
-  stepperMotor_stop_automatic_var = false;
+  motor_moveCCW_automatic_var = false;
+  motor_moveCW_automatic_var = false;
+  motor_stop_automatic_var = false;
 
-  stepperMotor_moveCCW_cmd = false;
-  stepperMotor_moveCW_cmd = false;
-  stepperMotor_stop_cmd = false;
+  motor_moveCCW_cmd = false;
+  motor_moveCW_cmd = false;
+  motor_stop_cmd = false;
 
   /* DEBUG */
   //digitalWrite(RED_LED, !serial_communication_is_ok);
@@ -958,4 +1107,26 @@ bool splitCommand(String input, String &tag, String &value, String &uid) {
   uid.trim();
 
   return true;
+}
+
+// ============================================================
+//  Funzioni di controllo motore DC
+// ============================================================
+
+// Senso orario (Clockwise)
+void motorCW(int pin_in1, int pin_in2) {
+  analogWrite(pin_in1, MOTOR_SPEED);
+  digitalWrite(pin_in2, LOW);
+}
+
+// Senso antiorario (Counter-Clockwise)
+void motorCCW(int pin_in1, int pin_in2) {
+  digitalWrite(pin_in1, LOW);
+  analogWrite(pin_in2, MOTOR_SPEED);
+}
+
+// Fermo (brake: IN1=LOW, IN2=LOW, ENA=0)
+void motorStop(int pin_in1, int pin_in2) {
+  digitalWrite(pin_in1, LOW);
+  digitalWrite(pin_in2, LOW);
 }
