@@ -16,6 +16,11 @@ PC817 circuitry
 
 
 DA FARE:
+- ricalibrare la bilancia + fare procedura
+- persistente il moltiplicatore del PID
+- interruttore per comando manuale del motore
+
+
 - capire perché se sono in CW reached, la lettura del peso non va ancora
 
 - il duty cycle cambia troppo velocemente (se il time proportionong vwindow è di 10s, forse ha senso fare l'update del pid ogni 10s?)
