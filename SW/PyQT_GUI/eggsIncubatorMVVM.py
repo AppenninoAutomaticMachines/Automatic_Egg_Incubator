@@ -521,9 +521,6 @@ class MainSoftwareThread(QtCore.QThread):
         self.eggTurnerMotor = self.StepperMotor("Egg_Turner_Stepper_Motor")
         self.last_turnsCounter = 0 # serve per ricordarmi il numero di turns counter
         
-        # BUTTON HANDLING
-        self.move_CW_motor_btn = False # = not pressed
-        self.move_CCW_motor_btn = False # = not pressed
 		
 		# PLOT
         self.remove_erroneous_values_from_T_plot = True
@@ -805,6 +802,8 @@ class MainSoftwareThread(QtCore.QThread):
             self.eggTurnerMotor.forceEggsRotation()
         
         if self.current_button == "move_CW_motor_btn":
+            self.eggTurnerMotor.pressButton(move_CW_motor_btn) # ogni volta in cui lo premo, il metodo farà opportunamente il toggle dello stato
+            
             self.move_CW_motor_btn = not self.move_CW_motor_btn # ogni volta in cui lo premo, toggle dello stato
             
             if self.move_CW_motor_btn:
@@ -2490,6 +2489,12 @@ class MainSoftwareThread(QtCore.QThread):
             '''
             self.rotation_state = "not_defined"
             
+            # BUTTON: these are two internal buttons I'll use for manual movements CW and CCW            
+            self.buttons = {
+                "move_CW_motor_btn":  False, # = not pressed
+                "move_CCW_motor_btn": False, # = not pressed
+            }
+            
             
             self.last_execution_time = time.time()
             self.auto_function_interval_sec = 3600  # Default to 1 hour
@@ -2517,6 +2522,23 @@ class MainSoftwareThread(QtCore.QThread):
 
             self.last_time_stable_position_is_reached = None
             self.last_stable_position = None
+            
+        def pressButton(self, button_name: str):
+            if button_name not in self.buttons:
+                raise ValueError(f"Button '{button_name}' not valid. Use: {list(self.buttons.keys())}")
+
+            self.buttons[button_name] = not self.buttons[button_name]
+            state = self.buttons[button_name]
+            print(f"{self.name}: {button_name} button -> {'PRESSED' if state else 'RELEASED'}")
+            
+            if state: # Premuto
+                if button_name == "move_CW_motor_btn":
+                    self.moveCWContinuous()
+                elif button_name == "move_CCW_motor_btn":
+                    self.moveCCWContinuous()
+            else: #Rilasciato
+                self.stop()
+            
 
         def setTurnsCounter(self, value):
             self.turnsCounter = value
@@ -2628,12 +2650,14 @@ class MainSoftwareThread(QtCore.QThread):
                                 print("Reached the IND_CCW limit switch")
                                 self.acknowledge_from_external = None # reset
                                 self.manual_state = "WAITING_FOR_COMMAND"
+                                self.buttons["moveCCWContinuous"] = False # Devo azzerare lo stato, altrimenti si imbanana (rimane 'premuto' nonostante sia arrivato da solo al finecorsa)
                                 
                             if self.acknowledge_from_external == "IND_CW" and self.rotation_state == "CW_rotation_direction":
                                 self.rotation_state = "CW_reached"
                                 print("Reached the IND_CW limit switch")
                                 self.acknowledge_from_external = None # reset
                                 self.manual_state = "WAITING_FOR_COMMAND"
+                                self.buttons["moveCWContinuous"] = False
                         
                         # IF stop command, then stop
                         if self.stop_command:
