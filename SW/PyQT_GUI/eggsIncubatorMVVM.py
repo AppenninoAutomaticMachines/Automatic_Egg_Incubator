@@ -556,6 +556,10 @@ class MainSoftwareThread(QtCore.QThread):
         water_weight_actuator_folder_path = os.path.join(machine_statistics_folder_path, 'Water_Weight')
         if not os.path.exists(water_weight_actuator_folder_path):
             os.makedirs(water_weight_actuator_folder_path)
+            
+        PID_duty_cycle_folder_path = os.path.join(machine_statistics_folder_path, 'PID_Duty_Cycle')
+        if not os.path.exists(PID_duty_cycle_folder_path):
+            os.makedirs(PID_duty_cycle_folder_path)
 
         general_purpose_folder_path = os.path.join(machine_statistics_folder_path, 'General_Purpose')
         if not os.path.exists(general_purpose_folder_path):
@@ -1408,6 +1412,7 @@ class MainSoftwareThread(QtCore.QThread):
                 self.save_data_to_files('Heater', {'Heater_Status': self.thc.get_output_control()})  # need to pass a dictionary
                 self.save_data_to_files('Humidifier', {'Humidifier_status': self.hhc.get_output_control()}) 
                 self.save_data_to_files('Water_Weight', current_weight) 
+                self.save_data_to_files('PID_duty_cycle', {'Heater_Status': self.last_pwm_sent}) # need to pass a dictionary
                 self.last_saving_time = datetime.now()
                 self.main_software_thread_log_message('SAVING', f"Saved data! {self.last_saving_time}")
                 
