@@ -16,6 +16,7 @@ PC817 circuitry
 
 
 DA FARE:
+- provare modifica dei pulsanti
 - ricalibrare la bilancia + fare procedura
 - interruttore per comando manuale del motore
 
