@@ -206,6 +206,14 @@ try:
         plot_all_days('Humidifier', remove_errors)
     elif arg1 == 'PLOT_CURRENT_DAY_DATA_HUMIDIFIER':
         plot_current_day('Humidifier', remove_errors)
+    elif arg1 == 'PLOT_ALL_DAYS_DATA_WATER_WEIGHT':
+        plot_current_day('Water_Weight', remove_errors)
+    elif arg1 == 'PLOT_CURRENT_DAY_DATA_WATER_WEIGHT':
+        plot_current_day('Water_Weight', remove_errors)
+    elif arg1 == 'PLOT_ALL_DAYS_DATA_WATER_WEIGHT':
+        plot_current_day('PID_duty_cycle', remove_errors)
+    elif arg1 == 'PLOT_CURRENT_DAY_DATA_WATER_WEIGHT':
+        plot_current_day('PID_duty_cycle', remove_errors)
     else:
         raise ValueError("Invalid operation specified")
 except Exception as e:
