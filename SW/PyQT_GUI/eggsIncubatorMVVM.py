@@ -1,3 +1,4 @@
+
 import sys
 import random
 from PyQt5 import QtCore, QtWidgets
@@ -448,7 +449,7 @@ class MainSoftwareThread(QtCore.QThread):
         '''
 
         # COPILOT       
-        self.multiplier = 0.0
+        self.multiplier = 3
         self.Kp = 11.28
         self.Ki = 0.000995    # [1/s]
         self.Kd = 0.0         # non usiamo il derivativo
@@ -1065,12 +1066,10 @@ class MainSoftwareThread(QtCore.QThread):
             computed_value = rounded_value * (10 ** (-self.multiplier))
             self.pid_temperature.set_gain_Ki(computed_value)
             self.save_parameter('TEMPERATURE_PID_KI_GAIN', rounded_value) 
-            # NOTA: il valore salvato è in unità normali, tipo 9 o 10. Ma il valore settato in PID è *1e-4! perché per il sistema termico ci vogliono valori molto più piccoli
+            # NOTA: il valore salvato è in unità normali, tipo 9 o 10. Ma il valore settato in PID è *1e-3! perché per il sistema termico ci vogliono valori molto più piccoli
         elif spinbox_name == "Kd_spinBox":
-            #self.pid_temperature.set_gain_Kd(rounded_value)
-            #self.save_parameter('TEMPERATURE_PID_KD_GAIN', rounded_value)
-            self.multiplier = rounded_value
-            print(f"Multiplier now is: -{self.multiplier}")
+            self.pid_temperature.set_gain_Kd(rounded_value)
+            self.save_parameter('TEMPERATURE_PID_KD_GAIN', rounded_value)
         elif spinbox_name == "days_duration_spinBox":            
             self.incubation_duration_days = int(value)
             self.save_parameter('INCUBATION_DURATION_DAYS', int(value))            
