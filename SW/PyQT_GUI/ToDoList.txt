@@ -17,6 +17,7 @@ PC817 circuitry
 
 DA FARE:
 - provare modifica dei pulsanti
+- provare modifica del plot: ho aggiunto el stringhe per water weight e PWD duty cycle (NON FATTA MODIFICA GUI ancora...)
 - ricalibrare la bilancia + fare procedura
 - interruttore per comando manuale del motore
 
