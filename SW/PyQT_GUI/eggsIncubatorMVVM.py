@@ -557,9 +557,9 @@ class MainSoftwareThread(QtCore.QThread):
         if not os.path.exists(water_weight_actuator_folder_path):
             os.makedirs(water_weight_actuator_folder_path)
             
-        PID_duty_cycle_folder_path = os.path.join(machine_statistics_folder_path, 'PID_Duty_Cycle')
-        if not os.path.exists(PID_duty_cycle_folder_path):
-            os.makedirs(PID_duty_cycle_folder_path)
+        PID_Duty_Cycle_folder_path = os.path.join(machine_statistics_folder_path, 'PID_Duty_Cycle')
+        if not os.path.exists(PID_Duty_Cycle_folder_path):
+            os.makedirs(PID_Duty_Cycle_folder_path)
 
         general_purpose_folder_path = os.path.join(machine_statistics_folder_path, 'General_Purpose')
         if not os.path.exists(general_purpose_folder_path):
@@ -806,22 +806,10 @@ class MainSoftwareThread(QtCore.QThread):
             self.eggTurnerMotor.forceEggsRotation()
         
         if self.current_button == "move_CW_motor_btn":
-            self.eggTurnerMotor.pressButton(move_CW_motor_btn) # ogni volta in cui lo premo, il metodo farà opportunamente il toggle dello stato
-            
-            self.move_CW_motor_btn = not self.move_CW_motor_btn # ogni volta in cui lo premo, toggle dello stato
-            
-            if self.move_CW_motor_btn:
-                self.eggTurnerMotor.moveCWContinuous()
-            elif not self.move_CW_motor_btn:
-                self.eggTurnerMotor.stop()
+            self.eggTurnerMotor.pressButton("move_CW_motor_btn") # ogni volta in cui lo premo, il metodo farà opportunamente il toggle dello stato
             
         if self.current_button == "move_CCW_motor_btn":
-            self.move_CCW_motor_btn = not self.move_CCW_motor_btn
-            
-            if self.move_CCW_motor_btn:
-                self.eggTurnerMotor.moveCCWContinuous()
-            elif not self.move_CCW_motor_btn:
-                self.eggTurnerMotor.stop()
+            self.eggTurnerMotor.pressButton("move_CCW_motor_btn") # ogni volta in cui lo premo, il metodo farà opportunamente il toggle dello stato
 				
         if self.current_button == "reset_statistics_T_btn":
             self.thc.reset_all_values()
@@ -1412,7 +1400,7 @@ class MainSoftwareThread(QtCore.QThread):
                 self.save_data_to_files('Heater', {'Heater_Status': self.thc.get_output_control()})  # need to pass a dictionary
                 self.save_data_to_files('Humidifier', {'Humidifier_status': self.hhc.get_output_control()}) 
                 self.save_data_to_files('Water_Weight', current_weight) 
-                self.save_data_to_files('PID_duty_cycle', {'Heater_Status': self.last_pwm_sent}) # need to pass a dictionary
+                self.save_data_to_files('PID_Duty_Cycle', {'PID_Duty_Cycle': self.last_pwm_sent}) # need to pass a dictionary
                 self.last_saving_time = datetime.now()
                 self.main_software_thread_log_message('SAVING', f"Saved data! {self.last_saving_time}")
                 
@@ -1531,6 +1519,8 @@ class MainSoftwareThread(QtCore.QThread):
             folder_path = os.path.join(machine_statistics_folder_path, 'Humidifier')
         elif data_type == 'Water_Weight':
             folder_path = os.path.join(machine_statistics_folder_path, 'Water_Weight')
+        elif data_type == 'PID_Duty_Cycle':
+            folder_path = os.path.join(machine_statistics_folder_path, 'PID_Duty_Cycle')
         elif data_type == 'General_Purpose':
             folder_path = os.path.join(machine_statistics_folder_path, 'General_Purpose')
         else:
@@ -2634,20 +2624,25 @@ class MainSoftwareThread(QtCore.QThread):
                     pass
                 
             elif self.main_state == "MANUAL_MODE":
+                    print(f"{self.main_state} + {self.manual_state}  + {self.stop_command}")
+                    
                     if self.manual_state == "WAITING_FOR_COMMAND": #waiting for command
                         pass
                         
                     if self.manual_state == "MOVING_CW_CONTINUOUSLY": # CW continuous moving
+                        print(f"{self.manual_state} A")
                         self.rotation_state = "CW_rotation_direction"
                         self.new_command = "manual_" + self.rotation_state
                         self.manual_state = "ROTATION_IN_PROGRESS" 
                         
                     if self.manual_state == "MOVING_CCW_CONTINUOUSLY": # CCW continuous moving
+                        print(f"{self.manual_state} B")
                         self.rotation_state = "CCW_rotation_direction"
                         self.new_command = "manual_" + self.rotation_state
                         self.manual_state = "ROTATION_IN_PROGRESS" 
                         
                     if self.manual_state == "ROTATION_IN_PROGRESS": # rotation in progress
+                        print(f"{self.manual_state} C")
                         # IF ack from limit switch --> comunica che è arrivato ack, ma di fatto si ferma da solo per Arduino
                         if self.acknowledge_from_external is not None:         
                             if self.acknowledge_from_external == "IND_CCW" and self.rotation_state == "CCW_rotation_direction":
@@ -2655,21 +2650,17 @@ class MainSoftwareThread(QtCore.QThread):
                                 print("Reached the IND_CCW limit switch")
                                 self.acknowledge_from_external = None # reset
                                 self.manual_state = "WAITING_FOR_COMMAND"
-                                self.buttons["moveCCWContinuous"] = False # Devo azzerare lo stato, altrimenti si imbanana (rimane 'premuto' nonostante sia arrivato da solo al finecorsa)
+                                self.buttons["move_CCW_motor_btn"] = False # Devo azzerare lo stato, altrimenti si imbanana (rimane 'premuto' nonostante sia arrivato da solo al finecorsa)
                                 
                             if self.acknowledge_from_external == "IND_CW" and self.rotation_state == "CW_rotation_direction":
                                 self.rotation_state = "CW_reached"
                                 print("Reached the IND_CW limit switch")
                                 self.acknowledge_from_external = None # reset
                                 self.manual_state = "WAITING_FOR_COMMAND"
-                                self.buttons["moveCWContinuous"] = False
-                        
-                        # IF stop command, then stop
-                        if self.stop_command:
-                            self.manual_state = "STOPPED"
-                            self.stop_command = False
+                                self.buttons["move_CW_motor_btn"] = False
                         
                     if self.manual_state == "STOPPED": 
+                        print(f"{self.manual_state} E")
                         self.new_command = "stop"
                         
                         if self.rotation_state == "CCW_rotation_direction":
@@ -2679,6 +2670,12 @@ class MainSoftwareThread(QtCore.QThread):
                             self.rotation_state = "stopped_from_CW_rotation_direction"
                             
                         self.manual_state = "WAITING_FOR_COMMAND"
+                        
+                    # IF stop command, then stop
+                    if self.stop_command:
+                        print(f"{self.manual_state} D")
+                        self.manual_state = "STOPPED"
+                        self.stop_command = False
             
             elif self.main_state == "AUTOMATIC_MODE":
                 if (current_time - self.last_execution_time >= self.auto_function_interval_sec or self.force_change_rotation_flag):
