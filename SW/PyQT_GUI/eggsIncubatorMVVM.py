@@ -1,4 +1,3 @@
-
 import sys
 import random
 from PyQt5 import QtCore, QtWidgets
