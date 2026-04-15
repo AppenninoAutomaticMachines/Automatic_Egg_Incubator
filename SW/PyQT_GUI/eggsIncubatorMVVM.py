@@ -2623,26 +2623,21 @@ class MainSoftwareThread(QtCore.QThread):
                 else:
                     pass
                 
-            elif self.main_state == "MANUAL_MODE":
-                    print(f"{self.main_state} + {self.manual_state}  + {self.stop_command}")
-                    
+            elif self.main_state == "MANUAL_MODE":                    
                     if self.manual_state == "WAITING_FOR_COMMAND": #waiting for command
                         pass
                         
                     if self.manual_state == "MOVING_CW_CONTINUOUSLY": # CW continuous moving
-                        print(f"{self.manual_state} A")
                         self.rotation_state = "CW_rotation_direction"
                         self.new_command = "manual_" + self.rotation_state
                         self.manual_state = "ROTATION_IN_PROGRESS" 
                         
                     if self.manual_state == "MOVING_CCW_CONTINUOUSLY": # CCW continuous moving
-                        print(f"{self.manual_state} B")
                         self.rotation_state = "CCW_rotation_direction"
                         self.new_command = "manual_" + self.rotation_state
                         self.manual_state = "ROTATION_IN_PROGRESS" 
                         
                     if self.manual_state == "ROTATION_IN_PROGRESS": # rotation in progress
-                        print(f"{self.manual_state} C")
                         # IF ack from limit switch --> comunica che è arrivato ack, ma di fatto si ferma da solo per Arduino
                         if self.acknowledge_from_external is not None:         
                             if self.acknowledge_from_external == "IND_CCW" and self.rotation_state == "CCW_rotation_direction":
@@ -2659,8 +2654,7 @@ class MainSoftwareThread(QtCore.QThread):
                                 self.manual_state = "WAITING_FOR_COMMAND"
                                 self.buttons["move_CW_motor_btn"] = False
                         
-                    if self.manual_state == "STOPPED": 
-                        print(f"{self.manual_state} E")
+                    if self.manual_state == "STOPPED":
                         self.new_command = "stop"
                         
                         if self.rotation_state == "CCW_rotation_direction":
@@ -2673,7 +2667,6 @@ class MainSoftwareThread(QtCore.QThread):
                         
                     # IF stop command, then stop
                     if self.stop_command:
-                        print(f"{self.manual_state} D")
                         self.manual_state = "STOPPED"
                         self.stop_command = False
             
