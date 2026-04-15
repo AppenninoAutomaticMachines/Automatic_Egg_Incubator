@@ -210,9 +210,9 @@ try:
         plot_current_day('Water_Weight', remove_errors)
     elif arg1 == 'PLOT_CURRENT_DAY_DATA_WATER_WEIGHT':
         plot_current_day('Water_Weight', remove_errors)
-    elif arg1 == 'PLOT_ALL_DAYS_DATA_WATER_WEIGHT':
+    elif arg1 == 'PLOT_ALL_DAYS_DATA_PID_DUTY_CYCLE':
         plot_current_day('PID_duty_cycle', remove_errors)
-    elif arg1 == 'PLOT_CURRENT_DAY_DATA_WATER_WEIGHT':
+    elif arg1 == 'PLOT_CURRENT_DAY_DATA_PID_DUTY_CYCLE':
         plot_current_day('PID_duty_cycle', remove_errors)
     else:
         raise ValueError("Invalid operation specified")
