@@ -2721,18 +2721,18 @@ class MainSoftwareThread(QtCore.QThread):
 					
 		# ogni tot diciamo che è passato il tempo per fare un update dei dati del motore: il programma, da fuori, riceve il segnale e prende i dati
                 #print(time.time() - self.last_motor_data_update_sec)
-                if ((time.time() - self.last_motor_data_update_sec) >= self.motor_data_update_interval_sec # update periodico
-                    or 
-                    self.force_change_rotation_flag # forzatura dell'update quando forzo un giro a mano
-                    or
-                    (self.new_command is not None and "automatic_" in self.new_command) # forzatura dell'update se non è scaduto il tempo ma se è scattato il comando di turn
-		    or
-		    (previous_rotation_state == "CCW_rotation_direction" and self.rotation_state == "CCW_reached") # forzatura update della visu se non è scaduto il tempo ma ho raggiunto il finecorsa
-		    or
-		    (previous_rotation_state == "CW_rotation_direction" and self.rotation_state == "CW_reached")
-		    ):
-                    self.update_motor_data = True
-                    self.last_motor_data_update_sec = time.time()
+            if ((time.time() - self.last_motor_data_update_sec) >= self.motor_data_update_interval_sec # update periodico
+                or 
+                self.force_change_rotation_flag # forzatura dell'update quando forzo un giro a mano
+                or
+                (self.new_command is not None and "automatic_" in self.new_command) # forzatura dell'update se non è scaduto il tempo ma se è scattato il comando di turn
+                or
+                (previous_rotation_state == "CCW_rotation_direction" and self.rotation_state == "CCW_reached") # forzatura update della visu se non è scaduto il tempo ma ho raggiunto il finecorsa
+                or
+                (previous_rotation_state == "CW_rotation_direction" and self.rotation_state == "CW_reached")
+                ):
+                self.update_motor_data = True
+                self.last_motor_data_update_sec = time.time()
                 
             #print(f"{self.main_state} {self.manual_state} {self.rotation_state} {self.new_command}")
                             
