@@ -185,13 +185,13 @@ float temp_fromDHT22; //Variabile in cui verrà inserita la temperatura
 
 /* HX711 WEIGHT CONTROL LOAD CELL */
 HX711 scale;
-int32_t calibration_offset = -79845; 
+int32_t calibration_offset = 39679; 
 /* 
   The HX711’s raw readings are 24-bit signed values, which easily fit inside a 32-bit signed integer.
   The HX711 Arduino libraries typically use long, long int, or int32_t for offsets and raw data.
   int32_t guarantees a 32-bit integer on all platforms, which is safer than int (whose size varies).
 */
-float calibration_scale = 420.0f; // to be extra explicit: In Arduino/C/C++, the f at the end of a number makes it a float literal instead of a double. .f tells the compiler the number is a float.
+float calibration_scale = 421.390777;//420.0f; // to be extra explicit: In Arduino/C/C++, the f at the end of a number makes it a float literal instead of a double. .f tells the compiler the number is a float.
 float waterWeight;
 /*
   La lettura del sensore è decisamente molto lunga, in termini di tempo. Quindi se leggiamo il peso mentre il motore gira si vede molto l'interruzione del treno di step a causa della lettura.
