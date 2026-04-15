@@ -2669,6 +2669,19 @@ class MainSoftwareThread(QtCore.QThread):
                     if self.stop_command:
                         self.manual_state = "STOPPED"
                         self.stop_command = False
+                        
+            if ((time.time() - self.last_motor_data_update_sec) >= self.motor_data_update_interval_sec # update periodico
+                or
+                (self.new_command is not None and "manual_" in self.new_command) # forzatura dell'update se non è scaduto il tempo ma se è scattato un comando di RUN manuale
+                or
+                (self.new_command is not None and "stop" in self.new_command) # forzatura dell'update se non è scaduto il tempo ma se è scattato un comando di stop
+                or
+                (previous_rotation_state == "CCW_rotation_direction" and self.rotation_state == "CCW_reached") # forzatura update della visu se non è scaduto il tempo ma ho raggiunto il finecorsa
+                or
+                (previous_rotation_state == "CW_rotation_direction" and self.rotation_state == "CW_reached")
+                ):
+                self.update_motor_data = True
+                self.last_motor_data_update_sec = time.time()
             
             elif self.main_state == "AUTOMATIC_MODE":
                 if (current_time - self.last_execution_time >= self.auto_function_interval_sec or self.force_change_rotation_flag):
