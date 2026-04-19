@@ -191,7 +191,7 @@ try:
     elif arg1 == 'PLOT_ALL_DAYS_DATA_MEAN_TEMPERATURE':
         plot_mean_all_days('Temperatures', remove_errors)
     elif arg1 == 'PLOT_ALL_DAYS_DATA_TEMPERATURES':
-        plot_current_day('Temperatures', remove_errors)
+        plot_all_days('Temperatures', remove_errors)
     elif arg1 == 'PLOT_CURRENT_DAY_DATA_TEMPERATURES':
         plot_current_day('Temperatures', remove_errors)
     elif arg1 == 'PLOT_ALL_DAYS_DATA_HUMIDITY':
