@@ -16,6 +16,8 @@ PC817 circuitry
 
 
 DA FARE:
+- se hai arduino acceso, che ha stabilito almeno una volta la comunicazione, poi spegni RPI, e lo riaccendi. Arduino non si riprende. Deve ripristinare tutto nel caso in cui NON veda più l'alive, per coprire
+	il caso di spegnimento solo di RPY
 - provare modifica dei pulsanti
 - provare modifica del plot: ho aggiunto el stringhe per water weight e PWD duty cycle (NON FATTA MODIFICA GUI ancora...)
 - ricalibrare la bilancia + fare procedura
