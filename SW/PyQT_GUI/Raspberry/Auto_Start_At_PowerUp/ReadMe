@@ -1,3 +1,46 @@
+AGGIUNTA COMMENTI E MODIFICHE DA CLAUDE
+ho visto, il 02/05/2026 che in realtà l'autostart non funzionava benissimo. Ho dovuto correggere.
+
+File 1 — Lo script di avvio
+Percorso: /home/filippo/Documents/PyQT_GUI/start_with_countdown.sh
+Si occupa di:
+
+Aspettare che il display grafico sia pronto
+Fare il countdown di 60 secondi (per dare tempo all'orologio di sincronizzarsi con la rete)
+Aspettare che Arduino sia disponibile su /dev/ttyACM0
+Avviare il programma Python
+
+
+File 2 — L'autostart desktop
+Percorso: ~/.config/autostart/pyqtgui.desktop
+Si occupa di:
+
+Dire a LXDE (il desktop del Raspberry) di lanciare automaticamente lo script all'avvio
+Aprire un terminale lxterminal visibile così puoi vedere cosa sta succedendo
+
+
+Flusso di avvio
+Raspberry si accende
+        ↓
+LXDE carica il desktop
+        ↓
+pyqtgui.desktop viene eseguito
+        ↓
+lxterminal apre un terminale
+        ↓
+start_with_countdown.sh parte
+        ↓
+Aspetta display grafico
+        ↓
+Countdown 60 secondi
+        ↓
+Aspetta /dev/ttyACM0
+        ↓
+Python avvia eggsIncubatorMVVM.py
+
+
+----------------------
+
 Nuova procedura, che per questioni di ambiente grafico funziona meglio (dovevo muovere il mouse...ecc)
 
 Per GUI app visibili, il modo corretto è lanciare il terminale da dentro l’ambiente grafico (non da systemd).
