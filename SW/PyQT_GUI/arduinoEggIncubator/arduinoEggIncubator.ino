@@ -941,7 +941,7 @@ void loop() {
   
   // SENDING TO RPY
   
-  if(listofDataToSend_numberOfData > 0){
+  if(listofDataToSend_numberOfData > 0 && serial_communication_is_ok){
     Serial.print('@'); // SYMBOL TO START BOARDS TRANSMISSION
     for(byte i = 0; i < listofDataToSend_numberOfData; i++){
       Serial.print(listofDataToSend[i]); 
@@ -1011,7 +1011,7 @@ int readFromBoard(){ // returns the number of commands received
   bool enableReading = false;
   byte receivedCommandsIndex = 0;
 
-  unsigned long  startReceiving; // mi ricordo appena entro in while loop
+  unsigned long  startReceiving = millis(); // mi ricordo appena entro in while loop
 
   while(receivingDataFromBoard){
     // qui è bloccante...assumo che prima o poi arduino pubblichi
