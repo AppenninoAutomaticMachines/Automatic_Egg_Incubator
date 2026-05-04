@@ -127,6 +127,7 @@ class SerialThread(QtCore.QThread):
                 self.serial_thread_log_message('INFO', 'Serial port opened successfully')
                 # Discard any initial data to avoid decode errors
                 self.serial_port.reset_input_buffer()
+                self.serial_port.reset_output_buffer()
                 return True
             except serial.SerialException as e:
                 self.serial_thread_log_message('ERROR', f"Failed to open serial port: {e}. Retrying in {self.retry_interval} seconds...")
@@ -703,7 +704,7 @@ class MainSoftwareThread(QtCore.QThread):
             (self.incubation_end_date - today).days
         )
         
-        if self.incubation_end_date_previous != self.incubation_end_date:
+        if self.incubation_end_date_previous != self.incubation_end_date or self.incubation_end_date_previous is None:
             self.update_date_edit.emit("endDate_dateTimeBox", self.incubation_end_date)
         
         if (self.days_passed_previous != self.days_passed) or (self.days_left_previous != self.days_left):
@@ -1062,7 +1063,8 @@ class MainSoftwareThread(QtCore.QThread):
             self.save_parameter('TEMPERATURE_PID_KD_GAIN', rounded_value)
         elif spinbox_name == "days_duration_spinBox":            
             self.incubation_duration_days = int(value)
-            self.save_parameter('INCUBATION_DURATION_DAYS', int(value))            
+            self.save_parameter('INCUBATION_DURATION_DAYS', int(value))  
+            self.update_incubation_state()          
             
     def handle_intialization_step(self, value_name, value):
         rounded_value = round(value, 1)
@@ -1103,6 +1105,7 @@ class MainSoftwareThread(QtCore.QThread):
             """
             # devo anche aggiornare la visualizzazione della start date!
             self.update_date_edit.emit("startDate_dateTimeBox", self.incubation_start_date)
+            self.update_incubation_state()
             
     def handle_radio_button_toggle(self, value_name, value):
         if value_name == "heaterOFF_radioBtn":
