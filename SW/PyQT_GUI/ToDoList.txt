@@ -16,6 +16,8 @@ PC817 circuitry
 
 
 DA FARE:
+- togliere lo spin box dalle date (start date e end date) nella GUI, perché le date le clicchi sul calendario
+- ingrandire la visualizzazione del calendario, è croppata in basso
 - se hai arduino acceso, che ha stabilito almeno una volta la comunicazione, poi spegni RPI, e lo riaccendi. Arduino non si riprende. Deve ripristinare tutto nel caso in cui NON veda più l'alive, per coprire
 	il caso di spegnimento solo di RPY
 - provare modifica dei pulsanti
