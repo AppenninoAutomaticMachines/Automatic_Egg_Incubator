@@ -1,0 +1,2220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Egg Incubator</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    /* ── Design tokens ─────────────────────────────────────────────────── */
+    :root {
+      --bg:        #0e0c08;
+      --surface:   #17140d;
+      --card:      #221d12;
+      --border:    #3d3520;
+      --amber:     #f5a623;
+      --heat:      #e85c2a;
+      --blue:      #4da6ff;
+      --green:     #3ecb7a;
+      --red:       #e84848;
+      --purple:    #c090f8;
+      --muted:     #8a8070;
+      --text:      #ede8d8;
+      --sidebar-w: 194px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: .875rem;
+    }
+
+    /* ── Sidebar ───────────────────────────────────────────────────────── */
+    #sidebar {
+      position: fixed; top: 0; left: 0;
+      width: var(--sidebar-w); height: 100vh;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      display: flex; flex-direction: column;
+      z-index: 100;
+    }
+
+    .sb-brand {
+      padding: .9rem .85rem;
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: .5rem;
+    }
+    .sb-brand .sb-logo { font-size: 1.3rem; }
+    .sb-brand .sb-name { font-size: .92rem; font-weight: 800; color: var(--amber); letter-spacing: -.01em; }
+    .sb-brand .sb-sub  { font-size: .68rem; color: var(--muted); font-weight: 400; }
+
+    .sb-section { font-size: .6rem; font-weight: 700; text-transform: uppercase; letter-spacing: .09em; color: var(--muted); padding: .55rem .85rem .15rem; }
+
+    .sb-nav { flex: 1; list-style: none; margin: 0; padding: .35rem 0; overflow-y: auto; }
+
+    .sb-nav li {
+      display: flex; align-items: center; gap: .48rem;
+      padding: .46rem .75rem;
+      margin: 1px 5px;
+      border-radius: 7px; border-left: 2px solid transparent;
+      cursor: pointer; color: var(--muted);
+      font-weight: 500; font-size: .81rem;
+      transition: background .12s, color .12s;
+      user-select: none;
+    }
+    .sb-nav li:hover   { background: rgba(245,166,35,.07); color: var(--text); }
+    .sb-nav li.active  { background: rgba(245,166,35,.12); color: var(--amber); border-left-color: var(--amber); }
+    .sb-nav li .ico    { width: 1.1rem; text-align: center; flex-shrink: 0; font-size: .88rem; }
+
+    .sb-footer {
+      padding: .6rem .85rem;
+      border-top: 1px solid var(--border);
+      font-size: .72rem;
+    }
+    .conn-row { display: flex; align-items: center; gap: .4rem; margin-bottom: .2rem; }
+    #conn-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--red); flex-shrink: 0;
+      transition: background .3s, box-shadow .3s;
+    }
+    #conn-dot.ok { background: var(--green); box-shadow: 0 0 5px var(--green); }
+    #conn-lbl  { color: var(--muted); }
+    #sys-time  { color: var(--muted); font-size: .69rem; font-variant-numeric: tabular-nums; }
+
+    /* ── Main content ──────────────────────────────────────────────────── */
+    #content { margin-left: var(--sidebar-w); min-height: 100vh; padding: 1.15rem 1.3rem 2rem; }
+
+    .page        { display: none; }
+    .page.active { display: block; }
+
+    .page-title {
+      font-size: 1rem; font-weight: 700;
+      margin-bottom: 1rem; padding-bottom: .45rem;
+      border-bottom: 1px solid var(--border);
+      color: var(--amber);
+      display: flex; align-items: center; gap: .45rem;
+    }
+
+    /* ── Generic card ──────────────────────────────────────────────────── */
+    .gcard { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: .85rem 1rem; }
+    .gcard-title { font-size: .67rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: .6rem; }
+
+    /* ── KPI box ───────────────────────────────────────────────────────── */
+    .kpi { background: var(--card); border: 1px solid var(--border); border-radius: 9px; padding: .65rem .85rem; }
+    .kpi .kpi-lbl { font-size: .62rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: .2rem; }
+    .kpi .kpi-val { font-size: 1.05rem; font-weight: 700; color: var(--blue); }
+
+    /* ── Temperature sensor tile ───────────────────────────────────────── */
+    .temp-tile {
+      background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+      padding: .65rem .5rem; text-align: center; position: relative;
+      transition: border-color .2s;
+    }
+    .temp-tile:hover { border-color: var(--amber); }
+    .temp-tile .tl-name { font-size: .59rem; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); margin-bottom: .2rem; }
+    .temp-tile .tl-val  { font-size: 1.45rem; font-weight: 800; color: var(--amber); line-height: 1; }
+    .temp-tile .tl-val.ext { color: var(--purple); }
+    .temp-tile .tl-unit { font-size: .63rem; color: var(--muted); margin-top: .04rem; }
+    .temp-tile .tl-dot  { position: absolute; top: 6px; right: 6px; width: 6px; height: 6px; border-radius: 50%; background: var(--green); }
+    .temp-tile .tl-dot.err { background: var(--red); }
+
+    /* ── Status pill ───────────────────────────────────────────────────── */
+    .spill {
+      display: inline-flex; align-items: center; gap: .3rem;
+      padding: .24rem .58rem; border-radius: 20px;
+      font-size: .72rem; font-weight: 600; white-space: nowrap;
+    }
+    .spill.on       { background: rgba(232,92,42,.15); color: var(--heat); border: 1px solid rgba(232,92,42,.3); }
+    .spill.on.hum   { background: rgba(77,166,255,.12); color: var(--blue); border: 1px solid rgba(77,166,255,.3); }
+    .spill.on.vlv   { background: rgba(62,203,122,.12); color: var(--green); border: 1px solid rgba(62,203,122,.3); }
+    .spill.off      { background: rgba(138,128,112,.07); color: var(--muted); border: 1px solid var(--border); }
+    .spill .dot     { width: 5px; height: 5px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+    .spill.on .dot  { animation: pulse 1.6s infinite; }
+
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
+
+    /* ── Progress / bar ────────────────────────────────────────────────── */
+    .t-bar  { height: 5px; background: var(--border); border-radius: 3px; overflow: hidden; margin: .55rem 0 .25rem; }
+    .t-fill { height: 100%; border-radius: 3px; background: linear-gradient(90deg, var(--amber), var(--heat)); transition: width .6s ease; }
+
+    .dc-bar  { height: 7px; background: var(--border); border-radius: 4px; overflow: hidden; }
+    .dc-fill { height: 100%; border-radius: 4px; background: linear-gradient(90deg, var(--amber), var(--heat)); transition: width .4s ease; }
+
+    /* ── Spinbox row ───────────────────────────────────────────────────── */
+    .sb-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: .37rem 0; border-bottom: 1px solid rgba(61,53,32,.6);
+    }
+    .sb-row:last-child { border-bottom: none; }
+    .sb-lbl { color: var(--text); font-size: .82rem; }
+    .sb-inp { width: 100px; text-align: right; }
+
+    /* ── Dark form controls ────────────────────────────────────────────── */
+    .form-control, .form-select {
+      background: var(--surface) !important; border-color: var(--border) !important;
+      color: var(--text) !important; font-size: .82rem;
+    }
+    .form-control:focus, .form-select:focus {
+      border-color: var(--amber) !important;
+      box-shadow: 0 0 0 2px rgba(245,166,35,.18) !important;
+    }
+    .form-check-input { background-color: var(--surface); border-color: var(--border); }
+    .form-check-input:checked { background-color: var(--amber); border-color: var(--amber); }
+    .form-check-label { color: var(--text); font-size: .82rem; }
+
+    /* ── Info row ──────────────────────────────────────────────────────── */
+    .info-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: .33rem 0; border-bottom: 1px solid rgba(61,53,32,.45); font-size: .81rem;
+    }
+    .info-row:last-child { border-bottom: none; }
+    .info-row .il { color: var(--muted); }
+    .info-row .iv { color: var(--amber); font-weight: 600; }
+
+    /* ── Motor button ──────────────────────────────────────────────────── */
+    .mbtn {
+      display: block; width: 100%; padding: .55rem .75rem;
+      background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+      color: var(--text); font-weight: 600; font-size: .8rem; text-align: center;
+      cursor: pointer; transition: border-color .14s, color .14s, background .14s;
+    }
+    .mbtn:hover  { border-color: var(--amber); color: var(--amber); }
+    .mbtn.active { background: rgba(245,166,35,.12); border-color: var(--amber); color: var(--amber); }
+
+    /* ── Stats table ───────────────────────────────────────────────────── */
+    .stbl { width: 100%; border-collapse: collapse; font-size: .79rem; }
+    .stbl th {
+      font-size: .64rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .05em; color: var(--muted);
+      padding: .3rem .45rem; border-bottom: 1px solid var(--border); text-align: right;
+    }
+    .stbl th:first-child { text-align: left; }
+    .stbl td {
+      padding: .3rem .45rem; border-bottom: 1px solid rgba(61,53,32,.35);
+      color: var(--text); text-align: right;
+    }
+    .stbl td:first-child { text-align: left; color: var(--muted); }
+    .stbl .sv { color: var(--amber); font-weight: 600; }
+
+    /* ── Utility buttons ───────────────────────────────────────────────── */
+    .btn-dk {
+      background: var(--surface); border: 1px solid var(--border);
+      color: var(--text); font-size: .76rem; border-radius: 6px;
+      padding: .27rem .58rem; cursor: pointer; transition: border-color .12s, color .12s;
+    }
+    .btn-dk:hover { border-color: var(--amber); color: var(--amber); }
+    .btn-danger-dk {
+      background: rgba(232,72,72,.1); border: 1px solid rgba(232,72,72,.3);
+      color: var(--red); font-size: .76rem; border-radius: 6px;
+      padding: .27rem .58rem; cursor: pointer;
+    }
+    .btn-danger-dk:hover { background: rgba(232,72,72,.2); }
+
+    /* ── Delta badge ───────────────────────────────────────────────────── */
+    .delta-badge {
+      display: inline-flex; align-items: center; gap: .2rem;
+      font-size: .71rem; font-weight: 700;
+      padding: .14rem .42rem; border-radius: 5px;
+    }
+    .delta-badge.cold { background: rgba(77,166,255,.12); color: var(--blue); }
+    .delta-badge.warm { background: rgba(232,92,42,.12); color: var(--heat); }
+    .delta-badge.ok   { background: rgba(62,203,122,.12); color: var(--green); }
+
+    /* ── Health item ───────────────────────────────────────────────────── */
+    .health-item {
+      display: flex; align-items: center; gap: .55rem;
+      padding: .48rem 0; border-bottom: 1px solid rgba(61,53,32,.45); font-size: .81rem;
+    }
+    .health-item:last-child { border-bottom: none; }
+    .health-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+    .health-dot.ok   { background: var(--green); }
+    .health-dot.warn { background: var(--amber); }
+    .health-dot.err  { background: var(--red); }
+    .health-lbl { color: var(--muted); flex: 1; }
+    .health-val { color: var(--text); font-weight: 600; }
+
+    /* ── Motor compass ─────────────────────────────────────────────────── */
+    .motor-compass { width: 90px; height: 90px; margin: 0 auto; }
+    .motor-arrow-group { transition: opacity .12s; }
+    .motor-arrow-group.blinking { animation: motorArrowBlink .85s ease-in-out infinite; }
+    @keyframes motorArrowBlink { 0%, 100% { opacity: 1; } 50% { opacity: .18; } }
+    .motor-reach-light { transition: fill .2s, filter .2s; }
+    #lightCCW.lit { fill: #c090f8; filter: drop-shadow(0 0 3px #c090f8); }
+    #lightCW.lit  { fill: #f5a623; filter: drop-shadow(0 0 3px #f5a623); }
+
+    /* ── Mobile ────────────────────────────────────────────────────────── */
+    @media (max-width: 768px) {
+      #sidebar       { transform: translateX(-100%); transition: transform .22s; }
+      #sidebar.open  { transform: translateX(0); }
+      #content       { margin-left: 0; }
+      #hbg           { display: flex !important; }
+    }
+    #hbg {
+      display: none; position: fixed; top: .6rem; left: .6rem; z-index: 200;
+      background: var(--card); border: 1px solid var(--border);
+      color: var(--amber); border-radius: 6px;
+      padding: .24rem .5rem; font-size: 1rem; cursor: pointer;
+      align-items: center;
+    }
+
+    /* ── Incubation calendar ─────────────────────────────────────────────── */
+    .inc-cal { display: flex; flex-wrap: wrap; gap: 1.6rem; }
+
+    .inc-cal-month h4 {
+      font-size: .78rem; font-weight: 700; color: var(--amber);
+      text-align: center; margin: 0 0 .4rem;
+    }
+    .inc-cal-grid {
+      display: grid; grid-template-columns: repeat(7, 1fr);
+      gap: 2px; text-align: center;
+    }
+    .inc-cal-hdr { font-size: .58rem; color: var(--muted); padding: .12rem 0; }
+    .inc-cal-day {
+      border-radius: 3px; padding: .2rem .04rem;
+      font-size: .68rem; line-height: 1.4; cursor: default;
+      color: var(--muted);
+    }
+    .inc-cal-day.passed {
+      background: rgba(62,203,122,.2); color: var(--green); font-weight: 600;
+    }
+    .inc-cal-day.today {
+      background: var(--amber); color: #0e0c08;
+      font-weight: 800; border-radius: 50%;
+    }
+    .inc-cal-day.remain {
+      background: rgba(232,72,72,.15); color: #ff7f7f; font-weight: 500;
+    }
+    .inc-cal-day.start-d { outline: 1px solid rgba(77,166,255,.75); outline-offset: -1px; }
+    .inc-cal-day.end-d   { outline: 1px solid rgba(232,72,72,.85);  outline-offset: -1px; }
+
+    /* ── Language switch ───────────────────────────────────────────────── */
+    #langSwitch {
+      position: fixed; top: .6rem; right: .8rem; z-index: 200;
+      display: flex; gap: .3rem;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 8px; padding: .25rem;
+    }
+    .lang-flag {
+      background: transparent; border: 1px solid transparent; border-radius: 6px;
+      font-size: 1.05rem; line-height: 1; padding: .25rem .4rem; cursor: pointer;
+      opacity: .5; transition: opacity .15s, border-color .15s, background .15s;
+    }
+    .lang-flag:hover { opacity: .85; }
+    .lang-flag.active { opacity: 1; border-color: var(--amber); background: rgba(245,166,35,.1); }
+
+  </style>
+</head>
+<body>
+
+<button id="hbg" onclick="document.getElementById('sidebar').classList.toggle('open')">☰</button>
+
+<div id="langSwitch">
+  <button class="lang-flag" id="flag_en" onclick="setLanguage('en')" title="English">🇬🇧</button>
+  <button class="lang-flag" id="flag_it" onclick="setLanguage('it')" title="Italiano">🇮🇹</button>
+</div>
+
+<!-- ════════════════════════════ SIDEBAR ════════════════════════════════════ -->
+<nav id="sidebar">
+  <div class="sb-brand">
+    <div class="sb-logo">🥚</div>
+    <div>
+      <div class="sb-name">Incubator</div>
+      <div class="sb-sub">Control Panel</div>
+    </div>
+  </div>
+
+  <ul class="sb-nav" id="sideNav">
+    <div class="sb-section">Monitor</div>
+    <li class="active" data-pg="dashboard"><span class="ico">📊</span><span class="nav-lbl">Dashboard</span></li>
+    <li data-pg="chart"  ><span class="ico">📈</span><span class="nav-lbl">Live Chart</span></li>
+    <li data-pg="history"><span class="ico">🗂️</span><span class="nav-lbl">History</span></li>
+    <li data-pg="stats"  ><span class="ico">📋</span><span class="nav-lbl">Statistics</span></li>
+
+    <div class="sb-section">Control</div>
+    <li data-pg="temp"  ><span class="ico">🌡️</span><span class="nav-lbl">Temperature</span></li>
+    <li data-pg="water" ><span class="ico">💧</span><span class="nav-lbl">Water &amp; Humidity</span></li>
+    <li data-pg="motor" ><span class="ico">⚙️</span><span class="nav-lbl">Motor</span></li>
+
+    <div class="sb-section">Setup</div>
+    <li data-pg="days"  ><span class="ico">📅</span><span class="nav-lbl">Incubation</span></li>
+    <li data-pg="system"><span class="ico">🔧</span><span class="nav-lbl">System</span></li>
+  </ul>
+
+  <div class="sb-footer">
+    <div class="conn-row">
+      <div id="conn-dot"></div>
+      <span id="conn-lbl">Disconnected</span>
+    </div>
+    <div id="sys-time">--:--:--</div>
+  </div>
+</nav>
+
+<!-- ════════════════════════════ MAIN CONTENT ═══════════════════════════════ -->
+<main id="content">
+
+  <!-- ════════════════════════ DASHBOARD ══════════════════════════════════════ -->
+  <div class="page active" id="page-dashboard">
+    <div class="page-title">📊 Dashboard</div>
+
+    <!-- Row 1: gauges + water tank -->
+    <div class="row g-2 mb-2">
+
+      <!-- Big temperature arc gauge -->
+      <div class="col-lg-4">
+        <div class="gcard h-100 d-flex flex-column align-items-center justify-content-center">
+          <div class="gcard-title w-100">Internal Temperature (avg)</div>
+          <svg id="tempGaugeSvg" viewBox="0 0 180 150" style="width:100%;max-width:220px" class="gauge-svg">
+            <!-- min/max labels -->
+            <text x="18" y="128" text-anchor="middle" fill="#8a8070" font-size="9">30°</text>
+            <text x="162" y="128" text-anchor="middle" fill="#8a8070" font-size="9">45°</text>
+            <!-- background track -->
+            <circle cx="90" cy="90" r="62"
+              fill="none" stroke="#3d3520" stroke-width="10" stroke-linecap="round"
+              stroke-dasharray="290.4 97.2"
+              transform="rotate(135, 90, 90)"/>
+            <!-- value arc -->
+            <circle id="tempGaugeArc" cx="90" cy="90" r="62"
+              fill="none" stroke="#f5a623" stroke-width="10" stroke-linecap="round"
+              stroke-dasharray="0 387.6"
+              transform="rotate(135, 90, 90)"/>
+            <!-- center text -->
+            <text id="gaugeTempVal" x="90" y="85" text-anchor="middle"
+              fill="#ede8d8" font-size="26" font-weight="800" font-family="sans-serif">--.-</text>
+            <text x="90" y="102" text-anchor="middle" fill="#8a8070" font-size="9">°C  internal avg</text>
+            <!-- delta from setpoint -->
+            <text id="gaugeDelta" x="90" y="116" text-anchor="middle"
+              fill="#8a8070" font-size="8">Δ SP: ---</text>
+          </svg>
+          <!-- sensor dots row -->
+          <div class="d-flex gap-2 mt-1 flex-wrap justify-content-center">
+            <div class="temp-tile" style="min-width:52px">
+              <div class="tl-name">T1</div><div class="tl-val" id="temp1">---</div><div class="tl-unit">°C</div>
+              <div class="tl-dot" id="dot1"></div>
+            </div>
+            <div class="temp-tile" style="min-width:52px">
+              <div class="tl-name">T2</div><div class="tl-val" id="temp2">---</div><div class="tl-unit">°C</div>
+              <div class="tl-dot" id="dot2"></div>
+            </div>
+            <div class="temp-tile" style="min-width:52px">
+              <div class="tl-name">T3</div><div class="tl-val" id="temp3">---</div><div class="tl-unit">°C</div>
+              <div class="tl-dot" id="dot3"></div>
+            </div>
+            <div class="temp-tile" style="min-width:52px">
+              <div class="tl-name">T4</div><div class="tl-val" id="temp4">---</div><div class="tl-unit">°C</div>
+              <div class="tl-dot" id="dot4"></div>
+            </div>
+            <div class="temp-tile" style="min-width:52px">
+              <div class="tl-name">EXT</div><div class="tl-val ext" id="externalTemp">---</div><div class="tl-unit">°C</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Humidity arc gauge -->
+      <div class="col-lg-4">
+        <div class="gcard h-100 d-flex flex-column align-items-center justify-content-center">
+          <div class="gcard-title w-100">Humidity &amp; Water</div>
+
+          <svg id="humGaugeSvg" viewBox="0 0 140 118" style="width:100%;max-width:180px" class="gauge-svg">
+            <text x="14" y="100" text-anchor="middle" fill="#8a8070" font-size="8">0%</text>
+            <text x="126" y="100" text-anchor="middle" fill="#8a8070" font-size="8">100%</text>
+            <circle cx="70" cy="70" r="48"
+              fill="none" stroke="#3d3520" stroke-width="9" stroke-linecap="round"
+              stroke-dasharray="226.2 75.4"
+              transform="rotate(135, 70, 70)"/>
+            <circle id="humGaugeArc" cx="70" cy="70" r="48"
+              fill="none" stroke="#4da6ff" stroke-width="9" stroke-linecap="round"
+              stroke-dasharray="0 301.6"
+              transform="rotate(135, 70, 70)"/>
+            <text id="gaugeHumVal" x="70" y="65" text-anchor="middle"
+              fill="#ede8d8" font-size="20" font-weight="800" font-family="sans-serif">--%</text>
+            <text x="70" y="80" text-anchor="middle" fill="#8a8070" font-size="8">relative humidity</text>
+          </svg>
+
+          <div class="d-flex gap-3 justify-content-center mt-1 w-100">
+            <div class="kpi text-center" style="flex:1">
+              <div class="kpi-lbl">Hum Sensor T</div>
+              <div class="kpi-val" style="font-size:.9rem" id="tempFromHumidity">---</div>
+              <div style="font-size:.65rem;color:var(--muted)">°C</div>
+            </div>
+            <div class="kpi text-center" style="flex:1">
+              <div class="kpi-lbl">Hum. Ctrl</div>
+              <span class="spill off" id="humidifierStatus"><span class="dot"></span>OFF</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Water tank SVG + valve -->
+      <div class="col-lg-4">
+        <div class="gcard h-100 d-flex flex-column align-items-center justify-content-center">
+          <div class="gcard-title w-100">Water Reservoir</div>
+
+          <div class="d-flex align-items-center gap-3">
+            <!-- Tank SVG -->
+            <svg viewBox="0 0 70 130" style="width:70px;flex-shrink:0">
+              <!-- Tank body -->
+              <rect x="8" y="8" width="54" height="112" rx="6"
+                fill="none" stroke="#3d3520" stroke-width="2"/>
+              <!-- Fill clip region (inside) -->
+              <defs>
+                <clipPath id="tankClip">
+                  <rect x="9" y="9" width="52" height="110" rx="5"/>
+                </clipPath>
+              </defs>
+              <!-- Water fill -->
+              <rect id="waterFillRect" x="9" y="90" width="52" height="29"
+                fill="rgba(77,166,255,0.25)" clip-path="url(#tankClip)"/>
+              <!-- Water surface shimmer -->
+              <rect id="waterSurface" x="9" y="90" width="52" height="3"
+                fill="rgba(77,166,255,0.5)" clip-path="url(#tankClip)"/>
+              <!-- Grid lines -->
+              <line x1="8" y1="36" x2="62" y2="36" stroke="#3d3520" stroke-width=".8" stroke-dasharray="4,3"/>
+              <line x1="8" y1="64" x2="62" y2="64" stroke="#3d3520" stroke-width=".8" stroke-dasharray="4,3"/>
+              <line x1="8" y1="92" x2="62" y2="92" stroke="#3d3520" stroke-width=".8" stroke-dasharray="4,3"/>
+              <!-- Scale labels -->
+              <text x="5" y="39"  text-anchor="end" fill="#8a8070" font-size="6">4kg</text>
+              <text x="5" y="67"  text-anchor="end" fill="#8a8070" font-size="6">2kg</text>
+              <text x="5" y="95"  text-anchor="end" fill="#8a8070" font-size="6">1kg</text>
+              <!-- Value text -->
+              <text id="waterTankPct" x="35" y="75" text-anchor="middle"
+                fill="#4da6ff" font-size="10" font-weight="700">--%</text>
+            </svg>
+
+            <!-- Right column -->
+            <div style="flex:1">
+              <div class="kpi mb-2">
+                <div class="kpi-lbl">Water Weight</div>
+                <div class="kpi-val" id="waterWeight">---</div>
+                <div style="font-size:.65rem;color:var(--muted)">kg</div>
+              </div>
+              <div class="kpi mb-2">
+                <div class="kpi-lbl">Valve</div>
+                <span class="spill off" id="evalveStatus"><span class="dot"></span>OFF</span>
+              </div>
+              <div class="kpi">
+                <div class="kpi-lbl">Heater</div>
+                <span class="spill off" id="heaterStatus"><span class="dot"></span>OFF</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Duty cycle bar -->
+          <div class="w-100 mt-3">
+            <div class="d-flex justify-content-between" style="font-size:.67rem;color:var(--muted);margin-bottom:.25rem">
+              <span class="i18n-auto">Heater duty cycle</span>
+              <span id="pidDutyCycle">---</span>
+            </div>
+            <div class="dc-bar"><div class="dc-fill" id="dcFill" style="width:0%"></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Row 2: KPIs -->
+    <div class="row g-2 mb-2">
+      <div class="col-sm-3"><div class="kpi">
+        <div class="kpi-lbl">PID Process Value</div>
+        <div class="kpi-val" id="pidCurrentValue">---</div>
+        <div style="font-size:.65rem;color:var(--muted)">°C</div>
+      </div></div>
+      <div class="col-sm-3"><div class="kpi">
+        <div class="kpi-lbl">Heat Control Value</div>
+        <div class="kpi-val" id="heatCtrlVal">---</div>
+        <div style="font-size:.65rem;color:var(--muted)">°C</div>
+      </div></div>
+      <div class="col-sm-3"><div class="kpi">
+        <div class="kpi-lbl">Sensor Spread (ΔT)</div>
+        <div class="kpi-val" id="sensorSpread">---</div>
+        <div style="font-size:.65rem;color:var(--muted)">max − min</div>
+      </div></div>
+      <div class="col-sm-3"><div class="kpi">
+        <div class="kpi-lbl">Days Passed / Left</div>
+        <div class="kpi-val">
+          <span id="daysPassed_dash">--</span> / <span id="daysLeft_dash">--</span>
+        </div>
+        <div style="font-size:.65rem;color:var(--muted)" id="incPhase_dash">---</div>
+      </div></div>
+    </div>
+
+    <!-- Row 3: Incubation progress -->
+    <div class="gcard">
+      <div class="d-flex justify-content-between align-items-center mb-1">
+        <div class="gcard-title" style="margin-bottom:0">Incubation Progress</div>
+        <span id="timelinePct_dash" style="font-size:.72rem;color:var(--muted)">— %</span>
+      </div>
+      <div class="t-bar"><div class="t-fill" id="timelineFill_dash" style="width:0%"></div></div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════ TEMPERATURE ════════════════════════════════════ -->
+  <div class="page" id="page-temp">
+    <div class="page-title">🌡️ Temperature Control</div>
+
+    <div class="row g-3">
+      <!-- Left: controls -->
+      <div class="col-lg-5">
+        <div class="gcard mb-3">
+          <div class="gcard-title">Heater Mode</div>
+          <div class="d-flex gap-3 flex-wrap">
+            <div class="form-check">
+              <input class="form-check-input" type="radio" name="heaterMode" id="r_htrOFF"  value="heaterOFF_radioBtn">
+              <label class="form-check-label" for="r_htrOFF">OFF</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="radio" name="heaterMode" id="r_htrAUTO" value="heaterAUTO_radioBtn">
+              <label class="form-check-label" for="r_htrAUTO">AUTO</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="radio" name="heaterMode" id="r_htrON"   value="heaterON_radioBtn">
+              <label class="form-check-label" for="r_htrON">Force ON</label>
+            </div>
+          </div>
+        </div>
+
+        <div class="gcard mb-3">
+          <div class="gcard-title">Control Algorithm</div>
+          <div class="d-flex gap-4">
+            <div class="form-check">
+              <input class="form-check-input" type="radio" name="pidMode" id="r_hysteresis" value="hysteresisActive_radioBtn">
+              <label class="form-check-label" for="r_hysteresis">Hysteresis</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="radio" name="pidMode" id="r_pid" value="PIDActive_radioBtn">
+              <label class="form-check-label" for="r_pid">PID + Feedforward</label>
+            </div>
+          </div>
+        </div>
+
+        <div class="gcard mb-3">
+          <div class="gcard-title">Hysteresis Limits</div>
+          <div class="sb-row">
+            <span class="sb-lbl">Upper limit (°C)</span>
+            <input type="number" step="0.1" class="form-control sb-inp"
+              id="sb_maxHysteresisValue_temperature_spinBox"
+              onchange="sendSpinbox('maxHysteresisValue_temperature_spinBox', this.value)">
+          </div>
+          <div class="sb-row">
+            <span class="sb-lbl">Lower limit (°C)</span>
+            <input type="number" step="0.1" class="form-control sb-inp"
+              id="sb_minHysteresisValue_temperature_spinBox"
+              onchange="sendSpinbox('minHysteresisValue_temperature_spinBox', this.value)">
+          </div>
+        </div>
+
+        <div class="gcard">
+          <div class="gcard-title">PID Parameters</div>
+          <div class="sb-row">
+            <span class="sb-lbl">Set Point (°C)</span>
+            <input type="number" step="0.1" class="form-control sb-inp"
+              id="sb_setPointTemperature_PID_spinBox"
+              onchange="sendSpinbox('setPointTemperature_PID_spinBox', this.value)">
+          </div>
+          <div class="sb-row">
+            <span class="sb-lbl">Kp</span>
+            <input type="number" step="0.01" class="form-control sb-inp"
+              id="sb_Kp_spinBox" onchange="sendSpinbox('Kp_spinBox', this.value)">
+          </div>
+          <div class="sb-row">
+            <span class="sb-lbl">Ki (×10⁻³)</span>
+            <input type="number" step="0.001" class="form-control sb-inp"
+              id="sb_Ki_spinBox" onchange="sendSpinbox('Ki_spinBox', this.value)">
+          </div>
+          <div class="sb-row">
+            <span class="sb-lbl">Kd</span>
+            <input type="number" step="0.001" class="form-control sb-inp"
+              id="sb_Kd_spinBox" onchange="sendSpinbox('Kd_spinBox', this.value)">
+          </div>
+        </div>
+      </div>
+
+      <!-- Right: readings -->
+      <div class="col-lg-7">
+        <div class="gcard mb-3">
+          <div class="gcard-title">Sensor Readings</div>
+          <div class="row g-2">
+            <div class="col-6 col-md-4"><div class="kpi">
+              <div class="kpi-lbl">Sensor 1</div>
+              <div class="kpi-val" style="color:var(--amber)" id="temp1_t">---</div>
+            </div></div>
+            <div class="col-6 col-md-4"><div class="kpi">
+              <div class="kpi-lbl">Sensor 2</div>
+              <div class="kpi-val" style="color:var(--amber)" id="temp2_t">---</div>
+            </div></div>
+            <div class="col-6 col-md-4"><div class="kpi">
+              <div class="kpi-lbl">Sensor 3</div>
+              <div class="kpi-val" style="color:var(--amber)" id="temp3_t">---</div>
+            </div></div>
+            <div class="col-6 col-md-4"><div class="kpi">
+              <div class="kpi-lbl">Sensor 4</div>
+              <div class="kpi-val" style="color:var(--amber)" id="temp4_t">---</div>
+            </div></div>
+            <div class="col-6 col-md-4"><div class="kpi">
+              <div class="kpi-lbl">External</div>
+              <div class="kpi-val" style="color:var(--purple)" id="externalTemp_t">---</div>
+            </div></div>
+            <div class="col-6 col-md-4"><div class="kpi">
+              <div class="kpi-lbl">Control Value</div>
+              <div class="kpi-val" id="heatCtrlVal_t">---</div>
+            </div></div>
+          </div>
+        </div>
+
+        <div class="gcard mb-3">
+          <div class="gcard-title">Heater Status</div>
+          <div class="d-flex flex-wrap gap-3 align-items-center">
+            <span class="spill off" id="heaterStatus_t"><span class="dot"></span>OFF</span>
+            <div style="font-size:.81rem">PID value&nbsp;<strong style="color:var(--blue)" id="pidCurrentValue_t">---</strong></div>
+            <div style="font-size:.81rem">Duty cycle&nbsp;<strong style="color:var(--amber)" id="pidDutyCycle_t">---</strong></div>
+          </div>
+        </div>
+
+        <div class="gcard">
+          <div class="gcard-title">Duty Cycle</div>
+          <div class="dc-bar"><div class="dc-fill" id="dcFill_t" style="width:0%"></div></div>
+          <div class="d-flex justify-content-between mt-1" style="font-size:.68rem;color:var(--muted)">
+            <span>0 %</span><span>50 %</span><span>100 %</span>
+          </div>
+          <div class="mt-2">
+            <span style="font-size:.74rem;color:var(--muted)">Δ from setpoint:&nbsp;</span>
+            <span id="tempDeltaBadge" class="delta-badge ok">--</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════ WATER & HUMIDITY ═══════════════════════════════ -->
+  <div class="page" id="page-water">
+    <div class="page-title">💧 Water &amp; Humidity</div>
+
+    <div class="row g-3">
+      <!-- Left: visual + status -->
+      <div class="col-lg-4">
+        <div class="gcard mb-3">
+          <div class="gcard-title">Current Readings</div>
+          <div class="info-row"><span class="il">Humidity</span>         <span class="iv" id="humidity1_w">---</span></div>
+          <div class="info-row"><span class="il">Sensor Temperature</span><span class="iv" id="tempFromHumidity_w">---</span></div>
+          <div class="info-row"><span class="il">Water Weight</span>     <span class="iv" id="waterWeight_w">---</span></div>
+          <div class="info-row"><span class="il">Hum. Ctrl Mean</span>   <span class="iv" id="humCtrlVal_w">---</span></div>
+          <div class="info-row"><span class="il">Water Ctrl Mean</span>  <span class="iv" id="waterCtrlVal_w">---</span></div>
+        </div>
+        <div class="gcard">
+          <div class="gcard-title">Actuator Status</div>
+          <div class="d-flex flex-column gap-2">
+            <div class="d-flex align-items-center justify-content-between">
+              <span class="i18n-auto" style="color:var(--muted);font-size:.81rem">Humidifier</span>
+              <span class="spill off" id="humidifierStatus_w"><span class="dot"></span>OFF</span>
+            </div>
+            <div class="d-flex align-items-center justify-content-between">
+              <span class="i18n-auto" style="color:var(--muted);font-size:.81rem">Water Valve</span>
+              <span class="spill off" id="evalveStatus_w"><span class="dot"></span>OFF</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right: controls -->
+      <div class="col-lg-8">
+        <div class="gcard mb-3">
+          <div class="gcard-title">Humidifier Mode</div>
+          <div class="d-flex gap-3 flex-wrap">
+            <div class="form-check">
+              <input class="form-check-input" type="radio" name="humMode" id="r_humOFF"  value="humidifierOFF_radioBtn">
+              <label class="form-check-label" for="r_humOFF">OFF</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="radio" name="humMode" id="r_humAUTO" value="humidifierAUTO_radioBtn">
+              <label class="form-check-label" for="r_humAUTO">AUTO</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="radio" name="humMode" id="r_humON"   value="humidifierON_radioBtn">
+              <label class="form-check-label" for="r_humON">Force ON</label>
+            </div>
+          </div>
+        </div>
+
+        <div class="gcard mb-3">
+          <div class="gcard-title">Humidity Hysteresis</div>
+          <div class="sb-row">
+            <span class="sb-lbl">Upper limit (%)</span>
+            <input type="number" step="0.1" class="form-control sb-inp"
+              id="sb_maxHysteresisValue_humidity_spinBox"
+              onchange="sendSpinbox('maxHysteresisValue_humidity_spinBox', this.value)">
+          </div>
+          <div class="sb-row">
+            <span class="sb-lbl">Lower limit (%)</span>
+            <input type="number" step="0.1" class="form-control sb-inp"
+              id="sb_minHysteresisValue_humidity_spinBox"
+              onchange="sendSpinbox('minHysteresisValue_humidity_spinBox', this.value)">
+          </div>
+        </div>
+
+        <div class="gcard mb-3">
+          <div class="gcard-title">Water Electro-valve Mode</div>
+          <div class="d-flex gap-3 flex-wrap">
+            <div class="form-check">
+              <input class="form-check-input" type="radio" name="evalveMode" id="r_evalveOFF"  value="evalveOFF_radioBtn">
+              <label class="form-check-label" for="r_evalveOFF">OFF</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="radio" name="evalveMode" id="r_evalveAUTO" value="evalveAUTO_radioBtn">
+              <label class="form-check-label" for="r_evalveAUTO">AUTO</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="radio" name="evalveMode" id="r_evalveON"   value="evalveON_radioBtn">
+              <label class="form-check-label" for="r_evalveON">Force ON</label>
+            </div>
+          </div>
+        </div>
+
+        <div class="gcard">
+          <div class="gcard-title">Water Level Hysteresis</div>
+          <div class="sb-row">
+            <span class="sb-lbl">Upper limit (kg)</span>
+            <input type="number" step="0.1" class="form-control sb-inp"
+              id="sb_maxHysteresisValue_waterLevelControl_spinBox"
+              onchange="sendSpinbox('maxHysteresisValue_waterLevelControl_spinBox', this.value)">
+          </div>
+          <div class="sb-row">
+            <span class="sb-lbl">Lower limit (kg)</span>
+            <input type="number" step="0.1" class="form-control sb-inp"
+              id="sb_minHysteresisValue_waterLevelControl_spinBox"
+              onchange="sendSpinbox('minHysteresisValue_waterLevelControl_spinBox', this.value)">
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════ MOTOR ══════════════════════════════════════════ -->
+  <div class="page" id="page-motor">
+    <div class="page-title">⚙️ Motor Control</div>
+
+    <div class="row g-3">
+      <!-- Status -->
+      <div class="col-lg-4">
+        <div class="gcard mb-3">
+          <div class="gcard-title">Motor Status</div>
+          <div class="info-row"><span class="il">Time Since Last Turn</span> <span class="iv" id="timePassed_motor">---</span></div>
+          <div class="info-row"><span class="il">Next Turn In</span>         <span class="iv" id="timeToNextTurn_motor">---</span></div>
+          <div class="info-row"><span class="il">Total Turns</span>          <span class="iv" id="turnsCounter_motor">---</span></div>
+          <div class="info-row"><span class="il">Main State</span>           <span style="color:var(--amber);font-weight:600" id="mainState_motor">---</span></div>
+          <div class="info-row"><span class="il">Manual State</span>         <span style="color:var(--amber);font-weight:600" id="manualState_motor">---</span></div>
+          <div class="info-row"><span class="il">Rotation State</span>       <span style="color:var(--green);font-weight:600"  id="rotationState_motor">---</span></div>
+        </div>
+        <div class="gcard">
+          <div class="gcard-title">Rotation Interval</div>
+          <div class="sb-row">
+            <span class="sb-lbl">Interval (min)</span>
+            <input type="number" step="1" min="1" class="form-control sb-inp"
+              id="sb_rotation_interval_spinBox"
+              onchange="sendIntSpinbox('rotation_interval_spinBox', this.value)">
+          </div>
+        </div>
+      </div>
+
+      <!-- Visual compass -->
+      <div class="col-lg-3">
+        <div class="gcard h-100 d-flex flex-column align-items-center justify-content-center">
+          <div class="gcard-title w-100">Direction</div>
+          <svg id="motorCompassSvg" viewBox="0 0 100 100" style="width:110px;height:110px">
+            <!-- Outer ring -->
+            <circle cx="50" cy="50" r="44" fill="none" stroke="#3d3520" stroke-width="2"/>
+            <!-- CCW arrow (thicker, blinks while rotating) -->
+            <g id="ccwArrowGroup" class="motor-arrow-group">
+              <path d="M 50 8 A 42 42 0 0 0 8 50" fill="none"
+                stroke="#3d3520" stroke-width="7" stroke-linecap="round"/>
+              <polygon id="arrowCCW" points="16,44 4,52 20,60" fill="#3d3520"/>
+            </g>
+            <!-- CW arrow (thicker, blinks while rotating) -->
+            <g id="cwArrowGroup" class="motor-arrow-group">
+              <path d="M 50 8 A 42 42 0 0 1 92 50" fill="none"
+                stroke="#3d3520" stroke-width="7" stroke-linecap="round"/>
+              <polygon id="arrowCW" points="84,44 96,52 80,60" fill="#3d3520"/>
+            </g>
+            <!-- Center circle -->
+            <circle cx="50" cy="50" r="17" fill="#221d12" stroke="#3d3520" stroke-width="1.5"/>
+            <!-- Egg icon -->
+            <text x="50" y="55" text-anchor="middle" font-size="15">🥚</text>
+            <!-- CCW label -->
+            <text x="10" y="24" fill="#8a8070" font-size="7" font-weight="700">CCW</text>
+            <!-- CW label -->
+            <text x="78" y="24" fill="#8a8070" font-size="7" font-weight="700">CW</text>
+            <!-- Reached indicators: fixed steady lights at 9 o'clock (CCW) and 3 o'clock (CW) -->
+            <circle id="lightCCW" class="motor-reach-light" cx="4" cy="50" r="5.5" fill="#3d3520"/>
+            <circle id="lightCW"  class="motor-reach-light" cx="96" cy="50" r="5.5" fill="#3d3520"/>
+          </svg>
+          <div style="font-size:.72rem;color:var(--muted);margin-top:.3rem" id="motorDirLabel">Idle</div>
+        </div>
+      </div>
+
+      <!-- Manual controls -->
+      <div class="col-lg-5">
+        <div class="gcard">
+          <div class="gcard-title">Manual Controls</div>
+          <div class="row g-2">
+            <div class="col-6">
+              <button class="mbtn" id="btn_move_CCW_motor_btn" onclick="sendButton('move_CCW_motor_btn')">⟲ CCW</button>
+            </div>
+            <div class="col-6">
+              <button class="mbtn" id="btn_move_CW_motor_btn"  onclick="sendButton('move_CW_motor_btn')">⟳ CW</button>
+            </div>
+            <div class="col-12">
+              <button class="mbtn" onclick="sendButton('forceEggsTurn_motor_btn')">🔄 Force Eggs Turn Now</button>
+            </div>
+            <div class="col-12">
+              <button class="mbtn" onclick="sendButton('layHorizontal_motor_btn')">↔ Lay Horizontal</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════ INCUBATION ═════════════════════════════════════ -->
+  <div class="page" id="page-days">
+    <div class="page-title">📅 Incubation Timeline</div>
+
+    <div class="row g-3">
+      <div class="col-lg-4">
+        <div class="gcard">
+          <div class="gcard-title">Settings</div>
+          <div class="sb-row">
+            <span class="sb-lbl">Start Date</span>
+            <input type="date" class="form-control" id="startDate"
+              onchange="sendDate(this.value)" style="width:150px">
+          </div>
+          <div class="sb-row">
+            <span class="sb-lbl">Duration (days)</span>
+            <input type="number" step="1" min="1" class="form-control sb-inp"
+              id="sb_days_duration_spinBox"
+              onchange="sendIntSpinbox('days_duration_spinBox', this.value)">
+          </div>
+        </div>
+      </div>
+
+      <div class="col-lg-8">
+        <div class="gcard">
+          <div class="gcard-title">Progress</div>
+          <div class="row g-2 mb-2">
+            <div class="col-3"><div class="kpi text-center">
+              <div class="kpi-lbl">Days In</div>
+              <div class="kpi-val" id="daysPassed">---</div>
+            </div></div>
+            <div class="col-3"><div class="kpi text-center">
+              <div class="kpi-lbl">Days Left</div>
+              <div class="kpi-val" id="daysLeft">---</div>
+            </div></div>
+            <div class="col-3"><div class="kpi text-center">
+              <div class="kpi-lbl">End Date</div>
+              <div class="kpi-val" style="font-size:.85rem" id="endDate">---</div>
+            </div></div>
+            <div class="col-3"><div class="kpi text-center">
+              <div class="kpi-lbl">Phase</div>
+              <div class="kpi-val" style="font-size:.85rem;color:var(--amber)" id="incPhase">---</div>
+            </div></div>
+          </div>
+          <div class="t-bar"><div class="t-fill" id="timelineFill" style="width:0%"></div></div>
+          <div class="d-flex justify-content-between mt-1" style="font-size:.69rem;color:var(--muted)">
+            <span class="i18n-auto">Start</span>
+            <span id="timelinePct">— % complete</span>
+            <span class="i18n-auto">Hatch</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Phase guide -->
+    <div class="gcard mt-3">
+      <div class="gcard-title">Incubation Phase Guide (chicken – 21 days)</div>
+      <div class="row g-1" style="font-size:.77rem">
+        <div class="col-md-4">
+          <div style="padding:.35rem .55rem;border-radius:6px;background:rgba(77,166,255,.08);border:1px solid rgba(77,166,255,.2)">
+            <strong style="color:var(--blue)">Setting (days 1–18)</strong><br>
+            <span style="color:var(--muted)">Temperature 37.8°C · Humidity 55% · Turn 3×/day</span>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div style="padding:.35rem .55rem;border-radius:6px;background:rgba(245,166,35,.08);border:1px solid rgba(245,166,35,.2)">
+            <strong style="color:var(--amber)">Pre-lockdown (day 18)</strong><br>
+            <span style="color:var(--muted)">Stop turning · Candle eggs · Increase humidity</span>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div style="padding:.35rem .55rem;border-radius:6px;background:rgba(62,203,122,.08);border:1px solid rgba(62,203,122,.2)">
+            <strong style="color:var(--green)">Lockdown (days 19–21)</strong><br>
+            <span style="color:var(--muted)">Temperature 37.5°C · Humidity 65–70% · No turning</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Incubation calendar -->
+    <div class="gcard mt-3">
+      <div class="d-flex align-items-center justify-content-between mb-2">
+        <div class="gcard-title" style="margin-bottom:0">Incubation Calendar</div>
+        <!-- Legend -->
+        <div class="d-flex gap-3" style="font-size:.7rem;color:var(--muted)">
+          <span style="display:inline-flex;align-items:center;gap:.3rem">
+            <span style="width:9px;height:9px;border-radius:50%;background:var(--amber);display:inline-block"></span>
+            Today
+          </span>
+          <span style="display:inline-flex;align-items:center;gap:.3rem">
+            <span style="width:9px;height:9px;border-radius:2px;background:rgba(62,203,122,.4);display:inline-block"></span>
+            Passed
+          </span>
+          <span style="display:inline-flex;align-items:center;gap:.3rem">
+            <span style="width:9px;height:9px;border-radius:2px;background:rgba(232,72,72,.35);display:inline-block"></span>
+            Remaining
+          </span>
+          <span style="display:inline-flex;align-items:center;gap:.3rem">
+            <span style="width:9px;height:9px;border-radius:2px;border:1px solid rgba(77,166,255,.8);display:inline-block"></span>
+            Start
+          </span>
+          <span style="display:inline-flex;align-items:center;gap:.3rem">
+            <span style="width:9px;height:9px;border-radius:2px;border:1px solid rgba(232,72,72,.9);display:inline-block"></span>
+            Hatch
+          </span>
+        </div>
+      </div>
+      <div id="incubationCalendar">
+        <span class="i18n-auto" style="color:var(--muted);font-size:.8rem">Set start date and duration to see the calendar.</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════ STATISTICS ═════════════════════════════════════ -->
+  <div class="page" id="page-stats">
+    <div class="page-title">📋 Statistics</div>
+
+    <div class="row g-3">
+      <div class="col-lg-6">
+        <div class="gcard mb-3">
+          <div class="gcard-title">Temperature</div>
+          <table class="stbl">
+            <thead><tr><th></th><th>Min</th><th>Mean</th><th>Max</th></tr></thead>
+            <tbody><tr>
+              <td>Temp</td>
+              <td><span class="sv" id="minTemp_stat">---</span></td>
+              <td><span class="sv" id="meanTemp_stat">---</span></td>
+              <td><span class="sv" id="maxTemp_stat">---</span></td>
+            </tr></tbody>
+          </table>
+          <div style="margin-top:.65rem">
+            <table class="stbl">
+              <thead><tr><th></th><th>Count ON</th><th>Count OFF</th><th>Time ON</th><th>Time OFF</th></tr></thead>
+              <tbody><tr>
+                <td>Heater</td>
+                <td><span class="sv" id="onCountT_stat">---</span></td>
+                <td><span class="sv" id="offCountT_stat">---</span></td>
+                <td><span class="sv" id="timeOnT_stat">---</span></td>
+                <td><span class="sv" id="timeOffT_stat">---</span></td>
+              </tr></tbody>
+            </table>
+          </div>
+          <div class="d-flex gap-2 mt-3 flex-wrap">
+            <button class="btn-danger-dk" onclick="sendButton('resetStatTemp_btn')">Reset</button>
+            <button class="btn-dk" onclick="requestPlot('Temperatures','mean')">📊 Mean Temp</button>
+            <button class="btn-dk" onclick="requestPlot('Temperatures','all')">📊 All Days</button>
+            <button class="btn-dk" onclick="requestPlot('Temperatures','today')">📊 Today</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-lg-6">
+        <div class="gcard mb-3">
+          <div class="gcard-title">Humidity</div>
+          <table class="stbl">
+            <thead><tr><th></th><th>Min</th><th>Mean</th><th>Max</th></tr></thead>
+            <tbody><tr>
+              <td>Humidity</td>
+              <td><span class="sv" id="minHum_stat">---</span></td>
+              <td><span class="sv" id="meanHum_stat">---</span></td>
+              <td><span class="sv" id="maxHum_stat">---</span></td>
+            </tr></tbody>
+          </table>
+          <div style="margin-top:.65rem">
+            <table class="stbl">
+              <thead><tr><th></th><th>Count ON</th><th>Count OFF</th><th>Time ON</th><th>Time OFF</th></tr></thead>
+              <tbody><tr>
+                <td>Humidifier</td>
+                <td><span class="sv" id="onCountH_stat">---</span></td>
+                <td><span class="sv" id="offCountH_stat">---</span></td>
+                <td><span class="sv" id="timeOnH_stat">---</span></td>
+                <td><span class="sv" id="timeOffH_stat">---</span></td>
+              </tr></tbody>
+            </table>
+          </div>
+          <div class="d-flex gap-2 mt-3 flex-wrap">
+            <button class="btn-danger-dk" onclick="sendButton('resetStatHum_btn')">Reset</button>
+            <button class="btn-dk" onclick="requestPlot('External_Temperature','all')">📊 Ext Temp</button>
+            <button class="btn-dk" onclick="requestPlot('Humidity','all')">📊 All Days</button>
+            <button class="btn-dk" onclick="requestPlot('Humidity','today')">📊 Today</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-12">
+        <div class="gcard">
+          <div class="gcard-title">Plot Options</div>
+          <div class="d-flex gap-4 flex-wrap align-items-center">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" id="cb_removeErrorsTemp"
+                onchange="sendCheckbox('removeErrorsTemp_checkBox', this.checked)">
+              <label class="form-check-label" for="cb_removeErrorsTemp">Remove Temperature Errors</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" id="cb_removeErrorsHum"
+                onchange="sendCheckbox('removeErrorsHum_checkBox', this.checked)">
+              <label class="form-check-label" for="cb_removeErrorsHum">Remove Humidity Errors</label>
+            </div>
+            <button class="btn-dk" onclick="requestPlot('Humidifier','all')">📊 Humidifier All Days</button>
+            <button class="btn-dk" onclick="requestPlot('Humidifier','today')">📊 Humidifier Today</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════ HISTORY CHARTS ════════════════════════════════ -->
+  <div class="page" id="page-history">
+    <div class="page-title">🗂️ Historical Charts</div>
+
+    <!-- Dataset selector -->
+    <div class="gcard mb-2" style="padding:.55rem .85rem">
+      <div class="gcard-title" style="margin-bottom:.4rem">Dataset</div>
+      <div class="d-flex gap-2 flex-wrap">
+        <button class="btn-dk hist-type-btn active" data-type="Temperatures"
+          onclick="selectHistType(this)">🌡 Temperature</button>
+        <button class="btn-dk hist-type-btn" data-type="External_Temperature"
+          onclick="selectHistType(this)">🌍 External Temp</button>
+        <button class="btn-dk hist-type-btn" data-type="Humidity"
+          onclick="selectHistType(this)">💧 Humidity</button>
+        <button class="btn-dk hist-type-btn" data-type="Heater"
+          onclick="selectHistType(this)">🔥 Heater</button>
+        <button class="btn-dk hist-type-btn" data-type="Humidifier"
+          onclick="selectHistType(this)">💦 Humidifier</button>
+        <button class="btn-dk hist-type-btn" data-type="Water_Weight"
+          onclick="selectHistType(this)">⚖ Water Weight</button>
+        <button class="btn-dk hist-type-btn" data-type="PID_Duty_Cycle"
+          onclick="selectHistType(this)">📐 PID Duty Cycle</button>
+      </div>
+    </div>
+
+    <!-- Mode + reload -->
+    <div class="gcard mb-2" style="padding:.55rem .85rem">
+      <div class="d-flex gap-2 flex-wrap align-items-center">
+        <span class="i18n-auto" style="color:var(--muted);font-size:.77rem">Mode:</span>
+        <button class="btn-dk hist-mode-btn active" data-mode="today"
+          onclick="selectHistMode(this)">Today</button>
+        <button class="btn-dk hist-mode-btn" data-mode="all"
+          onclick="selectHistMode(this)">All Days</button>
+        <button class="btn-dk hist-mode-btn" data-mode="mean"
+          onclick="selectHistMode(this)">Mean (All Days)</button>
+        <div style="flex:1"></div>
+        <button class="btn-dk" onclick="loadHistPlot()">↻ Reload</button>
+      </div>
+    </div>
+
+    <!-- Chart area -->
+    <div class="gcard mb-2" style="padding:.7rem">
+      <div id="histStatus"
+        style="color:var(--muted);font-size:.82rem;min-height:1.2rem;margin-bottom:.3rem"></div>
+      <div id="histChart" style="height:460px;"></div>
+    </div>
+
+    <!-- Zoom shortcuts -->
+    <div class="d-flex gap-2 flex-wrap align-items-center">
+      <span class="i18n-auto" style="color:var(--muted);font-size:.77rem">Zoom:</span>
+      <button class="btn-dk" onclick="histSetRange(30)">30 min</button>
+      <button class="btn-dk" onclick="histSetRange(60)">1 h</button>
+      <button class="btn-dk" onclick="histSetRange(120)">2 h</button>
+      <button class="btn-dk" onclick="histSetRange(240)">4 h</button>
+      <button class="btn-dk" onclick="histSetRange(24*60)">24 h</button>
+      <button class="btn-dk" onclick="histSetRange(0)">All</button>
+    </div>
+  </div>
+
+  <!-- ════════════════════════ LIVE CHART ═════════════════════════════════════ -->
+  <div class="page" id="page-chart">
+    <div class="page-title">📈 Live Temperature Chart</div>
+    <div class="gcard mb-2" style="padding:.6rem">
+      <div id="liveChart" style="height:460px;"></div>
+    </div>
+    <div class="d-flex gap-2 flex-wrap align-items-center">
+      <span class="i18n-auto" style="color:var(--muted);font-size:.77rem">Range:</span>
+      <button class="btn-dk" onclick="setChartRange(30)">30 min</button>
+      <button class="btn-dk" onclick="setChartRange(60)">1 h</button>
+      <button class="btn-dk" onclick="setChartRange(120)">2 h</button>
+      <button class="btn-dk" onclick="setChartRange(240)">4 h</button>
+      <button class="btn-dk" onclick="setChartRange(0)">All</button>
+    </div>
+  </div>
+
+  <!-- ════════════════════════ SYSTEM ═════════════════════════════════════════ -->
+  <div class="page" id="page-system">
+    <div class="page-title">🔧 System Health</div>
+
+    <div class="row g-3">
+      <div class="col-lg-6">
+        <div class="gcard mb-3">
+          <div class="gcard-title">Connectivity</div>
+          <div class="health-item">
+            <div class="health-dot ok" id="hd-broker"></div>
+            <span class="health-lbl">Web socket (browser ↔ server)</span>
+            <span class="health-val" id="hv-broker">---</span>
+          </div>
+          <div class="health-item">
+            <div class="health-dot warn" id="hd-arduino"></div>
+            <span class="health-lbl">Arduino data freshness</span>
+            <span class="health-val" id="hv-arduino">---</span>
+          </div>
+          <div class="health-item">
+            <div class="health-dot ok" id="hd-uptime"></div>
+            <span class="health-lbl">Last update received</span>
+            <span class="health-val" id="hv-uptime">---</span>
+          </div>
+        </div>
+
+        <div class="gcard">
+          <div class="gcard-title">Temperature Sensors</div>
+          <div class="health-item">
+            <div class="health-dot" id="hd-t1"></div>
+            <span class="health-lbl">Sensor TMP01</span>
+            <span class="health-val" id="hv-t1">---</span>
+          </div>
+          <div class="health-item">
+            <div class="health-dot" id="hd-t2"></div>
+            <span class="health-lbl">Sensor TMP02</span>
+            <span class="health-val" id="hv-t2">---</span>
+          </div>
+          <div class="health-item">
+            <div class="health-dot" id="hd-t3"></div>
+            <span class="health-lbl">Sensor TMP03</span>
+            <span class="health-val" id="hv-t3">---</span>
+          </div>
+          <div class="health-item">
+            <div class="health-dot" id="hd-t4"></div>
+            <span class="health-lbl">Sensor TMP04</span>
+            <span class="health-val" id="hv-t4">---</span>
+          </div>
+          <div class="health-item">
+            <div class="health-dot" id="hd-ext"></div>
+            <span class="health-lbl">External TMP (EXTT)</span>
+            <span class="health-val" id="hv-ext">---</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-lg-6">
+        <div class="gcard mb-3">
+          <div class="gcard-title">Actuators</div>
+          <div class="health-item">
+            <div class="health-dot ok" id="hd-htr"></div>
+            <span class="health-lbl">Heater (HTR01)</span>
+            <span class="health-val" id="hv-htr">---</span>
+          </div>
+          <div class="health-item">
+            <div class="health-dot ok" id="hd-hum"></div>
+            <span class="health-lbl">Humidifier (HUMER01)</span>
+            <span class="health-val" id="hv-hum">---</span>
+          </div>
+          <div class="health-item">
+            <div class="health-dot ok" id="hd-vlv"></div>
+            <span class="health-lbl">Water Valve (ELV01)</span>
+            <span class="health-val" id="hv-vlv">---</span>
+          </div>
+          <div class="health-item">
+            <div class="health-dot ok" id="hd-mtr"></div>
+            <span class="health-lbl">Stepper Motor (STPR01)</span>
+            <span class="health-val" id="hv-mtr">---</span>
+          </div>
+        </div>
+
+        <div class="gcard">
+          <div class="gcard-title">Control Loop</div>
+          <div class="health-item">
+            <div class="health-dot" id="hd-algo"></div>
+            <span class="health-lbl">Active algorithm</span>
+            <span class="health-val" id="hv-algo">---</span>
+          </div>
+          <div class="health-item">
+            <div class="health-dot ok"></div>
+            <span class="health-lbl">Heater setpoint (SP)</span>
+            <span class="health-val" id="hv-sp">---</span>
+          </div>
+          <div class="health-item">
+            <div class="health-dot ok"></div>
+            <span class="health-lbl">PID duty cycle</span>
+            <span class="health-val" id="hv-dc">---</span>
+          </div>
+          <div class="health-item">
+            <div class="health-dot" id="hd-spread"></div>
+            <span class="health-lbl">Sensor spread (ΔT)</span>
+            <span class="health-val" id="hv-spread">---</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<!-- ── Scripts ────────────────────────────────────────────────────────────── -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+<script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
+
+<script>
+'use strict';
+
+// ── i18n (EN/IT) ─────────────────────────────────────────────────────────
+const I18N_IT = {
+  // Sidebar
+  'Incubator': 'Incubatrice', 'Control Panel': 'Pannello di Controllo',
+  'Monitor': 'Monitoraggio', 'Control': 'Controllo', 'Setup': 'Impostazioni',
+  'Dashboard': 'Pannello', 'Live Chart': 'Grafico Live', 'History': 'Cronologia',
+  'Statistics': 'Statistiche', 'Temperature': 'Temperatura',
+  'Water & Humidity': 'Acqua e Umidità', 'Motor': 'Motore', 'Incubation': 'Incubazione',
+  'System': 'Sistema', 'Connected': 'Connesso', 'Disconnected': 'Disconnesso',
+  // Page titles
+  '📊 Dashboard': '📊 Pannello',
+  '🌡️ Temperature Control': '🌡️ Controllo Temperatura',
+  '💧 Water & Humidity': '💧 Acqua e Umidità',
+  '⚙️ Motor Control': '⚙️ Controllo Motore',
+  '📅 Incubation Timeline': '📅 Cronologia Incubazione',
+  '📋 Statistics': '📋 Statistiche',
+  '🗂️ Historical Charts': '🗂️ Grafici Storici',
+  '📈 Live Temperature Chart': '📈 Grafico Temperatura Live',
+  '🔧 System Health': '🔧 Stato del Sistema',
+  // Card titles
+  'Internal Temperature (avg)': 'Temperatura Interna (media)',
+  'Humidity & Water': 'Umidità e Acqua',
+  'Water Reservoir': 'Serbatoio Acqua',
+  'Incubation Progress': 'Avanzamento Incubazione',
+  'Heater Mode': 'Modalità Riscaldatore',
+  'Control Algorithm': 'Algoritmo di Controllo',
+  'Hysteresis Limits': 'Limiti Isteresi',
+  'PID Parameters': 'Parametri PID',
+  'Sensor Readings': 'Letture Sensori',
+  'Heater Status': 'Stato Riscaldatore',
+  'Duty Cycle': 'Ciclo di Lavoro',
+  'Current Readings': 'Letture Attuali',
+  'Actuator Status': 'Stato Attuatori',
+  'Humidifier Mode': 'Modalità Umidificatore',
+  'Humidity Hysteresis': 'Isteresi Umidità',
+  'Water Electro-valve Mode': 'Modalità Elettrovalvola Acqua',
+  'Water Level Hysteresis': 'Isteresi Livello Acqua',
+  'Motor Status': 'Stato Motore',
+  'Rotation Interval': 'Intervallo Rotazione',
+  'Manual Controls': 'Controlli Manuali',
+  'Settings': 'Impostazioni',
+  'Progress': 'Avanzamento',
+  'Incubation Phase Guide (chicken – 21 days)': 'Guida alle Fasi di Incubazione (pollo – 21 giorni)',
+  'Incubation Calendar': 'Calendario Incubazione',
+  'Humidity': 'Umidità',
+  'Plot Options': 'Opzioni Grafico',
+  'Connectivity': 'Connettività',
+  'Temperature Sensors': 'Sensori di Temperatura',
+  'Actuators': 'Attuatori',
+  'Control Loop': 'Ciclo di Controllo',
+  // KPI labels
+  'Hum Sensor T': 'Temp. Sensore Umidità', 'Hum. Ctrl': 'Ctrl Umidità',
+  'Water Weight': 'Peso Acqua', 'Valve': 'Valvola', 'Heater': 'Riscaldatore',
+  'PID Process Value': 'Valore di Processo PID',
+  'Heat Control Value': 'Valore Controllo Calore',
+  'Sensor Spread (ΔT)': 'Escursione Sensori (ΔT)',
+  'Days Passed / Left': 'Giorni Trascorsi / Rimanenti',
+  'Sensor 1': 'Sensore 1', 'Sensor 2': 'Sensore 2', 'Sensor 3': 'Sensore 3', 'Sensor 4': 'Sensore 4',
+  'External': 'Esterno', 'Control Value': 'Valore di Controllo',
+  'Days In': 'Giorni Trascorsi', 'Days Left': 'Giorni Rimanenti',
+  'End Date': 'Data Fine', 'Phase': 'Fase',
+  // Radio / checkbox labels
+  'Force ON': 'Forza ON', 'Hysteresis': 'Isteresi',
+  'Remove Temperature Errors': 'Rimuovi Errori Temperatura',
+  'Remove Humidity Errors': 'Rimuovi Errori Umidità',
+  // Setting labels
+  'Upper limit (°C)': 'Limite superiore (°C)', 'Lower limit (°C)': 'Limite inferiore (°C)',
+  'Set Point (°C)': 'Setpoint (°C)',
+  'Upper limit (%)': 'Limite superiore (%)', 'Lower limit (%)': 'Limite inferiore (%)',
+  'Upper limit (kg)': 'Limite superiore (kg)', 'Lower limit (kg)': 'Limite inferiore (kg)',
+  'Interval (min)': 'Intervallo (min)',
+  'Start Date': 'Data Inizio', 'Duration (days)': 'Durata (giorni)',
+  // Info-row labels
+  'Sensor Temperature': 'Temperatura Sensore', 'Hum. Ctrl Mean': 'Media Ctrl Umidità',
+  'Water Ctrl Mean': 'Media Ctrl Acqua', 'Time Since Last Turn': "Tempo dall'Ultima Rotazione",
+  'Next Turn In': 'Prossima Rotazione Tra', 'Total Turns': 'Rotazioni Totali',
+  'Main State': 'Stato Principale', 'Manual State': 'Stato Manuale', 'Rotation State': 'Stato Rotazione',
+  // Health page
+  'Web socket (browser ↔ server)': 'Web socket (browser ↔ server)',
+  'Arduino data freshness': 'Aggiornamento dati Arduino',
+  'Last update received': 'Ultimo aggiornamento ricevuto',
+  'Sensor TMP01': 'Sensore TMP01', 'Sensor TMP02': 'Sensore TMP02',
+  'Sensor TMP03': 'Sensore TMP03', 'Sensor TMP04': 'Sensore TMP04',
+  'External TMP (EXTT)': 'TMP Esterna (EXTT)',
+  'Heater (HTR01)': 'Riscaldatore (HTR01)', 'Humidifier (HUMER01)': 'Umidificatore (HUMER01)',
+  'Water Valve (ELV01)': 'Valvola Acqua (ELV01)', 'Stepper Motor (STPR01)': 'Motore Passo-Passo (STPR01)',
+  'Active algorithm': 'Algoritmo attivo', 'Heater setpoint (SP)': 'Setpoint Riscaldatore (SP)',
+  'PID duty cycle': 'Duty cycle PID', 'Sensor spread (ΔT)': 'Escursione sensori (ΔT)',
+  // Table headers
+  'Min': 'Min', 'Mean': 'Media', 'Max': 'Max',
+  'Count ON': 'Conteggio ON', 'Count OFF': 'Conteggio OFF',
+  'Time ON': 'Tempo ON', 'Time OFF': 'Tempo OFF',
+  // Buttons
+  'Reset': 'Reimposta',
+  '📊 Mean Temp': '📊 Temp. Media', '📊 All Days': '📊 Tutti i Giorni', '📊 Today': '📊 Oggi',
+  '📊 Ext Temp': '📊 Temp. Esterna',
+  '📊 Humidifier All Days': '📊 Umidificatore Tutti i Giorni', '📊 Humidifier Today': '📊 Umidificatore Oggi',
+  '🌡 Temperature': '🌡 Temperatura', '🌍 External Temp': '🌍 Temp. Esterna',
+  '💧 Humidity': '💧 Umidità', '🔥 Heater': '🔥 Riscaldatore', '💦 Humidifier': '💦 Umidificatore',
+  '⚖ Water Weight': '⚖ Peso Acqua', '📐 PID Duty Cycle': '📐 Duty Cycle PID',
+  'Today': 'Oggi', 'All Days': 'Tutti i Giorni', 'Mean (All Days)': 'Media (Tutti i Giorni)',
+  '↻ Reload': '↻ Ricarica', 'All': 'Tutti',
+  '🔄 Force Eggs Turn Now': '🔄 Forza Rotazione Uova Ora', '↔ Lay Horizontal': '↔ Posiziona Orizzontale',
+  // Bare labels (i18n-auto)
+  'Heater duty cycle': 'Duty cycle riscaldatore',
+  'Water Valve': 'Valvola Acqua', 'Start': 'Inizio', 'Hatch': 'Schiusa',
+  'Set start date and duration to see the calendar.': 'Imposta data di inizio e durata per vedere il calendario.',
+  'Mode:': 'Modalità:', 'Zoom:': 'Zoom:', 'Range:': 'Intervallo:',
+  // Dynamic status text (via setPill / setHealthItem / setText)
+  'Heating': 'Riscaldamento', 'Humidifying': 'Umidificazione', 'Filling': 'Riempimento',
+  'ON – Heating': 'ON – Riscaldamento', 'ON – Humidifying': 'ON – Umidificazione',
+  'ON – Filling': 'ON – Riempimento', 'Fresh': 'Aggiornato',
+  'Idle': 'Inattivo', 'Rotating CCW': 'Rotazione CCW', 'Rotating CW': 'Rotazione CW',
+  'CCW reached': 'CCW raggiunto', 'CW reached': 'CW raggiunto',
+  'Setting': 'Preparazione', 'Pre-lockdown': 'Pre-blocco', 'Lockdown': 'Blocco',
+  // Calendar month/day names
+  'January': 'Gennaio', 'February': 'Febbraio', 'March': 'Marzo', 'April': 'Aprile',
+  'May': 'Maggio', 'June': 'Giugno', 'July': 'Luglio', 'August': 'Agosto',
+  'September': 'Settembre', 'October': 'Ottobre', 'November': 'Novembre', 'December': 'Dicembre',
+  'Mo': 'Lu', 'Tu': 'Ma', 'We': 'Me', 'Th': 'Gi', 'Fr': 'Ve', 'Sa': 'Sa', 'Su': 'Do',
+};
+
+let currentLang = localStorage.getItem('incubatorLang') || 'en';
+
+// Translates a canonical English source string to the current language.
+// Anything not found in the dictionary (numbers, raw sensor values, etc.)
+// passes through unchanged, so it's always safe to call.
+function tr(txt) {
+  if (currentLang === 'it' && Object.prototype.hasOwnProperty.call(I18N_IT, txt)) {
+    return I18N_IT[txt];
+  }
+  return txt;
+}
+
+// Static markup translation: elements matching STATIC_I18N_SELECTORS keep their
+// original English text cached in data-i18n-src the first time this runs, so
+// switching languages back and forth is always lossless.
+const STATIC_I18N_SELECTORS = [
+  '.page-title', '.gcard-title', '.kpi-lbl', '.form-check-label', '.sb-lbl',
+  '.il', '.health-lbl', 'th', '.btn-dk', '.btn-danger-dk', '.mbtn',
+  '.sb-name', '.sb-sub', '.sb-section', '.nav-lbl', '.i18n-auto',
+].join(', ');
+
+function applyStaticTranslations() {
+  document.querySelectorAll(STATIC_I18N_SELECTORS).forEach(el => {
+    if (el.dataset.i18nSrc === undefined) el.dataset.i18nSrc = el.textContent;
+    el.textContent = tr(el.dataset.i18nSrc);
+  });
+}
+
+function setLanguage(lang) {
+  currentLang = lang;
+  localStorage.setItem('incubatorLang', lang);
+  document.documentElement.lang = lang;
+  document.getElementById('flag_en').classList.toggle('active', lang === 'en');
+  document.getElementById('flag_it').classList.toggle('active', lang === 'it');
+  applyStaticTranslations();
+  // Give immediate feedback on the connection label too (next socket event
+  // will also keep it correct going forward, this just avoids a stale flash).
+  const connLbl = document.getElementById('conn-lbl');
+  if (connLbl) connLbl.textContent = tr(socket && socket.connected ? 'Connected' : 'Disconnected');
+  renderIncubationCalendar();
+}
+
+// ── System clock ──────────────────────────────────────────────────────────
+setInterval(() => {
+  const n = new Date();
+  const pad = v => String(v).padStart(2, '0');
+  document.getElementById('sys-time').textContent =
+    `${pad(n.getHours())}:${pad(n.getMinutes())}:${pad(n.getSeconds())}`;
+}, 1000);
+
+// ── Sidebar navigation ────────────────────────────────────────────────────
+document.getElementById('sideNav').querySelectorAll('li').forEach(li => {
+  li.addEventListener('click', () => {
+    document.querySelectorAll('#sideNav li').forEach(x => x.classList.remove('active'));
+    document.querySelectorAll('.page').forEach(x => x.classList.remove('active'));
+    li.classList.add('active');
+    document.getElementById('page-' + li.dataset.pg).classList.add('active');
+    if (li.dataset.pg === 'chart'   && !chartInited) initChart([]);
+    if (li.dataset.pg === 'history') loadHistPlot();
+    if (window.innerWidth <= 768)
+      document.getElementById('sidebar').classList.remove('open');
+  });
+});
+
+// ── Socket.IO ─────────────────────────────────────────────────────────────
+const socket = io();
+
+socket.on('connect', () => {
+  document.getElementById('conn-dot').classList.add('ok');
+  document.getElementById('conn-lbl').textContent = tr('Connected');
+  setHealthItem('hd-broker', 'hv-broker', 'ok', 'Connected');
+});
+socket.on('disconnect', () => {
+  document.getElementById('conn-dot').classList.remove('ok');
+  document.getElementById('conn-lbl').textContent = tr('Disconnected');
+  setHealthItem('hd-broker', 'hv-broker', 'err', 'Disconnected');
+});
+
+socket.on('full_state', state => {
+  if (state.view)            applyView(state.view);
+  if (state.statistics)      applyStatistics(state.statistics);
+  if (state.days_statistics) applyDaysStats(state.days_statistics);
+  if (state.motor)           applyMotor(state.motor);
+  if (state.spinboxes)
+    Object.entries(state.spinboxes).forEach(([n, v]) => applySpinbox(n, v));
+  if (state.dates)
+    Object.entries(state.dates).forEach(([n, v]) => applyDate(n, v));
+  if (state.radio_buttons)
+    Object.entries(state.radio_buttons).forEach(([n, v]) => applyRadio(n, v));
+});
+
+socket.on('update_view',            applyView);
+socket.on('update_statistics',      applyStatistics);
+socket.on('update_days_statistics', applyDaysStats);
+socket.on('update_motor',           applyMotor);
+socket.on('update_spinbox', d => applySpinbox(d.name, d.value));
+socket.on('update_date',    d => applyDate(d.name, d.date));
+socket.on('update_radio',   d => applyRadio(d.name, d.checked));
+
+// ── Helpers ───────────────────────────────────────────────────────────────
+function setText(id, txt) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = (txt !== undefined && txt !== null) ? tr(txt) : '---';
+}
+
+function fmt(v, dec = 1) {
+  return (typeof v === 'number' && isFinite(v)) ? v.toFixed(dec) : null;
+}
+
+function setPill(id, isOn, onTxt, offTxt, onClass) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.innerHTML = `<span class="dot"></span>${tr(isOn ? onTxt : offTxt)}`;
+  el.className = 'spill ' + (isOn ? ('on' + (onClass ? ' ' + onClass : '')) : 'off');
+}
+
+function setHealthItem(dotId, valId, status, text) {
+  const dot = document.getElementById(dotId);
+  const val = document.getElementById(valId);
+  if (dot) dot.className = 'health-dot ' + status;
+  if (val) val.textContent = tr(text);
+}
+
+// ── Gauge: arc gauge using stroke-dasharray on a circle ───────────────────
+// 270° arc: circumference for r=62 → 2π*62 = 389.6; 270/360 * 389.6 = 292.2; rest = 97.4
+const TEMP_CIRC = 389.6, TEMP_ARC = 292.2;
+const HUM_CIRC  = 301.6, HUM_ARC  = 226.2;
+
+function tempGaugeColor(t) {
+  if (t === null) return '#3d3520';
+  if (t < 36)    return '#4da6ff';   // cold
+  if (t < 37.2)  return '#f5a623';   // warming
+  if (t <= 38.2) return '#3ecb7a';   // nominal
+  if (t <= 39.5) return '#f5a623';   // warm
+  return '#e84848';                   // hot
+}
+
+function updateTempGauge(avg) {
+  const arc = document.getElementById('tempGaugeArc');
+  const lbl = document.getElementById('gaugeTempVal');
+  if (!arc || !lbl) return;
+  const MIN = 30, MAX = 45;
+  const pct = avg !== null ? Math.max(0, Math.min(1, (avg - MIN) / (MAX - MIN))) : 0;
+  const dash = pct * TEMP_ARC;
+  arc.setAttribute('stroke-dasharray', `${dash.toFixed(1)} ${(TEMP_CIRC - dash).toFixed(1)}`);
+  arc.setAttribute('stroke', tempGaugeColor(avg));
+  lbl.textContent = avg !== null ? avg.toFixed(1) : '--.-';
+  lbl.setAttribute('fill', tempGaugeColor(avg));
+}
+
+function updateHumGauge(hum) {
+  const arc = document.getElementById('humGaugeArc');
+  const lbl = document.getElementById('gaugeHumVal');
+  if (!arc || !lbl) return;
+  const pct = hum !== null ? Math.max(0, Math.min(1, hum / 100)) : 0;
+  const dash = pct * HUM_ARC;
+  arc.setAttribute('stroke-dasharray', `${dash.toFixed(1)} ${(HUM_CIRC - dash).toFixed(1)}`);
+  lbl.textContent = hum !== null ? hum.toFixed(0) + '%' : '--%';
+}
+
+// ── Water tank fill ───────────────────────────────────────────────────────
+function updateWaterTank(kg) {
+  const fill    = document.getElementById('waterFillRect');
+  const surface = document.getElementById('waterSurface');
+  const pctEl   = document.getElementById('waterTankPct');
+  if (!fill || !pctEl) return;
+  const MAX_KG = 4.0;
+  const pct = kg !== null ? Math.max(0, Math.min(1, kg / MAX_KG)) : 0;
+  const TANK_TOP = 9, TANK_H = 110;
+  const fillH = pct * TANK_H;
+  const fillY = TANK_TOP + TANK_H - fillH;
+  fill.setAttribute('y',      fillY.toFixed(1));
+  fill.setAttribute('height', fillH.toFixed(1));
+  if (surface) { surface.setAttribute('y', fillY.toFixed(1)); }
+  pctEl.textContent = kg !== null ? `${(pct * 100).toFixed(0)}%` : '--%';
+}
+
+// ── Motor compass update ──────────────────────────────────────────────────
+function updateMotorCompass(rotState) {
+  const ccwGroup  = document.getElementById('ccwArrowGroup');
+  const cwGroup   = document.getElementById('cwArrowGroup');
+  const acw       = document.getElementById('arrowCCW');
+  const acl       = document.getElementById('arrowCW');
+  const lightCCW  = document.getElementById('lightCCW');
+  const lightCW   = document.getElementById('lightCW');
+  const lbl       = document.getElementById('motorDirLabel');
+  if (!ccwGroup || !cwGroup) return;
+
+  const rs = (rotState || '').toString().toLowerCase();
+  // "*_rotation_direction" = motor is actively turning right now → blink.
+  // "*_reached" = limit switch reached, motor is in position → steady light.
+  const rotatingCCW = rs === 'ccw_rotation_direction';
+  const rotatingCW  = rs === 'cw_rotation_direction';
+  const reachedCCW  = rs === 'ccw_reached';
+  const reachedCW   = rs === 'cw_reached';
+
+  const purple = '#c090f8', amber = '#f5a623', dim = '#3d3520';
+
+  // Arrows: lit (steady) while actively rotating in that direction, dim otherwise.
+  ccwGroup.querySelector('path').setAttribute('stroke', rotatingCCW ? purple : dim);
+  cwGroup.querySelector('path').setAttribute('stroke',  rotatingCW  ? amber  : dim);
+  if (acw) acw.setAttribute('fill', rotatingCCW ? purple : dim);
+  if (acl) acl.setAttribute('fill', rotatingCW  ? amber  : dim);
+  ccwGroup.classList.toggle('blinking', rotatingCCW);
+  cwGroup.classList.toggle('blinking',  rotatingCW);
+
+  // Reached lights: steady on at 9 o'clock (CCW) / 3 o'clock (CW), off otherwise.
+  if (lightCCW) lightCCW.classList.toggle('lit', reachedCCW);
+  if (lightCW)  lightCW.classList.toggle('lit',  reachedCW);
+
+  if (lbl) {
+    let key = 'Idle';
+    if (rotatingCCW) key = 'Rotating CCW';
+    else if (rotatingCW) key = 'Rotating CW';
+    else if (reachedCCW) key = 'CCW reached';
+    else if (reachedCW) key = 'CW reached';
+    lbl.textContent = tr(key);
+    lbl.style.color = (rotatingCCW || reachedCCW) ? 'var(--purple)'
+                     : (rotatingCW || reachedCW)   ? 'var(--amber)'
+                     : 'var(--muted)';
+  }
+}
+
+// ── Incubation phase ──────────────────────────────────────────────────────
+function incubationPhase(passed, total) {
+  if (!total || total <= 0) return '---';
+  const pct = passed / total * 100;
+  if (total <= 21) {
+    if (passed <= 0)  return 'Not Started';
+    if (passed < 18)  return 'Setting';
+    if (passed === 18) return 'Pre-lockdown';
+    if (passed < total) return 'Lockdown';
+    return 'Hatch!';
+  }
+  if (pct < 5)  return 'Not Started';
+  if (pct < 85) return 'Setting';
+  if (pct < 93) return 'Pre-lockdown';
+  if (pct < 100) return 'Lockdown';
+  return 'Hatch!';
+}
+
+// ── Stored setpoint (tracked from spinbox updates) ────────────────────────
+let _setpoint = null;
+let _lastDataTime = null;
+let _pidActive = false;
+let _spreadWarn = false;
+
+// ── Apply functions ───────────────────────────────────────────────────────
+function applyView(d) {
+  _lastDataTime = Date.now();
+
+  const t1 = (typeof d.temp1 === 'number' && isFinite(d.temp1)) ? d.temp1 : null;
+  const t2 = (typeof d.temp2 === 'number' && isFinite(d.temp2)) ? d.temp2 : null;
+  const t3 = (typeof d.temp3 === 'number' && isFinite(d.temp3)) ? d.temp3 : null;
+  const t4 = (typeof d.temp4 === 'number' && isFinite(d.temp4)) ? d.temp4 : null;
+  const te = (typeof d.externalTemp === 'number' && isFinite(d.externalTemp)) ? d.externalTemp : null;
+
+  // Dashboard tiles (number only – unit is in static label)
+  setText('temp1', fmt(t1) ?? '---');
+  setText('temp2', fmt(t2) ?? '---');
+  setText('temp3', fmt(t3) ?? '---');
+  setText('temp4', fmt(t4) ?? '---');
+  setText('externalTemp', fmt(te) ?? '---');
+
+  // Sensor validity dots
+  [['dot1', t1], ['dot2', t2], ['dot3', t3], ['dot4', t4]].forEach(([id, v]) => {
+    const el = document.getElementById(id);
+    if (el) el.className = 'tl-dot' + (v === null ? ' err' : '');
+  });
+
+  // Temperature page
+  setText('temp1_t',        (fmt(t1) ?? '---') + ' °C');
+  setText('temp2_t',        (fmt(t2) ?? '---') + ' °C');
+  setText('temp3_t',        (fmt(t3) ?? '---') + ' °C');
+  setText('temp4_t',        (fmt(t4) ?? '---') + ' °C');
+  setText('externalTemp_t', (fmt(te) ?? '---') + ' °C');
+  setText('heatCtrlVal_t',  (fmt(d.heatCtrlVal) ?? '---') + ' °C');
+
+  const dcRaw = (typeof d.pidDutyCycle === 'number' && isFinite(d.pidDutyCycle)) ? d.pidDutyCycle : null;
+  const dcPct = dcRaw !== null ? (dcRaw * 100).toFixed(1) + ' %' : '---';
+  setText('pidDutyCycle',   dcPct);
+  setText('pidDutyCycle_t', dcPct);
+  // Duty cycle bars
+  const dcW = dcRaw !== null ? (dcRaw * 100).toFixed(1) : 0;
+  ['dcFill', 'dcFill_t'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.width = dcW + '%';
+  });
+
+  setText('pidCurrentValue',   (fmt(d.pidCurrentValue) ?? '---') + ' °C');
+  setText('pidCurrentValue_t', (fmt(d.pidCurrentValue) ?? '---') + ' °C');
+  setText('heatCtrlVal',       (fmt(d.heatCtrlVal) ?? '---') + ' °C');
+
+  // Average temp gauge
+  const valids = [t1, t2, t3, t4].filter(v => v !== null);
+  const avg = valids.length ? valids.reduce((a, b) => a + b, 0) / valids.length : null;
+  updateTempGauge(avg);
+
+  // Sensor spread
+  if (valids.length >= 2) {
+    const spread = Math.max(...valids) - Math.min(...valids);
+    setText('sensorSpread', spread.toFixed(2) + ' °C');
+    _spreadWarn = spread > 1.0;
+    setHealthItem('hd-spread', 'hv-spread', _spreadWarn ? 'warn' : 'ok',
+      spread.toFixed(2) + ' °C' + (_spreadWarn ? ' ⚠' : ''));
+  }
+
+  // Delta from setpoint
+  const deltaEl = document.getElementById('gaugeDelta');
+  const badgeEl = document.getElementById('tempDeltaBadge');
+  if (_setpoint !== null && avg !== null) {
+    const delta = avg - _setpoint;
+    const sign = delta >= 0 ? '+' : '';
+    const dStr = sign + delta.toFixed(2) + ' °C';
+    if (deltaEl) { deltaEl.textContent = 'Δ SP: ' + dStr; deltaEl.setAttribute('fill', tempGaugeColor(avg)); }
+    if (badgeEl) {
+      badgeEl.textContent = dStr;
+      badgeEl.className = 'delta-badge ' +
+        (Math.abs(delta) < 0.3 ? 'ok' : delta < 0 ? 'cold' : 'warm');
+    }
+  } else {
+    if (deltaEl) { deltaEl.textContent = 'Δ SP: ---'; }
+    if (badgeEl) { badgeEl.textContent = '---'; badgeEl.className = 'delta-badge ok'; }
+  }
+
+  // Humidity
+  const hum = (typeof d.humidity1 === 'number' && isFinite(d.humidity1)) ? d.humidity1 : null;
+  updateHumGauge(hum);
+  setText('humidity1',         (fmt(hum) ?? '---') + ' %');
+  setText('tempFromHumidity',  (fmt(d.tempFromHumidity) ?? '---'));
+  setText('humidity1_w',       (fmt(hum) ?? '---') + ' %');
+  setText('tempFromHumidity_w',(fmt(d.tempFromHumidity) ?? '---') + ' °C');
+  setText('humCtrlVal_w',      (fmt(d.humCtrlVal) ?? '---') + ' %');
+  setText('waterCtrlVal_w',    (fmt(d.waterCtrlVal) ?? '---') + ' kg');
+
+  // Water
+  const wkg = (typeof d.waterWeight === 'number' && isFinite(d.waterWeight)) ? d.waterWeight : null;
+  updateWaterTank(wkg);
+  setText('waterWeight',   (fmt(wkg) ?? '---') + ' kg');
+  setText('waterWeight_w', (fmt(wkg) ?? '---') + ' kg');
+
+  // Status pills
+  setPill('heaterStatus',      d.heaterStatus,     'Heating',     'OFF');
+  setPill('heaterStatus_t',    d.heaterStatus,     'Heating',     'OFF');
+  setPill('humidifierStatus',  d.humidifierStatus, 'Humidifying', 'OFF', 'hum');
+  setPill('humidifierStatus_w',d.humidifierStatus, 'Humidifying', 'OFF', 'hum');
+  setPill('evalveStatus',      d.evalveStatus,     'Filling',     'OFF', 'vlv');
+  setPill('evalveStatus_w',    d.evalveStatus,     'Filling',     'OFF', 'vlv');
+
+  // System health panel
+  const sensorList = [[t1,'t1','TMP01'],[t2,'t2','TMP02'],[t3,'t3','TMP03'],[t4,'t4','TMP04'],[te,'ext','EXTT']];
+  sensorList.forEach(([v, key, name]) => {
+    setHealthItem('hd-'+key, 'hv-'+key,
+      v !== null ? 'ok' : 'err',
+      v !== null ? (v.toFixed(1) + ' °C') : 'Fault / no data');
+  });
+  setHealthItem('hd-htr', 'hv-htr', 'ok', d.heaterStatus ? 'ON – Heating' : 'OFF');
+  setHealthItem('hd-hum', 'hv-hum', 'ok', d.humidifierStatus ? 'ON – Humidifying' : 'OFF');
+  setHealthItem('hd-vlv', 'hv-vlv', 'ok', d.evalveStatus ? 'ON – Filling' : 'OFF');
+  setHealthItem('hd-dc',  'hv-dc',  'ok', dcPct);
+  if (_setpoint !== null) setText('hv-sp', _setpoint.toFixed(1) + ' °C');
+
+  // Update last-data time in system page
+  setText('hv-uptime', new Date().toLocaleTimeString());
+  setHealthItem('hd-arduino', 'hv-arduino', 'ok', 'Fresh');
+}
+
+function applyStatistics(d) {
+  setText('minTemp_stat',  (fmt(d.minTemp)  ?? '---') + ' °C');
+  setText('meanTemp_stat', (fmt(d.meanTemp) ?? '---') + ' °C');
+  setText('maxTemp_stat',  (fmt(d.maxTemp)  ?? '---') + ' °C');
+  setText('onCountT_stat', d.onCountT);
+  setText('offCountT_stat',d.offCountT);
+  setText('timeOnT_stat',  d.timeOnT);
+  setText('timeOffT_stat', d.timeOffT);
+  setText('minHum_stat',   (fmt(d.minHum)  ?? '---') + ' %');
+  setText('meanHum_stat',  (fmt(d.meanHum) ?? '---') + ' %');
+  setText('maxHum_stat',   (fmt(d.maxHum)  ?? '---') + ' %');
+  setText('onCountH_stat', d.onCountH);
+  setText('offCountH_stat',d.offCountH);
+  setText('timeOnH_stat',  d.timeOnH);
+  setText('timeOffH_stat', d.timeOffH);
+}
+
+function applyDaysStats(d) {
+  const passed = parseInt(d.daysPassed) || 0;
+  const left   = parseInt(d.daysLeft)   || 0;
+  const total  = passed + left;
+  const pct    = total > 0 ? Math.min(100, Math.round(passed / total * 100)) : 0;
+  const pctStr = pct + ' % complete';
+  const phase  = incubationPhase(passed, total);
+
+  setText('daysPassed',     d.daysPassed);
+  setText('daysLeft',       d.daysLeft);
+  setText('daysPassed_dash',d.daysPassed);
+  setText('daysLeft_dash',  d.daysLeft);
+  setText('incPhase',       phase);
+  setText('incPhase_dash',  phase);
+
+  ['timelineFill', 'timelineFill_dash'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.width = pct + '%';
+  });
+  setText('timelinePct',      pctStr);
+  setText('timelinePct_dash', pctStr);
+}
+
+function applyMotor(d) {
+  setText('timePassed_motor',     d.timePassed);
+  setText('timeToNextTurn_motor', d.timeToNextTurn);
+  setText('turnsCounter_motor',   d.turnsCounter);
+  setText('mainState_motor',      d.mainState);
+  setText('manualState_motor',    d.manualState);
+  setText('rotationState_motor',  d.rotationState);
+  updateMotorCompass(d.rotationState);
+  updateMotorButtons(d.rotationState);
+  setHealthItem('hd-mtr', 'hv-mtr', 'ok', d.mainState || '---');
+}
+
+// Accende il bottone CW/CCW solo mentre il motore sta effettivamente ruotando
+// in quella direzione; lo spegne appena il finecorsa viene raggiunto (o il moto si ferma).
+function updateMotorButtons(rotationState) {
+  const rs = (rotationState || '').toLowerCase();
+  const isCW  = rs === 'cw_rotation_direction';
+  const isCCW = rs === 'ccw_rotation_direction';
+  const btnCW  = document.getElementById('btn_move_CW_motor_btn');
+  const btnCCW = document.getElementById('btn_move_CCW_motor_btn');
+  if (btnCW)  btnCW.classList.toggle('active', isCW);
+  if (btnCCW) btnCCW.classList.toggle('active', isCCW);
+}
+
+function applySpinbox(name, value) {
+  const el = document.getElementById('sb_' + name);
+  if (el && document.activeElement !== el) el.value = value;
+  if (name === 'setPointTemperature_PID_spinBox') {
+    _setpoint = parseFloat(value);
+    setText('hv-sp', _setpoint.toFixed(1) + ' °C');
+  }
+}
+
+// Incubation calendar state
+let _calStart = null;   // 'YYYY-MM-DD'
+let _calEnd   = null;   // 'YYYY-MM-DD'
+
+function applyDate(name, dateStr) {
+  if (name === 'startDate_dateTimeBox') {
+    const el = document.getElementById('startDate');
+    if (el && document.activeElement !== el) el.value = dateStr;
+    _calStart = dateStr ? dateStr.substring(0, 10) : null;
+    renderIncubationCalendar();
+  } else if (name === 'endDate_dateTimeBox') {
+    setText('endDate', dateStr);
+    _calEnd = dateStr ? dateStr.substring(0, 10) : null;
+    renderIncubationCalendar();
+  }
+}
+
+function applyRadio(name, checked) {
+  const map = {
+    'heaterOFF_radioBtn':        'r_htrOFF',
+    'heaterAUTO_radioBtn':       'r_htrAUTO',
+    'heaterON_radioBtn':         'r_htrON',
+    'hysteresisActive_radioBtn': 'r_hysteresis',
+    'PIDActive_radioBtn':        'r_pid',
+    'humidifierOFF_radioBtn':    'r_humOFF',
+    'humidifierAUTO_radioBtn':   'r_humAUTO',
+    'humidifierON_radioBtn':     'r_humON',
+    'evalveOFF_radioBtn':        'r_evalveOFF',
+    'evalveAUTO_radioBtn':       'r_evalveAUTO',
+    'evalveON_radioBtn':         'r_evalveON',
+  };
+  const elId = map[name];
+  if (elId && checked) {
+    const el = document.getElementById(elId);
+    if (el) el.checked = true;
+  }
+  // Track active algorithm for system page
+  if (name === 'hysteresisActive_radioBtn' && checked) {
+    _pidActive = false;
+    setHealthItem('hd-algo', 'hv-algo', 'ok', 'Hysteresis');
+  }
+  if (name === 'PIDActive_radioBtn' && checked) {
+    _pidActive = true;
+    setHealthItem('hd-algo', 'hv-algo', 'ok', 'PID + Feedforward');
+  }
+}
+
+// ── Staleness check: mark arduino data as stale if no update in 30 s ─────
+setInterval(() => {
+  if (_lastDataTime === null) return;
+  const secs = Math.round((Date.now() - _lastDataTime) / 1000);
+  if (secs > 30) {
+    setHealthItem('hd-arduino', 'hv-arduino', 'warn', secs + ' s ago');
+  }
+}, 5000);
+
+// ── Send helpers ──────────────────────────────────────────────────────────
+function sendButton(name)         { socket.emit('button_click',  { name }); }
+function sendSpinbox(name, val)   { socket.emit('spinbox_change',{ name, value: parseFloat(val) }); }
+function sendIntSpinbox(name,val) { socket.emit('spinbox_change',{ name, value: parseInt(val, 10) }); }
+function sendCheckbox(name, st)   { socket.emit('radio_toggle',  { name, state: st }); }
+function sendDate(d)              { if (d) socket.emit('date_change', { name: 'incubationStartDate', date: d }); }
+
+function sendToggleButton(name) {
+  socket.emit('button_click', { name });
+  const btn = document.getElementById('btn_' + name);
+  if (btn) btn.classList.toggle('active');
+}
+
+// ── Radio-group listeners ─────────────────────────────────────────────────
+['heaterMode', 'pidMode', 'humMode', 'evalveMode'].forEach(group => {
+  document.querySelectorAll(`[name="${group}"]`).forEach(r => {
+    r.addEventListener('change', e => {
+      if (e.target.checked)
+        socket.emit('radio_toggle', { name: e.target.value, state: true });
+    });
+  });
+});
+
+// ── Live Chart ────────────────────────────────────────────────────────────
+const CHART_KEYS   = ['T1','T2','T3','T4','Te'];
+const TRACE_NAMES  = { T1:'Sensor 1', T2:'Sensor 2', T3:'Sensor 3', T4:'Sensor 4', Te:'External' };
+const TRACE_COLORS = ['#f5a623','#4da6ff','#3ecb7a','#c090f8','#e85c2a'];
+let chartInited = false;
+
+function chartLayout() {
+  return {
+    margin: { t: 10, r: 20, b: 60, l: 50 },
+    paper_bgcolor: '#221d12',
+    plot_bgcolor:  '#17140d',
+    font: { color: '#ede8d8', size: 11 },
+    legend: { orientation: 'h', y: -0.22, font: { color: '#8a8070' } },
+    hovermode: 'x unified',
+    xaxis: {
+      type: 'date', tickformat: '%H:%M',
+      gridcolor: '#3d3520', linecolor: '#3d3520',
+      tickfont: { color: '#8a8070' },
+      showspikes: true, spikemode: 'across', spikesnap: 'cursor',
+      spikecolor: '#f5a623', spikethickness: 1, spikedash: 'dot',
+    },
+    yaxis: {
+      title: { text: '°C', font: { color: '#8a8070' }, standoff: 4 },
+      gridcolor: '#3d3520', linecolor: '#3d3520',
+      tickfont: { color: '#8a8070' },
+      showspikes: true, spikemode: 'across', spikesnap: 'cursor',
+      spikecolor: '#f5a623', spikethickness: 1, spikedash: 'dot',
+    },
+  };
+}
+
+function initChart(points) {
+  const traces = CHART_KEYS.map((key, i) => ({
+    name: TRACE_NAMES[key], type: 'scatter', mode: 'lines',
+    x: points.map(p => p.ts), y: points.map(p => p[key]),
+    line: { color: TRACE_COLORS[i], width: 1.8 },
+    connectgaps: false,
+  }));
+  Plotly.newPlot('liveChart', traces, chartLayout(), {
+    responsive: true, displayModeBar: true,
+    modeBarButtonsToRemove: ['select2d','lasso2d','toImage'],
+  });
+  chartInited = true;
+}
+
+function extendChart(pt) {
+  if (!chartInited) return;
+  Plotly.extendTraces('liveChart',
+    { x: CHART_KEYS.map(() => [pt.ts]), y: CHART_KEYS.map(k => [pt[k]]) },
+    CHART_KEYS.map((_, i) => i), 1440
+  );
+}
+
+// Formatta una Date come stringa locale "ingenua" YYYY-MM-DDTHH:MM:SS,
+// stesso formato usato dal backend (datetime.now().strftime('%Y-%m-%dT%H:%M:%S')).
+// Non usare .toISOString(): quella converte in UTC e introduce uno sfasamento
+// pari al fuso orario (es. 2h in estate con CEST) rispetto ai dati disegnati.
+function toLocalNaiveISOString(d) {
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` +
+         `T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
+function setChartRange(minutes) {
+  if (!chartInited) return;
+  if (minutes === 0) { Plotly.relayout('liveChart', { 'xaxis.autorange': true }); return; }
+  const now  = new Date();
+  const from = new Date(now - minutes * 60000);
+  Plotly.relayout('liveChart', {
+    'xaxis.autorange': false,
+    'xaxis.range': [toLocalNaiveISOString(from), toLocalNaiveISOString(now)],
+  });
+}
+
+socket.on('chart_history', pts => { initChart(pts); });
+socket.on('update_chart',  pt  => { extendChart(pt); });
+
+// ── History Charts ────────────────────────────────────────────────────────
+let histType    = 'Temperatures';
+let histMode    = 'today';
+let histInited  = false;
+
+const HIST_COLORS = ['#f5a623','#4da6ff','#3ecb7a','#c090f8','#e85c2a','#ff6b6b','#51d3c0'];
+const HIST_YUNITS = {
+  Temperatures:         '°C',
+  External_Temperature: '°C',
+  Humidity:             '%',
+  Heater:               'ON/OFF',
+  Humidifier:           'ON/OFF',
+  Water_Weight:         'g',
+  PID_Duty_Cycle:       'duty [0-1]',
+};
+
+function selectHistType(btn) {
+  document.querySelectorAll('.hist-type-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  histType = btn.dataset.type;
+  loadHistPlot();
+}
+
+function selectHistMode(btn) {
+  document.querySelectorAll('.hist-mode-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  histMode = btn.dataset.mode;
+  loadHistPlot();
+}
+
+// Called from stats buttons: navigate to history page and pre-select type/mode
+function requestPlot(type, mode) {
+  // Activate sidebar item and page
+  document.querySelectorAll('#sideNav li').forEach(x => x.classList.remove('active'));
+  document.querySelectorAll('.page').forEach(x => x.classList.remove('active'));
+  const li = document.querySelector('[data-pg="history"]');
+  if (li) li.classList.add('active');
+  document.getElementById('page-history').classList.add('active');
+  if (window.innerWidth <= 768)
+    document.getElementById('sidebar').classList.remove('open');
+
+  // Update toolbar state
+  histType = type;
+  histMode = mode;
+  document.querySelectorAll('.hist-type-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.type === type);
+  });
+  document.querySelectorAll('.hist-mode-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.mode === mode);
+  });
+
+  loadHistPlot();
+}
+
+async function loadHistPlot() {
+  const statusEl = document.getElementById('histStatus');
+  const chartEl  = document.getElementById('histChart');
+  if (!statusEl || !chartEl) return;
+
+  statusEl.textContent = 'Loading…';
+
+  try {
+    const url  = `/api/csv_data?type=${encodeURIComponent(histType)}&mode=${encodeURIComponent(histMode)}`;
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error(`Server error ${resp.status}`);
+    const data = await resp.json();
+
+    if (!data.series || data.series.length === 0 ||
+        data.series.every(s => !s.x || s.x.length === 0)) {
+      statusEl.textContent = `No data available for "${data.title || histType}".`;
+      Plotly.purge(chartEl);
+      histInited = false;
+      return;
+    }
+    statusEl.textContent = '';
+
+    const traces = data.series.map((s, i) => ({
+      name: s.name,
+      type: 'scatter',
+      mode: 'lines',
+      x: s.x,
+      y: s.y,
+      line: { color: HIST_COLORS[i % HIST_COLORS.length], width: 1.8 },
+      connectgaps: false,
+    }));
+
+    const tickFmt = (histMode === 'today') ? '%H:%M' : '%Y-%m-%d %H:%M';
+
+    const layout = {
+      title: { text: data.title, font: { color: '#ede8d8', size: 13 }, x: 0.02, xanchor: 'left' },
+      margin: { t: 44, r: 20, b: 90, l: 58 },
+      paper_bgcolor: '#221d12',
+      plot_bgcolor:  '#17140d',
+      font: { color: '#ede8d8', size: 11 },
+      legend: { orientation: 'h', y: -0.26, font: { color: '#8a8070' } },
+      hovermode: 'x unified',
+      xaxis: {
+        type: 'date',
+        tickformat: tickFmt,
+        tickangle: -30,
+        gridcolor: '#3d3520', linecolor: '#3d3520',
+        tickfont: { color: '#8a8070' },
+        showspikes: true, spikemode: 'across', spikesnap: 'cursor',
+        spikecolor: '#f5a623', spikethickness: 1, spikedash: 'dot',
+      },
+      yaxis: {
+        title: { text: HIST_YUNITS[histType] || '', font: { color: '#8a8070' }, standoff: 4 },
+        gridcolor: '#3d3520', linecolor: '#3d3520',
+        tickfont: { color: '#8a8070' },
+        showspikes: true, spikemode: 'across', spikesnap: 'cursor',
+        spikecolor: '#f5a623', spikethickness: 1, spikedash: 'dot',
+      },
+    };
+
+    Plotly.react(chartEl, traces, layout, {
+      responsive: true, displayModeBar: true,
+      modeBarButtonsToRemove: ['select2d', 'lasso2d'],
+    });
+    histInited = true;
+  } catch (e) {
+    statusEl.textContent = 'Error: ' + e.message;
+  }
+}
+
+function histSetRange(minutes) {
+  const chartEl = document.getElementById('histChart');
+  if (!histInited || !chartEl || !chartEl.data) return;
+  if (minutes === 0) {
+    Plotly.relayout(chartEl, { 'xaxis.autorange': true });
+    return;
+  }
+  const now  = new Date();
+  const from = new Date(now - minutes * 60000);
+  Plotly.relayout(chartEl, {
+    'xaxis.autorange': false,
+    'xaxis.range': [toLocalNaiveISOString(from), toLocalNaiveISOString(now)],
+  });
+}
+
+// ── Incubation calendar ───────────────────────────────────────────────────
+const _MONTH_NAMES = ['January','February','March','April','May','June',
+                      'July','August','September','October','November','December'];
+const _DAY_NAMES   = ['Mo','Tu','We','Th','Fr','Sa','Su'];
+
+function renderIncubationCalendar() {
+  const el = document.getElementById('incubationCalendar');
+  if (!el) return;
+
+  if (!_calStart || !_calEnd) {
+    el.innerHTML = `<span style="color:var(--muted);font-size:.8rem">${tr('Set start date and duration to see the calendar.')}</span>`;
+    return;
+  }
+
+  const start = new Date(_calStart + 'T00:00:00');
+  const end   = new Date(_calEnd   + 'T00:00:00');
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+
+  if (isNaN(start) || isNaN(end) || end < start) return;
+
+  // Build list of months to display (from start month to end month inclusive)
+  const months = [];
+  for (
+    let m = new Date(start.getFullYear(), start.getMonth(), 1);
+    m <= new Date(end.getFullYear(), end.getMonth(), 1);
+    m.setMonth(m.getMonth() + 1)
+  ) months.push(new Date(m));
+
+  let html = '<div class="inc-cal">';
+
+  for (const ms of months) {
+    const y  = ms.getFullYear();
+    const mo = ms.getMonth();
+    const daysInMonth = new Date(y, mo + 1, 0).getDate();
+    // First day of month: 0=Sun → convert to Mon=0
+    const firstDow = (new Date(y, mo, 1).getDay() + 6) % 7;
+
+    html += `<div class="inc-cal-month">`;
+    html += `<h4>${tr(_MONTH_NAMES[mo])} ${y}</h4>`;
+    html += `<div class="inc-cal-grid">`;
+
+    // Week-day headers
+    _DAY_NAMES.forEach(d => html += `<div class="inc-cal-hdr">${tr(d)}</div>`);
+
+    // Empty leading cells
+    for (let i = 0; i < firstDow; i++) html += `<div></div>`;
+
+    // Day cells
+    for (let d = 1; d <= daysInMonth; d++) {
+      const day  = new Date(y, mo, d);
+      const t    = day.getTime();
+      const isStart = t === start.getTime();
+      const isEnd   = t === end.getTime();
+      const isToday = t === today.getTime();
+
+      const cls = ['inc-cal-day'];
+      if (isStart) cls.push('start-d');
+      if (isEnd)   cls.push('end-d');
+
+      if (isToday) {
+        cls.push('today');
+      } else if (day >= start && day < today && day <= end) {
+        cls.push('passed');
+      } else if (day > today && day <= end) {
+        cls.push('remain');
+      }
+
+      const tip = isStart ? 'Start of incubation'
+                : isEnd   ? '🥚 Hatch day'
+                : isToday ? 'Today'
+                : '';
+
+      html += `<div class="${cls.join(' ')}"${tip ? ` title="${tip}"` : ''}>${d}</div>`;
+    }
+
+    html += `</div></div>`;
+  }
+
+  html += '</div>';
+  el.innerHTML = html;
+}
+
+// ── Language init (must run after everything above is defined) ────────────
+setLanguage(currentLang);
+
+</script>
+</body>
+</html>
