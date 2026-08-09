@@ -16,6 +16,9 @@ import uuid
 import json
 import shutil
 import math
+import threading
+from flask import Flask, render_template, request, jsonify
+from flask_socketio import SocketIO, emit as sio_emit
 
 '''
     SALVATAGGIO DEI PARAMETRI:
@@ -82,6 +85,163 @@ timeout = 0.1
 """
 identifiers = ["TMP", "HUM", "HTP", "IND", "EXTT", "WGT"]  # Global variable
 command_tags = ["HTR01", "HUMER01", "STPR01", "ELV01", "PWM01"]
+
+# ---------------------------------------------------------------------------
+# Web server (Flask + SocketIO) – replaces the PyQt5 MainWindow
+# ---------------------------------------------------------------------------
+flask_app = Flask(__name__)
+flask_app.config['SECRET_KEY'] = 'incubator_secret_key_2024'
+socketio = SocketIO(flask_app, cors_allowed_origins="*", async_mode='threading')
+web_bridge = None  # assigned in __main__
+
+
+@flask_app.route('/')
+def index():
+    return render_template('index.html')
+
+
+@socketio.on('connect')
+def on_connect():
+    """Send current state to a newly connected browser."""
+    if web_bridge:
+        sio_emit('full_state', web_bridge.current_state)
+        sio_emit('chart_history', list(web_bridge._chart_buf))
+
+
+@socketio.on('button_click')
+def on_button_click(data):
+    if web_bridge:
+        web_bridge.button_clicked.emit(data.get('name', ''))
+
+
+@socketio.on('spinbox_change')
+def on_spinbox_change(data):
+    if web_bridge:
+        web_bridge.float_spinBox_value_changed.emit(
+            data.get('name', ''), float(data.get('value', 0.0))
+        )
+
+
+@socketio.on('radio_toggle')
+def on_radio_toggle(data):
+    if web_bridge:
+        web_bridge.radio_button_toggled.emit(
+            data.get('name', ''), bool(data.get('state', False))
+        )
+
+
+@socketio.on('date_change')
+def on_date_change(data):
+    if web_bridge:
+        d = date.fromisoformat(data.get('date', '2000-01-01'))
+        web_bridge.date_changed.emit('incubationStartDate', d)
+
+
+@flask_app.route('/api/csv_data')
+def api_csv_data():
+    """Return CSV history data as JSON for the in-browser history charts.
+
+    Query params:
+      type  – folder name inside Machine_Statistics (e.g. 'Temperatures')
+      mode  – 'today' | 'all' | 'mean'
+    """
+    import csv as _csv
+
+    ALLOWED = {
+        'Temperatures', 'External_Temperature', 'Humidity',
+        'Heater', 'Humidifier', 'Water_Weight', 'PID_Duty_Cycle',
+    }
+    # Values outside these ranges are treated as sensor errors → replaced with None
+    VALID_RANGES = {
+        'Temperatures':         (-10.0, 80.0),
+        'External_Temperature': (-20.0, 60.0),
+        'Humidity':             (0.0, 100.0),
+        'Water_Weight':         (0.0, 10000.0),
+        'PID_Duty_Cycle':       (0.0, 1.0),
+        'Heater':               (0.0, 1.0),
+        'Humidifier':           (0.0, 1.0),
+    }
+
+    data_type = request.args.get('type', 'Temperatures')
+    mode      = request.args.get('mode', 'today')   # today | all | mean
+
+    if data_type not in ALLOWED:
+        return jsonify({'error': 'invalid type'}), 400
+
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    folder = os.path.join(script_dir, 'Machine_Statistics', data_type)
+
+    if not os.path.isdir(folder):
+        return jsonify({'series': [], 'title': f'No data for {data_type}'})
+
+    today = datetime.now().strftime('%Y-%m-%d')
+
+    if mode == 'today':
+        csv_files = [os.path.join(folder, f'{today}.csv')]
+    else:
+        csv_files = sorted([
+            os.path.join(folder, fn)
+            for fn in os.listdir(folder) if fn.endswith('.csv')
+        ])
+
+    valid_min, valid_max = VALID_RANGES.get(data_type, (-1e9, 1e9))
+
+    rows = []
+    for path in csv_files:
+        if not os.path.exists(path):
+            continue
+        try:
+            with open(path, newline='') as f:
+                for row in _csv.DictReader(f):
+                    try:
+                        ts = datetime.strptime(row['Timestamp'], '%Y-%m-%d %H:%M:%S')
+                        entry = {'ts': ts}
+                        for k, v in row.items():
+                            if k == 'Timestamp':
+                                continue
+                            s = v.strip().lower()
+                            if s == 'true':
+                                fv = 1.0
+                            elif s == 'false':
+                                fv = 0.0
+                            else:
+                                fv = float(s)
+                            # Replace sensor error values with None (shows as gap)
+                            entry[k] = fv if valid_min <= fv <= valid_max else None
+                        rows.append(entry)
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
+    rows.sort(key=lambda r: r['ts'])
+
+    # Collect column names in order of first appearance
+    col_names = []
+    for r in rows:
+        for k in r:
+            if k != 'ts' and k not in col_names:
+                col_names.append(k)
+
+    ts_strs = [r['ts'].strftime('%Y-%m-%dT%H:%M:%S') for r in rows]
+
+    if mode == 'mean' and col_names:
+        mean_y = []
+        for r in rows:
+            vals = [r[k] for k in col_names if r.get(k) is not None]
+            mean_y.append(round(sum(vals) / len(vals), 3) if vals else None)
+        series = [{'name': 'Mean', 'x': ts_strs, 'y': mean_y}]
+    else:
+        series = [
+            {'name': k, 'x': ts_strs, 'y': [r.get(k) for r in rows]}
+            for k in col_names
+        ]
+
+    label_map = {'today': 'Today', 'all': 'All Days', 'mean': 'Mean – All Days'}
+    title = f"{data_type.replace('_', ' ')} – {label_map.get(mode, mode)}"
+    return jsonify({'series': series, 'title': title})
+
+# ---------------------------------------------------------------------------
 
 
 class SerialThread(QtCore.QThread):
@@ -1707,6 +1867,13 @@ class MainSoftwareThread(QtCore.QThread):
             # persistenza nella modalità di riscaldamento scelta
             self.pid_temperature_is_activated = pid_heating_mode_is_selected
             self.update_radio_button_exclusive.emit('PIDActive_radioBtn', self.pid_temperature_is_activated)
+
+        # Heater/Humidifier/Valve: forceON e forceOFF sono False di default in HysteresisController,
+        # cioè il controllore parte già in AUTO. Sincronizzo il radio button della pagina web con
+        # questo stato reale, altrimenti all'apertura nessun radio button risulta selezionato.
+        self.update_radio_button_exclusive.emit('heaterAUTO_radioBtn', True)
+        self.update_radio_button_exclusive.emit('humidifierAUTO_radioBtn', True)
+        self.update_radio_button_exclusive.emit('evalveAUTO_radioBtn', True)
             
             
     def _load_all_parameters(self):
@@ -2771,6 +2938,258 @@ class MainSoftwareThread(QtCore.QThread):
                 '''                  
                 self.acknowledge_from_external = None # reset 
 
+class WebBridge(QtCore.QObject):
+    """
+    Replaces MainWindow.  Bridges MainSoftwareThread (QThread/pyqtSignal) with the
+    web front-end (Flask-SocketIO).  Lives in the Qt main thread so all signals from
+    MainSoftwareThread are delivered here via Qt's queued connection.
+    """
+
+    # Signals sent TO MainSoftwareThread (same interface as MainWindow)
+    button_clicked               = QtCore.pyqtSignal(str)
+    float_spinBox_value_changed  = QtCore.pyqtSignal(str, float)
+    initialization_step          = QtCore.pyqtSignal(str, float)
+    initialization_done          = QtCore.pyqtSignal(str, bool)
+    radio_button_toggled         = QtCore.pyqtSignal(str, bool)
+    date_changed                 = QtCore.pyqtSignal(str, object)
+
+    def __init__(self, main_software_thread):
+        super().__init__()
+        self.current_state = {}   # cache – sent to new browsers on connect
+        self._chart_buf       = deque(maxlen=1440)   # 4 h × 1 sample/10 s
+        self._chart_last_ts   = 0.0
+        self._chart_interval  = 10.0                 # seconds between chart samples
+
+        # MainSoftwareThread → WebBridge
+        main_software_thread.update_view.connect(self.on_update_view)
+        main_software_thread.update_statistics.connect(self.on_update_statistics)
+        main_software_thread.update_days_statistics.connect(self.on_update_days_statistics)
+        main_software_thread.update_motor.connect(self.on_update_motor)
+        main_software_thread.update_spinbox_value.connect(self.on_update_spinbox)
+        main_software_thread.update_int_spinbox_value.connect(self.on_update_int_spinbox)
+        main_software_thread.update_date_edit.connect(self.on_update_date_edit)
+        main_software_thread.update_radio_button_exclusive.connect(self.on_update_radio_button)
+
+        # WebBridge → MainSoftwareThread
+        self.button_clicked.connect(main_software_thread.handle_button_click)
+        self.float_spinBox_value_changed.connect(main_software_thread.handle_float_spinBox_value)
+        self.initialization_step.connect(main_software_thread.handle_intialization_step)
+        self.initialization_done.connect(main_software_thread.handle_initialization_done)
+        self.radio_button_toggled.connect(main_software_thread.handle_radio_button_toggle)
+        self.date_changed.connect(main_software_thread.on_date_received)
+
+        # Send default values (mirrors what MainWindow.__init__ emitted from .ui defaults)
+        self._send_init_defaults()
+        self._load_chart_history_from_csv()
+
+    def _send_init_defaults(self):
+        defaults = [
+            ("maxHysteresisValue_temperature_spinBox",      37.8),
+            ("minHysteresisValue_temperature_spinBox",      37.5),
+            ("maxHysteresisValue_humidity_spinBox",         45.0),
+            ("minHysteresisValue_humidity_spinBox",         25.0),
+            ("maxHysteresisValue_waterLevelControl_spinBox", 4.0),
+            ("minHysteresisValue_waterLevelControl_spinBox", 1.0),
+            ("setPointTemperature_PID_spinBox",             37.8),
+            ("Kp_spinBox",  0.0),
+            ("Ki_spinBox",  0.0),
+            ("Kd_spinBox",  0.0),
+            ("days_duration_spinBox", 0.0),
+        ]
+        sb = {}
+        for name, val in defaults:
+            self.initialization_step.emit(name, val)
+            sb[name] = val
+        self.current_state['spinboxes'] = sb
+        self.initialization_done.emit("GUI_initialization_procedure", True)
+
+    @staticmethod
+    def _fmt(secs):
+        s = int(secs)
+        if s < 60:
+            return f"{s} sec"
+        if s < 3600:
+            m, r = divmod(s, 60)
+            return f"{m} min {r} sec" if r else f"{m} min"
+        h, rem = divmod(s, 3600)
+        m = rem // 60
+        return f"{h} h {m} min" if m else f"{h} h"
+
+    @staticmethod
+    def _safe_temp(v):
+        """Return v if it's a plausible temperature, else None (Plotly gap)."""
+        try:
+            f = float(v)
+        except (TypeError, ValueError):
+            return None
+        if f in (-127.0, 85.0) or not (5.0 <= f <= 80.0):
+            return None
+        return round(f, 2)
+
+    def _load_chart_history_from_csv(self):
+        """Pre-populate _chart_buf from the last 4 h of saved CSV files."""
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        temp_dir   = os.path.join(script_dir, 'Machine_Statistics', 'Temperatures')
+        ext_dir    = os.path.join(script_dir, 'Machine_Statistics', 'External_Temperature')
+
+        cutoff = datetime.now() - timedelta(hours=4)
+        # build list of dates that might contain rows in the window (spans midnight)
+        dates = []
+        d = cutoff.date()
+        while d <= datetime.now().date():
+            dates.append(d.strftime('%Y-%m-%d'))
+            d += timedelta(days=1)
+
+        rows = {}   # ts_str → point dict
+
+        for date_str in dates:
+            fp = os.path.join(temp_dir, f"{date_str}.csv")
+            if not os.path.exists(fp):
+                continue
+            try:
+                with open(fp, newline='') as f:
+                    for row in csv.DictReader(f):
+                        ts_str = row.get('Timestamp', '')
+                        try:
+                            ts = datetime.strptime(ts_str, '%Y-%m-%d %H:%M:%S')
+                        except ValueError:
+                            continue
+                        if ts < cutoff:
+                            continue
+                        rows[ts_str] = {
+                            'ts': ts.strftime('%Y-%m-%dT%H:%M:%S'),
+                            'T1': self._safe_temp(row.get('TMP01')),
+                            'T2': self._safe_temp(row.get('TMP02')),
+                            'T3': self._safe_temp(row.get('TMP03')),
+                            'T4': self._safe_temp(row.get('TMP04')),
+                            'Te': None,
+                        }
+            except Exception:
+                pass
+
+        for date_str in dates:
+            fp = os.path.join(ext_dir, f"{date_str}.csv")
+            if not os.path.exists(fp):
+                continue
+            try:
+                with open(fp, newline='') as f:
+                    for row in csv.DictReader(f):
+                        ts_str = row.get('Timestamp', '')
+                        try:
+                            ts = datetime.strptime(ts_str, '%Y-%m-%d %H:%M:%S')
+                        except ValueError:
+                            continue
+                        if ts < cutoff:
+                            continue
+                        if ts_str in rows:
+                            rows[ts_str]['Te'] = self._safe_temp(row.get('EXTT'))
+                        else:
+                            rows[ts_str] = {
+                                'ts': ts.strftime('%Y-%m-%dT%H:%M:%S'),
+                                'T1': None, 'T2': None, 'T3': None, 'T4': None,
+                                'Te': self._safe_temp(row.get('EXTT')),
+                            }
+            except Exception:
+                pass
+
+        for ts_str in sorted(rows):
+            self._chart_buf.append(rows[ts_str])
+
+    # ---- Slots: data FROM MainSoftwareThread → push to browsers ----
+
+    def on_update_view(self, all_data):
+        if len(all_data) < 16:
+            return
+        d = {
+            'temp1': all_data[0],  'temp2': all_data[1],
+            'temp3': all_data[2],  'temp4': all_data[3],
+            'humidity1': all_data[4], 'tempFromHumidity': all_data[5],
+            'heatCtrlVal': all_data[6], 'humCtrlVal': all_data[7],
+            'heaterStatus': all_data[8], 'humidifierStatus': all_data[9],
+            'externalTemp': all_data[10], 'waterWeight': all_data[11],
+            'waterCtrlVal': all_data[12], 'evalveStatus': all_data[13],
+            'pidCurrentValue': all_data[14], 'pidDutyCycle': all_data[15],
+        }
+        self.current_state['view'] = d
+        socketio.emit('update_view', d)
+
+        # ---- chart sampling (every _chart_interval seconds) ----
+        now = time.time()
+        if now - self._chart_last_ts >= self._chart_interval:
+            self._chart_last_ts = now
+            point = {
+                'ts': datetime.now().strftime('%Y-%m-%dT%H:%M:%S'),
+                'T1': self._safe_temp(all_data[0]),
+                'T2': self._safe_temp(all_data[1]),
+                'T3': self._safe_temp(all_data[2]),
+                'T4': self._safe_temp(all_data[3]),
+                'Te': self._safe_temp(all_data[10]),
+            }
+            self._chart_buf.append(point)
+            socketio.emit('update_chart', point)
+
+    def on_update_statistics(self, all_data):
+        if len(all_data) < 14:
+            return
+        d = {
+            'minTemp':  all_data[0], 'meanTemp': all_data[1], 'maxTemp': all_data[2],
+            'onCountT': all_data[3], 'offCountT': all_data[4],
+            'timeOnT':  self._fmt(all_data[5]), 'timeOffT': self._fmt(all_data[6]),
+            'minHum':   all_data[7], 'meanHum':  all_data[8], 'maxHum':  all_data[9],
+            'onCountH': all_data[10], 'offCountH': all_data[11],
+            'timeOnH':  self._fmt(all_data[12]), 'timeOffH': self._fmt(all_data[13]),
+        }
+        self.current_state['statistics'] = d
+        socketio.emit('update_statistics', d)
+
+    def on_update_days_statistics(self, all_data):
+        if len(all_data) < 2:
+            return
+        d = {'daysPassed': all_data[0], 'daysLeft': all_data[1]}
+        self.current_state['days_statistics'] = d
+        socketio.emit('update_days_statistics', d)
+
+    def on_update_motor(self, all_data):
+        if len(all_data) < 6:
+            return
+        d = {
+            'timePassed':    self._fmt(all_data[0]),
+            'timeToNextTurn': self._fmt(all_data[1]),
+            'turnsCounter':  all_data[2],
+            'mainState':     all_data[3],
+            'manualState':   all_data[4],
+            'rotationState': all_data[5],
+        }
+        self.current_state['motor'] = d
+        socketio.emit('update_motor', d)
+
+    def _set_spinbox(self, name, value):
+        if 'spinboxes' not in self.current_state:
+            self.current_state['spinboxes'] = {}
+        self.current_state['spinboxes'][name] = value
+
+    def on_update_spinbox(self, name, value):
+        self._set_spinbox(name, value)
+        socketio.emit('update_spinbox', {'name': name, 'value': value})
+
+    def on_update_int_spinbox(self, name, value):
+        self._set_spinbox(name, value)
+        socketio.emit('update_spinbox', {'name': name, 'value': value})
+
+    def on_update_date_edit(self, name, date_val):
+        if 'dates' not in self.current_state:
+            self.current_state['dates'] = {}
+        self.current_state['dates'][name] = date_val.isoformat()
+        socketio.emit('update_date', {'name': name, 'date': date_val.isoformat()})
+
+    def on_update_radio_button(self, name, value):
+        if 'radio_buttons' not in self.current_state:
+            self.current_state['radio_buttons'] = {}
+        self.current_state['radio_buttons'][name] = value
+        socketio.emit('update_radio', {'name': name, 'checked': value})
+
+
+# NOTE: MainWindow is kept for reference but is no longer instantiated.
 class MainWindow(QtWidgets.QMainWindow):
     # Define custom signals - this is done to send button/spinBox and other custom signals to other thread MainSoftwareThread: use Qt Signals
     button_clicked = QtCore.pyqtSignal(str)  # Emits button name
@@ -3054,16 +3473,50 @@ class MainWindow(QtWidgets.QMainWindow):
 
 
 if __name__ == "__main__":
-    app = QtWidgets.QApplication(sys.argv)
+    import os
+    # Run Qt headlessly (no display needed – only event loop for QThread/signals)
+    os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 
-    # Initialize the main software thread
+    qt_app = QtCore.QCoreApplication(sys.argv)
+
     main_software_thread = MainSoftwareThread()
 
-    # Initialize and show the main window
-    window = MainWindow(main_software_thread)
-    window.show()
+    # WebBridge replaces MainWindow: connects threads to the web front-end
+    web_bridge = WebBridge(main_software_thread)
 
-    # Start the main software thread
+    # Flask-SocketIO runs in a daemon thread; Qt event loop runs in the main thread
+    flask_thread = threading.Thread(
+        target=lambda: socketio.run(
+            flask_app, host='0.0.0.0', port=5000,
+            debug=False, use_reloader=False
+        ),
+        daemon=True,
+    )
+    flask_thread.start()
+
+    def _open_browser():
+        import time, subprocess, shutil
+        time.sleep(5)  # wait for Flask to bind port 5000
+        browser = shutil.which('chromium-browser') or shutil.which('chromium') or shutil.which('google-chrome')
+        if not browser:
+            print("No Chromium browser found – open http://localhost:5000 manually")
+            return
+
+        # Normal, closable window everywhere (Raspberry Pi included) — no kiosk/fullscreen.
+        subprocess.Popen([
+            browser,
+            '--new-window',
+            '--noerrdialogs',
+            '--disable-session-crashed-bubble',
+            'http://localhost:5000'
+        ])
+
+    browser_thread = threading.Thread(target=_open_browser, daemon=True)
+    browser_thread.start()
+
     main_software_thread.start()
+
+    print("Incubator web server started → http://localhost:5000")
+    sys.exit(qt_app.exec_())
 
     sys.exit(app.exec_())
