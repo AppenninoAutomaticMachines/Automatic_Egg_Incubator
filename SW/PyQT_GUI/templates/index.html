@@ -384,7 +384,7 @@
             <!-- center text -->
             <text id="gaugeTempVal" x="90" y="85" text-anchor="middle"
               fill="#ede8d8" font-size="26" font-weight="800" font-family="sans-serif">--.-</text>
-            <text x="90" y="102" text-anchor="middle" fill="#8a8070" font-size="9">°C  internal avg</text>
+            <text id="svgTempSubLabel" x="90" y="102" text-anchor="middle" fill="#8a8070" font-size="9">°C  internal avg</text>
             <!-- delta from setpoint -->
             <text id="gaugeDelta" x="90" y="116" text-anchor="middle"
               fill="#8a8070" font-size="8">Δ SP: ---</text>
@@ -432,7 +432,7 @@
               transform="rotate(135, 70, 70)"/>
             <text id="gaugeHumVal" x="70" y="65" text-anchor="middle"
               fill="#ede8d8" font-size="20" font-weight="800" font-family="sans-serif">--%</text>
-            <text x="70" y="80" text-anchor="middle" fill="#8a8070" font-size="8">relative humidity</text>
+            <text id="svgHumSubLabel" x="70" y="80" text-anchor="middle" fill="#8a8070" font-size="8">relative humidity</text>
           </svg>
 
           <div class="d-flex gap-3 justify-content-center mt-1 w-100">
@@ -1009,7 +1009,7 @@
             <table class="stbl">
               <thead><tr><th></th><th>Count ON</th><th>Count OFF</th><th>Time ON</th><th>Time OFF</th></tr></thead>
               <tbody><tr>
-                <td>Heater</td>
+                <td class="i18n-auto">Heater relay</td>
                 <td><span class="sv" id="onCountT_stat">---</span></td>
                 <td><span class="sv" id="offCountT_stat">---</span></td>
                 <td><span class="sv" id="timeOnT_stat">---</span></td>
@@ -1032,7 +1032,7 @@
           <table class="stbl">
             <thead><tr><th></th><th>Min</th><th>Mean</th><th>Max</th></tr></thead>
             <tbody><tr>
-              <td>Humidity</td>
+              <td class="i18n-auto">Humidity</td>
               <td><span class="sv" id="minHum_stat">---</span></td>
               <td><span class="sv" id="meanHum_stat">---</span></td>
               <td><span class="sv" id="maxHum_stat">---</span></td>
@@ -1042,7 +1042,7 @@
             <table class="stbl">
               <thead><tr><th></th><th>Count ON</th><th>Count OFF</th><th>Time ON</th><th>Time OFF</th></tr></thead>
               <tbody><tr>
-                <td>Humidifier</td>
+                <td class="i18n-auto">Humidifier relay</td>
                 <td><span class="sv" id="onCountH_stat">---</span></td>
                 <td><span class="sv" id="offCountH_stat">---</span></td>
                 <td><span class="sv" id="timeOnH_stat">---</span></td>
@@ -1376,6 +1376,12 @@ const I18N_IT = {
   'Today': 'Oggi', 'All Days': 'Tutti i Giorni', 'Mean (All Days)': 'Media (Tutti i Giorni)',
   '↻ Reload': '↻ Ricarica', 'All': 'Tutti',
   '🔄 Force Eggs Turn Now': '🔄 Forza Rotazione Uova Ora', '↔ Lay Horizontal': '↔ Posiziona Orizzontale',
+  // Stats table row labels (unique keys to avoid conflicts with other usages)
+  'Heater relay': 'relè riscaldatore',
+  'Humidifier relay': 'relè umidificatore',
+  // SVG gauge sub-labels
+  '°C  internal avg': '°C  media',
+  'relative humidity': 'umidità relativa',
   // Bare labels (i18n-auto)
   'Heater duty cycle': 'Duty cycle riscaldatore',
   'Water Valve': 'Valvola Acqua', 'Start': 'Inizio', 'Hatch': 'Schiusa',
@@ -1418,6 +1424,13 @@ const STATIC_I18N_SELECTORS = [
 
 function applyStaticTranslations() {
   document.querySelectorAll(STATIC_I18N_SELECTORS).forEach(el => {
+    if (el.dataset.i18nSrc === undefined) el.dataset.i18nSrc = el.textContent;
+    el.textContent = tr(el.dataset.i18nSrc);
+  });
+  // SVG <text> elements are not reachable by the CSS selector above
+  ['svgTempSubLabel', 'svgHumSubLabel'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
     if (el.dataset.i18nSrc === undefined) el.dataset.i18nSrc = el.textContent;
     el.textContent = tr(el.dataset.i18nSrc);
   });
