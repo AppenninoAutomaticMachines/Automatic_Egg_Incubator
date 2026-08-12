@@ -300,9 +300,12 @@
     }
     .lang-flag {
       background: transparent; border: 1px solid transparent; border-radius: 6px;
-      font-size: 1.05rem; line-height: 1; padding: .25rem .4rem; cursor: pointer;
-      opacity: .5; transition: opacity .15s, border-color .15s, background .15s;
+      font-size: .72rem; font-weight: 700; line-height: 1; padding: .25rem .5rem;
+      cursor: pointer; display: inline-flex; align-items: center; gap: .3rem;
+      color: var(--muted);
+      opacity: .5; transition: opacity .15s, border-color .15s, background .15s, color .15s;
     }
+    .lang-flag.active { color: var(--text); }
     .lang-flag:hover { opacity: .85; }
     .lang-flag.active { opacity: 1; border-color: var(--amber); background: rgba(245,166,35,.1); }
 
@@ -313,8 +316,22 @@
 <button id="hbg" onclick="document.getElementById('sidebar').classList.toggle('open')">☰</button>
 
 <div id="langSwitch">
-  <button class="lang-flag" id="flag_en" onclick="setLanguage('en')" title="English">🇬🇧</button>
-  <button class="lang-flag" id="flag_it" onclick="setLanguage('it')" title="Italiano">🇮🇹</button>
+  <button class="lang-flag" id="flag_en" onclick="setLanguage('en')" title="English">
+    <svg viewBox="0 0 60 30" width="22" height="11" style="flex-shrink:0">
+      <rect width="60" height="30" fill="#012169"/>
+      <path d="M0,0 L60,30 M60,0 L0,30" stroke="#fff" stroke-width="6"/>
+      <path d="M0,0 L60,30 M60,0 L0,30" stroke="#C8102E" stroke-width="4"/>
+      <path d="M30,0 V30 M0,15 H60" stroke="#fff" stroke-width="10"/>
+      <path d="M30,0 V30 M0,15 H60" stroke="#C8102E" stroke-width="6"/>
+    </svg>ENG
+  </button>
+  <button class="lang-flag" id="flag_it" onclick="setLanguage('it')" title="Italiano">
+    <svg viewBox="0 0 3 2" width="22" height="14" style="flex-shrink:0">
+      <rect width="1" height="2" fill="#009246"/>
+      <rect x="1" width="1" height="2" fill="#fff"/>
+      <rect x="2" width="1" height="2" fill="#ce2b37"/>
+    </svg>ITA
+  </button>
 </div>
 
 <!-- ════════════════════════════ SIDEBAR ════════════════════════════════════ -->
