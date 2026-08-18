@@ -262,20 +262,24 @@
     }
 
     /* ── Incubation calendar ─────────────────────────────────────────────── */
-    .inc-cal { display: flex; flex-wrap: wrap; gap: 1.6rem; }
+    .inc-cal {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 2.5rem;
+    }
 
     .inc-cal-month h4 {
-      font-size: .78rem; font-weight: 700; color: var(--amber);
-      text-align: center; margin: 0 0 .4rem;
+      font-size: 1rem; font-weight: 700; color: var(--amber);
+      text-align: center; margin: 0 0 .7rem; letter-spacing: .03em;
     }
     .inc-cal-grid {
       display: grid; grid-template-columns: repeat(7, 1fr);
-      gap: 2px; text-align: center;
+      gap: 4px; text-align: center;
     }
-    .inc-cal-hdr { font-size: .58rem; color: var(--muted); padding: .12rem 0; }
+    .inc-cal-hdr { font-size: .75rem; color: var(--muted); padding: .25rem 0; font-weight: 600; }
     .inc-cal-day {
-      border-radius: 3px; padding: .2rem .04rem;
-      font-size: .68rem; line-height: 1.4; cursor: default;
+      border-radius: 4px; padding: .55rem .1rem;
+      font-size: .9rem; line-height: 1.3; cursor: default;
       color: var(--muted);
     }
     .inc-cal-day.passed {
@@ -288,8 +292,8 @@
     .inc-cal-day.remain {
       background: rgba(232,72,72,.15); color: #ff7f7f; font-weight: 500;
     }
-    .inc-cal-day.start-d { outline: 1px solid rgba(77,166,255,.75); outline-offset: -1px; }
-    .inc-cal-day.end-d   { outline: 1px solid rgba(232,72,72,.85);  outline-offset: -1px; }
+    .inc-cal-day.start-d { outline: 1.5px solid rgba(77,166,255,.75); outline-offset: -1px; }
+    .inc-cal-day.end-d   { outline: 1.5px solid rgba(232,72,72,.85);  outline-offset: -1px; }
 
     /* ── Language switch ───────────────────────────────────────────────── */
     #langSwitch {
@@ -2180,13 +2184,12 @@ function renderIncubationCalendar() {
 
   if (isNaN(start) || isNaN(end) || end < start) return;
 
-  // Build list of months to display (from start month to end month inclusive)
-  const months = [];
-  for (
-    let m = new Date(start.getFullYear(), start.getMonth(), 1);
-    m <= new Date(end.getFullYear(), end.getMonth(), 1);
-    m.setMonth(m.getMonth() + 1)
-  ) months.push(new Date(m));
+  // Always show exactly 2 consecutive months starting from start month
+  const sm = new Date(start.getFullYear(), start.getMonth(), 1);
+  const months = [
+    new Date(sm),
+    new Date(sm.getFullYear(), sm.getMonth() + 1, 1)
+  ];
 
   let html = '<div class="inc-cal">';
 
