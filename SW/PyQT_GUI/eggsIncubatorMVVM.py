@@ -1,4 +1,6 @@
 import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import random
 from PyQt5 import QtCore, QtWidgets
 from eggsIncubatorGUI import Ui_MainWindow  # Import the UI class directly
@@ -69,11 +71,20 @@ log_message('ERROR', 'This is an error message.')
 '''
 
 # ARDUINO serial communication - setup #
-portSetup = "/dev/ttyUSB0"
-portSetup = "/dev/ttyACM0"
+# La stessa scheda ha nomi di porta diversi sui due sistemi: sul PC di sviluppo
+# (Windows) è COM9, sul Raspberry che fa girare l'incubatrice è /dev/ttyUSB0.
+# Scegliendola qui lo stesso file gira su entrambi senza modifiche a mano — che
+# altrimenti si perdono a ogni copia del progetto da una macchina all'altra.
+portSetup = "/dev/ttyUSB0" if sys.platform.startswith("linux") else "COM9"
 
 baudrateSetup = 115200
 timeout = 0.1
+
+# Modalità leggera (?lite=1) del browser aperto in automatico all'avvio.
+# None  → scelta storica: lite sul Pi (Linux), piena da PC in rete
+# True  → forza sempre la modalità leggera
+# False → forza sempre la modalità piena
+BROWSER_LITE_MODE = None
 
 """
 	"EXTT" = riguarda il sensore di temperatura esterno.
@@ -82,15 +93,65 @@ timeout = 0.1
     
     "ELV01" = tag che riguarda il comando alla ELECTRO VALVE 01 = valvola per riempire il contenitore dell'acqua
     "PWM01" = è un valore INTERO da 0 a 255 che è il valore di PWM che Arduino deve impostare in uscita per far funzionare SSR con regolatore PID per la temperatura
+    "FAN01" = valore FLOAT da 0.0 a 1.0 (percentuale/100) per il duty cycle PWM delle ventole di ricircolo aria
 """
 identifiers = ["TMP", "HUM", "HTP", "IND", "EXTT", "WGT"]  # Global variable
-command_tags = ["HTR01", "HUMER01", "STPR01", "ELV01", "PWM01"]
+command_tags = ["HTR01", "HUMER01", "STPR01", "ELV01", "PWM01", "FAN01"]
+
+# ---------------------------------------------------------------------------
+# Accesso robusto ai file
+# La cartella del progetto è dentro OneDrive: mentre sincronizza un file lo
+# tiene bloccato per qualche decina di ms e open() alza
+# PermissionError [Errno 13] / OSError WinError 32. Lo stesso può fare
+# l'antivirus. Ogni scrittura viene quindi ritentata e, se proprio fallisce,
+# NON deve mai far cadere il thread di controllo (heater/PID/umidificatore).
+# ---------------------------------------------------------------------------
+FILE_ACCESS_RETRIES = 5
+FILE_ACCESS_RETRY_DELAY = 0.02  # s, raddoppiato ad ogni tentativo (~0.6 s totali)
+
+
+def open_with_retry(file_path, mode, **kwargs):
+    """
+    Come open(), ma ritenta se il file è temporaneamente bloccato da un altro
+    processo (OneDrive, antivirus, editor aperto). Rilancia l'ultima eccezione
+    se dopo tutti i tentativi il file è ancora inaccessibile.
+    """
+    delay = FILE_ACCESS_RETRY_DELAY
+    last_error = None
+    for attempt in range(FILE_ACCESS_RETRIES):
+        try:
+            return open(file_path, mode, **kwargs)
+        except (PermissionError, OSError) as e:
+            # errori "definitivi": inutile ritentare
+            if isinstance(e, (FileNotFoundError, IsADirectoryError, NotADirectoryError)):
+                raise
+            last_error = e
+            if attempt < FILE_ACCESS_RETRIES - 1:
+                time.sleep(delay)
+                delay *= 2
+    raise last_error
+
+
+def append_text_safe(file_path, text, encoding='utf-8'):
+    """
+    Appende testo a un file senza mai propagare eccezioni: il logging non deve
+    poter uccidere il thread che lo chiama. Ritorna True se ha scritto.
+    """
+    try:
+        with open_with_retry(file_path, 'a', encoding=encoding) as file:
+            file.write(text)
+        return True
+    except Exception as e:
+        # solo terminale: se il file di log non è scrivibile non ha senso loggare su file
+        print(f"[LOG-FAIL] Impossibile scrivere su {file_path}: {e}")
+        return False
 
 # ---------------------------------------------------------------------------
 # Web server (Flask + SocketIO) – replaces the PyQt5 MainWindow
 # ---------------------------------------------------------------------------
 flask_app = Flask(__name__)
 flask_app.config['SECRET_KEY'] = 'incubator_secret_key_2024'
+flask_app.config['TEMPLATES_AUTO_RELOAD'] = True
 socketio = SocketIO(flask_app, cors_allowed_origins="*", async_mode='threading')
 web_bridge = None  # assigned in __main__
 
@@ -162,6 +223,10 @@ def api_csv_data():
         'Humidifier':           (0.0, 1.0),
     }
 
+    # Colonne che non sono misure ma riferimenti di controllo: vanno tracciate
+    # con uno stile diverso e non entrano nel calcolo della media.
+    REFERENCE_COLUMNS = {'SETPOINT', 'SP_MIN', 'SP_MAX'}
+
     data_type = request.args.get('type', 'Temperatures')
     mode      = request.args.get('mode', 'today')   # today | all | mean
 
@@ -191,7 +256,7 @@ def api_csv_data():
         if not os.path.exists(path):
             continue
         try:
-            with open(path, newline='') as f:
+            with open_with_retry(path, 'r', newline='') as f:
                 for row in _csv.DictReader(f):
                     try:
                         ts = datetime.strptime(row['Timestamp'], '%Y-%m-%d %H:%M:%S')
@@ -199,13 +264,20 @@ def api_csv_data():
                         for k, v in row.items():
                             if k == 'Timestamp':
                                 continue
-                            s = v.strip().lower()
+                            s = (v or '').strip().lower()
                             if s == 'true':
                                 fv = 1.0
                             elif s == 'false':
                                 fv = 0.0
                             else:
-                                fv = float(s)
+                                try:
+                                    fv = float(s)
+                                except ValueError:
+                                    # cella vuota o non numerica (es. colonna
+                                    # aggiunta dopo): buco nel grafico, ma la
+                                    # riga resta valida per le altre colonne
+                                    entry[k] = None
+                                    continue
                             # Replace sensor error values with None (shows as gap)
                             entry[k] = fv if valid_min <= fv <= valid_max else None
                         rows.append(entry)
@@ -226,14 +298,23 @@ def api_csv_data():
     ts_strs = [r['ts'].strftime('%Y-%m-%dT%H:%M:%S') for r in rows]
 
     if mode == 'mean' and col_names:
+        # I riferimenti di controllo non sono misure: vanno esclusi dalla media
+        # dei sensori, altrimenti la "Mean" verrebbe tirata verso il setpoint.
+        measured = [k for k in col_names if k not in REFERENCE_COLUMNS]
         mean_y = []
         for r in rows:
-            vals = [r[k] for k in col_names if r.get(k) is not None]
+            vals = [r[k] for k in measured if r.get(k) is not None]
             mean_y.append(round(sum(vals) / len(vals), 3) if vals else None)
         series = [{'name': 'Mean', 'x': ts_strs, 'y': mean_y}]
+        # ...ma restano utili come riferimento sovrapposto alla media
+        series += [
+            {'name': k, 'x': ts_strs, 'y': [r.get(k) for r in rows], 'reference': True}
+            for k in col_names if k in REFERENCE_COLUMNS
+        ]
     else:
         series = [
-            {'name': k, 'x': ts_strs, 'y': [r.get(k) for r in rows]}
+            {'name': k, 'x': ts_strs, 'y': [r.get(k) for r in rows],
+             'reference': k in REFERENCE_COLUMNS}
             for k in col_names
         ]
 
@@ -246,6 +327,7 @@ def api_csv_data():
 
 class SerialThread(QtCore.QThread):
     data_received = QtCore.pyqtSignal(list)
+    board_reset_detected = QtCore.pyqtSignal()  # Arduino ripartito: vedi tag BOOT
 
     def __init__(self, port = portSetup, baudrate = baudrateSetup):
         super().__init__()
@@ -262,6 +344,12 @@ class SerialThread(QtCore.QThread):
         self.awaiting_ack = None
         self.ack_received_flag = False
         self.failed_commands = []
+
+        # Diagnostica scheda (tag UPT/MEM nel frame periodico)
+        self.board_uptime_ms = None
+        self.board_free_ram = None
+        self.last_boot_log_time = 0.0
+        self.boot_burst_count = 0
         self.max_retries = 3
         self.ack_timeout = 0.5 # time.time() returns seconds. Suggested is 300-500ms
         
@@ -481,6 +569,52 @@ class SerialThread(QtCore.QThread):
 
             elif len(parts) == 2:
                 info_name, info_value = parts
+
+                if info_name == "BOOT":
+                    # Arduino è ripartito: setup() ha rimesso i relè a LOW e u_cmd a 0.0,
+                    # quindi lo stato che il PC crede di aver impostato non è più vero.
+                    #
+                    # Il riavvio può ripetersi decine di volte al secondo (crash loop):
+                    # log e segnale vanno limitati a uno al secondo, altrimenti si
+                    # allaga il file di log e si martella la scheda di comandi.
+                    now_boot = time.time()
+                    serial_thread_instance.boot_burst_count += 1
+                    if (now_boot - serial_thread_instance.last_boot_log_time) >= 1.0:
+                        burst = serial_thread_instance.boot_burst_count
+                        serial_thread_instance.boot_burst_count = 0
+                        serial_thread_instance.last_boot_log_time = now_boot
+                        self.serial_thread_log_message(
+                            'ALARM', f"⚠️ Arduino riavviato (BOOT) x{burst} nell'ultimo secondo")
+                        serial_thread_instance.board_reset_detected.emit()
+                    continue
+
+                if info_name == "MEM":
+                    serial_thread_instance.board_free_ram = int(float(info_value))
+                    continue
+
+                if info_name == "UPT":
+                    # DIAGNOSTICA dei "silenzi" di ~2.4 s sulla seriale.
+                    # L'uptime della scheda distingue le tre cause possibili, che
+                    # dal PC sono altrimenti indistinguibili.
+                    uptime_ms = int(float(info_value))
+                    previous = serial_thread_instance.board_uptime_ms
+                    serial_thread_instance.board_uptime_ms = uptime_ms
+                    ram = serial_thread_instance.board_free_ram
+
+                    if previous is not None:
+                        if uptime_ms < previous:
+                            self.serial_thread_log_message(
+                                'ALARM',
+                                f"⚠️ RESET SCHEDA: uptime tornato indietro "
+                                f"({previous} -> {uptime_ms} ms), RAM libera {ram} B")
+                            serial_thread_instance.board_reset_detected.emit()
+                        elif (uptime_ms - previous) > 1500:
+                            self.serial_thread_log_message(
+                                'ALARM',
+                                f"⚠️ STALLO FIRMWARE: {uptime_ms - previous} ms fra due frame "
+                                f"(nessun reset, uptime continuo), RAM libera {ram} B")
+                    continue
+
                 if info_value.upper() == "NAN":
                     number = 0.0
                 elif SerialThread.is_number(info_value):
@@ -522,11 +656,10 @@ class SerialThread(QtCore.QThread):
         print(message)
         current_date = datetime.now().strftime('%Y-%m-%d')
         log_file = os.path.join(self.serial_thread_log_folder_path, f"log_{current_date}.txt")
-        
+
         timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        
-        with open(log_file, 'a', encoding='utf-8') as file:
-            file.write(f"[{error_type}] {message} @ {timestamp}\n")
+
+        append_text_safe(log_file, f"[{error_type}] {message} @ {timestamp}\n")
         '''
         OLD VERSION FOR JSON FORMAT
         """
@@ -567,6 +700,7 @@ class MainSoftwareThread(QtCore.QThread):
         self.running = True
         self.serial_thread = SerialThread()
         self.serial_thread.data_received.connect(self.process_serial_data)
+        self.serial_thread.board_reset_detected.connect(self.handle_board_reset)
         self.current_data = []  # Holds the most recent data received from SerialThread
         
         self._last_today = date.today()
@@ -627,7 +761,25 @@ class MainSoftwareThread(QtCore.QThread):
 
 
         self.pid_temperature_is_activated = False # by default hysteresis controller is active!
-        self.pwm = 0 #value to store output for arduino 
+        self.pwm = 0 #value to store output for arduino
+
+        # Ventole ricircolo aria: percentuale 0-100 impostata dall'utente (non calcolata,
+        # a differenza del duty PID), inviata ad Arduino come FAN01 (0.0-1.0).
+        self.fan_speed_percent = 0.0
+
+        # Ultimo duty inviato ad Arduino + istante di invio. Il comando PWM01 viene
+        # ripetuto periodicamente anche a valore invariato: vedi process_serial_data.
+        self.last_pwm_sent = 0.0
+        self._last_pwm_sent_time = 0.0   # 0.0 -> il primo invio parte subito
+        self.PWM_RESEND_INTERVAL_SEC = 5.0
+
+        # Riallineamento dopo un riavvio della scheda: vedi handle_board_reset
+        self._last_board_resync_time = 0.0
+        self._board_reset_window_start = 0.0
+        self._board_reset_count = 0
+        self.BOARD_RESYNC_MIN_INTERVAL_SEC = 5.0
+        self.BOARD_RESET_WINDOW_SEC = 30.0
+        self.BOARD_RESET_LOOP_THRESHOLD = 3
 
         
         # State variables to handle inputs from MainWindow
@@ -829,7 +981,7 @@ class MainSoftwareThread(QtCore.QThread):
               
             time.sleep(0.1)
             
-    def update_incubation_state(self, today: date | None = None):
+    def update_incubation_state(self, today=None):  # type: (date) -> None
         """
         Aggiorna:
         - days_passed
@@ -952,6 +1104,66 @@ class MainSoftwareThread(QtCore.QThread):
             
     def queue_command(self, cmd, value):
         self.command_list.append((cmd, value))
+
+    def handle_board_reset(self):
+        """
+        Chiamata quando Arduino segnala un riavvio (tag BOOT).
+
+        Dopo un reset la scheda è tornata a riposo: setup() rimette tutti i relè a
+        LOW e la globale u_cmd a 0.0. Senza questo riallineamento il PC resterebbe
+        convinto di avere gli attuatori nello stato precedente e - non inviando
+        comandi a valore invariato - non li ripristinerebbe mai.
+
+        ATTENZIONE all'anello di retroazione: se è proprio il comando che stiamo
+        ripristinando a far riavviare la scheda, il ripristino diventa un ciclo
+        infinito (riavvio -> rinvio -> riavvio) che martella l'Arduino decine di
+        volte al secondo. Perciò il riallineamento è limitato in frequenza e, se i
+        riavvii continuano, il relè del riscaldatore smette di essere ripristinato.
+        """
+        now_reset = time.time()
+
+        # Finestra scorrevole per riconoscere un crash loop
+        if (now_reset - self._board_reset_window_start) > self.BOARD_RESET_WINDOW_SEC:
+            self._board_reset_window_start = now_reset
+            self._board_reset_count = 0
+        self._board_reset_count += 1
+
+        if (now_reset - self._last_board_resync_time) < self.BOARD_RESYNC_MIN_INTERVAL_SEC:
+            return
+        self._last_board_resync_time = now_reset
+
+        heater_relay_is_suspect = self._board_reset_count >= self.BOARD_RESET_LOOP_THRESHOLD
+
+        self.main_software_thread_log_message(
+            'ALARM',
+            f"⚠️ Arduino riavviato ({self._board_reset_count} riavvii negli ultimi "
+            f"{self.BOARD_RESET_WINDOW_SEC:.0f} s): rinvio dello stato degli attuatori")
+
+        if self.pid_temperature_is_activated:
+            # In modo PID scalda l'SSR: il relè 1 resta spento di proposito.
+            self.queue_command("PWM01", self.pwm)
+            self.last_pwm_sent = self.pwm
+            self._last_pwm_sent_time = now_reset
+        elif self._debounced_heater_output_thc is not None:
+            if heater_relay_is_suspect and self._debounced_heater_output_thc:
+                self.main_software_thread_log_message(
+                    'CRITICAL',
+                    "⛔ Riavvii ripetuti: il comando HTR01 True sembra essere la causa. "
+                    "Ripristino del relè riscaldatore SOSPESO per non alimentare il ciclo "
+                    "di riavvii. Riscaldatore considerato SPENTO.")
+                self._debounced_heater_output_thc = False
+                self._last_output_state_thc = False
+            else:
+                self.queue_command("HTR01", self._debounced_heater_output_thc)
+
+        if self._debounced_heater_output_hhc is not None:
+            self.queue_command("HUMER01", self._debounced_heater_output_hhc)
+        if self._debounced_heater_output_whc is not None:
+            self.queue_command("ELV01", self._debounced_heater_output_whc)
+
+        # Le ventole non dipendono dal riscaldatore: setup() le rimette a 0 su
+        # ogni riavvio, quindi vanno riallineate a prescindere dal ramo sopra.
+        self.queue_command("FAN01", round(self.fan_speed_percent / 100.0, 3))
 
     def stop(self):
         self.running = False
@@ -1171,7 +1383,8 @@ class MainSoftwareThread(QtCore.QThread):
             else:
                 self.hhc.set_upper_limit(rounded_value)
                 self.save_parameter('HUMIDITY_HYSTERESIS_CONTROLLER_UPPER_LIMIT', rounded_value)
-                
+            self.publish_humidity_setpoint()
+
         elif spinbox_name == "minHysteresisValue_humidity_spinBox":
             if rounded_value >= self.hhc.get_upper_limit():
                 self.hhc.set_upper_limit(rounded_value)
@@ -1183,6 +1396,11 @@ class MainSoftwareThread(QtCore.QThread):
             else:
                 self.hhc.set_lower_limit(rounded_value)
                 self.save_parameter('HUMIDITY_HYSTERESIS_CONTROLLER_LOWER_LIMIT', rounded_value)
+            self.publish_humidity_setpoint()
+
+        elif spinbox_name == "setPointHumidity_spinBox":
+            self.apply_humidity_setpoint(rounded_value)
+
         elif spinbox_name == "maxHysteresisValue_waterLevelControl_spinBox":
             if rounded_value <= self.whc.get_lower_limit():
                 self.whc.set_upper_limit(rounded_value)
@@ -1194,7 +1412,12 @@ class MainSoftwareThread(QtCore.QThread):
             else:
                 self.whc.set_upper_limit(rounded_value)
                 self.save_parameter('WATER_LEVEL_CONTROL_HYSTERESIS_CONTROLLER_UPPER_LIMIT', rounded_value)
-                
+            # Eco verso la view: senza questo le linee dei limiti sul disegno del
+            # serbatoio (e lo stato inviato a un browser che si ricollega) restano
+            # ferme al valore caricato all'avvio da parameters.json.
+            self.update_spinbox_value.emit("maxHysteresisValue_waterLevelControl_spinBox", rounded_value)
+
+
         elif spinbox_name == "minHysteresisValue_waterLevelControl_spinBox":
             if rounded_value >= self.whc.get_upper_limit():
                 self.whc.set_upper_limit(rounded_value)
@@ -1206,10 +1429,17 @@ class MainSoftwareThread(QtCore.QThread):
             else:
                 self.whc.set_lower_limit(rounded_value)
                 self.save_parameter('WATER_LEVEL_CONTROL_HYSTERESIS_CONTROLLER_LOWER_LIMIT', rounded_value)
-                
+            # Eco verso la view (vedi nota sul limite massimo qui sopra)
+            self.update_spinbox_value.emit("minHysteresisValue_waterLevelControl_spinBox", rounded_value)
+
+
         elif spinbox_name == "setPointTemperature_PID_spinBox":
             self.pid_temperature.set_reference_value(rounded_value)
             self.save_parameter('TEMPERATURE_PID_SET_POINT', rounded_value)
+            # Eco verso la view: senza questo il browser non sa che il setpoint è
+            # cambiato e continua a calcolare il "Δ from setpoint" sul valore
+            # caricato all'avvio da parameters.json.
+            self.update_spinbox_value.emit("setPointTemperature_PID_spinBox", rounded_value)
         elif spinbox_name == "Kp_spinBox":
             self.pid_temperature.set_gain_Kp(rounded_value)
             self.save_parameter('TEMPERATURE_PID_KP_GAIN', rounded_value)
@@ -1221,11 +1451,72 @@ class MainSoftwareThread(QtCore.QThread):
         elif spinbox_name == "Kd_spinBox":
             self.pid_temperature.set_gain_Kd(rounded_value)
             self.save_parameter('TEMPERATURE_PID_KD_GAIN', rounded_value)
-        elif spinbox_name == "days_duration_spinBox":            
+        elif spinbox_name == "days_duration_spinBox":
             self.incubation_duration_days = int(value)
-            self.save_parameter('INCUBATION_DURATION_DAYS', int(value))  
-            self.update_incubation_state()          
-            
+            self.save_parameter('INCUBATION_DURATION_DAYS', int(value))
+            self.update_incubation_state()
+
+        elif spinbox_name == "webRefreshInterval_spinBox":
+            # Solo per il browser: quanto spesso la pagina ridisegna i dati.
+            # Arduino e MainSoftwareThread continuano a girare alla stessa
+            # velocità di sempre, non c'è nessun controllore da aggiornare qui.
+            clamped_value = int(max(250, min(10000, value)))
+            self.save_parameter('WEB_REFRESH_INTERVAL_MS', clamped_value)
+            self.update_spinbox_value.emit("webRefreshInterval_spinBox", clamped_value)
+
+        elif spinbox_name == "fanSpeed_spinBox":
+            clamped_value = max(0.0, min(100.0, rounded_value))
+            self.fan_speed_percent = clamped_value
+            self.save_parameter('FAN_SPEED_PERCENT', clamped_value)
+            self.queue_command("FAN01", round(clamped_value / 100.0, 3))
+            # Eco verso la view: senza questo un secondo browser collegato non
+            # vede il valore aggiornato finché non ricarica la pagina.
+            self.update_spinbox_value.emit("fanSpeed_spinBox", clamped_value)
+
+    def get_humidity_setpoint(self):
+        """
+        L'umidità è regolata da un controllore a isteresi, quindi non ha un
+        setpoint proprio: il valore di riferimento è il centro della banda
+        min/max. Ricavarlo invece di salvarlo a parte evita che i due valori
+        possano divergere.
+        """
+        return round((self.hhc.get_upper_limit() + self.hhc.get_lower_limit()) / 2.0, 1)
+
+    def publish_humidity_setpoint(self):
+        """Riallinea la vista dopo una modifica dei limiti di isteresi."""
+        setpoint = self.get_humidity_setpoint()
+        self.spinbox_values["setPointHumidity_spinBox"] = setpoint
+        self.update_spinbox_value.emit("setPointHumidity_spinBox", setpoint)
+
+    def apply_humidity_setpoint(self, setpoint):
+        """
+        Sposta la banda di isteresi mantenendone l'ampiezza, centrata sul nuovo
+        setpoint: dalla dashboard si regola l'umidità con un solo valore e la
+        pagina Water & Humidity resta allineata.
+        """
+        half_width = (self.hhc.get_upper_limit() - self.hhc.get_lower_limit()) / 2.0
+        half_width = min(max(half_width, 0.0), 50.0)   # banda sempre dentro 0–100 %
+        setpoint = round(min(max(setpoint, half_width), 100.0 - half_width), 1)
+        upper = round(setpoint + half_width, 1)
+        lower = round(setpoint - half_width, 1)
+
+        # Si sposta per primo il limite che si allontana dall'altro: impostandoli
+        # nell'ordine sbagliato la banda passa per un istante da collassata
+        # (upper == lower) e HysteresisController forza l'uscita a OFF.
+        if lower < self.hhc.get_lower_limit():
+            self.hhc.set_lower_limit(lower)
+            self.hhc.set_upper_limit(upper)
+        else:
+            self.hhc.set_upper_limit(upper)
+            self.hhc.set_lower_limit(lower)
+        self.save_parameter('HUMIDITY_HYSTERESIS_CONTROLLER_UPPER_LIMIT', upper)
+        self.save_parameter('HUMIDITY_HYSTERESIS_CONTROLLER_LOWER_LIMIT', lower)
+
+        self.spinbox_values["setPointHumidity_spinBox"] = setpoint
+        self.update_spinbox_value.emit("setPointHumidity_spinBox", setpoint)
+        self.update_spinbox_value.emit("maxHysteresisValue_humidity_spinBox", upper)
+        self.update_spinbox_value.emit("minHysteresisValue_humidity_spinBox", lower)
+
     def handle_intialization_step(self, value_name, value):
         rounded_value = round(value, 1)
         if value_name == "maxHysteresisValue_temperature_spinBox":
@@ -1236,6 +1527,10 @@ class MainSoftwareThread(QtCore.QThread):
             self.hhc.set_upper_limit(rounded_value)
         elif value_name == "minHysteresisValue_humidity_spinBox":
             self.hhc.set_lower_limit(rounded_value)
+        elif value_name == "setPointHumidity_spinBox":
+            # Derivato dalla banda di isteresi, che i due valori qui sopra hanno
+            # già impostato: nulla da applicare al controllore.
+            pass
         elif value_name == "maxHysteresisValue_waterLevelControl_spinBox":
             self.whc.set_upper_limit(rounded_value)
         elif value_name == "minHysteresisValue_waterLevelControl_spinBox":
@@ -1300,10 +1595,18 @@ class MainSoftwareThread(QtCore.QThread):
         if value_name == "hysteresisActive_radioBtn":
             self.pid_temperature_is_activated = False
             self.save_parameter('PID_HEATING_MODE_IS_SELECTED', self.pid_temperature_is_activated)
-            
+            # Il relè torna a seguire il controllore: dimentico lo stato "già inviato"
+            # e sblocco il debounce, così il prossimo ciclo riallinea l'attuatore.
+            self._debounced_heater_output_thc = None
+            self._last_output_change_time_thc = 0.0
+
         if value_name == "PIDActive_radioBtn":
             self.pid_temperature_is_activated = True
             self.save_parameter('PID_HEATING_MODE_IS_SELECTED', self.pid_temperature_is_activated)
+            # Da qui in poi HTR01 non viene più inviato (vedi process_serial_data):
+            # spengo il relè una volta sola, altrimenti resterebbe acceso all'infinito.
+            self.queue_command("HTR01", False)
+            self._debounced_heater_output_thc = False
             
             
     def process_serial_data(self, new_data):
@@ -1336,11 +1639,31 @@ class MainSoftwareThread(QtCore.QThread):
         # faccio l'update qui: ogni votla che arrivano dati nuovi li elaboro, anche nel controllore
         # al controllore di temperatura passo solo temperature filtrate, ovvero i valori dentro il range di temperatura corretto
         
-        filtered_temperatures = self.filter_temperatures(list(current_temperatures.values()))
-        if not filtered_temperatures:
-            self.main_software_thread_log_message('WARNING', 'filtered_temperature list is empty! fault in the sensors')       
+        '''
+            Un frame seriale può non contenere alcuna lettura di temperatura: Arduino
+            accoda gli eventi degli induttori (<IND_CW,1>/<IND_CCW,1>) in qualunque
+            iterazione del loop, mentre il blocco sensori lo aggiunge solo quando la
+            conversione dei DS18B20 è pronta. Il risultato è un frame tipo @<IND_CW, 1>#
+            con current_temperatures vuoto.
 
-        if self.pid_temperature_is_activated:
+            ATTENZIONE alla distinzione, perché i due casi richiedono reazioni opposte:
+              - nessuna temperatura NEL FRAME  -> frame parziale, NON è un guasto:
+                i controllori non vanno aggiornati, l'attuazione resta com'è
+              - temperature presenti ma tutte fuori range -> guasto sensori:
+                si spegne l'attuatore, esattamente come prima
+
+            Senza questa distinzione ogni evento induttore faceva passare una lista
+            vuota ai controllori, che la interpretano come guasto e spengono l'uscita
+            (ramo forceOFF del PID e "if not values" di HysteresisController), con
+            comandi spuri all'attuatore (PWM a 0 e ritorno a 1.0 un secondo dopo).
+        '''
+        temperatures_in_frame = bool(current_temperatures)
+
+        filtered_temperatures = self.filter_temperatures(list(current_temperatures.values()))
+        if temperatures_in_frame and not filtered_temperatures:
+            self.main_software_thread_log_message('WARNING', 'filtered_temperature list is empty! fault in the sensors')
+
+        if self.pid_temperature_is_activated and temperatures_in_frame:
             # === PID Controller with Automatic Timing === #
             # nel caso di controllo ad isteresi avevo fatto tutto internamente...ma qui PID rimane general purpose. Il setpoint è uno e calcolato fuori dal PID.
 
@@ -1385,14 +1708,29 @@ class MainSoftwareThread(QtCore.QThread):
 
             PWM_DELTA_THRESHOLD = 0.005   # soglia di variazione minima - robustezza alla variazione per i FLOAT
 
-            last = getattr(self, "last_pwm_sent", None) # al primo giro last_pwm_sent non esiste, quindi restituisce None e il primo comando verrà inviato. 
-                                                        # Da qui in poi last_pwm_sent esiste e viene assegnato
-            
-            # Controllo variazione significativa
-            if last is None or abs(self.pwm - last) >= PWM_DELTA_THRESHOLD:
+            '''
+                Il comando non va inviato SOLO quando cambia: u_cmd sull'Arduino è una
+                variabile globale che un riavvio della scheda riporta a 0.0. Con il PID
+                in saturazione (uscita ferma a 1.0) il comando non cambiava mai, quindi
+                dopo un reset il riscaldatore restava spento all'infinito mentre l'interfaccia
+                continuava a mostrare duty 100%. Il rinvio periodico riallinea la scheda
+                e alimenta il failsafe FAILSAFE_MS lato firmware (se non arrivano comandi
+                per 30 s l'Arduino azzera l'uscita da solo).
+            '''
+            now_pwm = time.time()
+            pwm_value_changed = abs(self.pwm - self.last_pwm_sent) >= PWM_DELTA_THRESHOLD
+            pwm_refresh_due = (now_pwm - self._last_pwm_sent_time) >= self.PWM_RESEND_INTERVAL_SEC
+
+            if pwm_value_changed or pwm_refresh_due:
                 self.queue_command("PWM01", self.pwm)
-                self.main_software_thread_log_message('INFO', f"⚙️ Heater PWM value sent: {self.pwm}")
+                self.main_software_thread_log_message(
+                    'INFO',
+                    f"⚙️ Heater PWM value sent: {self.pwm}" if pwm_value_changed
+                    else f"⚙️ Heater PWM refresh: {self.pwm}",
+                    not pwm_value_changed  # il refresh periodico non sporca il terminale
+                )
                 self.last_pwm_sent = self.pwm
+                self._last_pwm_sent_time = now_pwm
             '''
             # in questo modo inviamo ad Arduino un comando al secondo....dovrebbe essere ok da gestire.
             self.queue_command("PWM01", self.pwm)
@@ -1406,7 +1744,10 @@ class MainSoftwareThread(QtCore.QThread):
             (a patto di attivare PID + cablare heater sull'uscita del RELE' e non dell'SSR)
             2.1) questo mi permette di loggare nel file quando va/non va il riscaldatore e quindi fare opportuna identificazione del modello
         '''
-        self.thc.update(filtered_temperatures)
+        if temperatures_in_frame:
+            self.thc.update(filtered_temperatures)
+        # NB: il debounce qui sotto legge thc.get_output_control(): saltando l'update
+        # l'uscita resta invariata, quindi non parte nessun comando HTR01 spurio.
         #print(list(current_temperatures.values()))  [11.9, 11.6, 11.3, 11.1]
         #print(current_temperatures) {'TMP01': 11.9, 'TMP02': 11.6, 'TMP03': 11.3, 'TMP04': 11.1}
         #print(type(current_temperatures)) <class 'dict'>
@@ -1424,8 +1765,17 @@ class MainSoftwareThread(QtCore.QThread):
             self._last_output_change_time_thc = time.time()
             self._last_output_state_thc = current_state
 
+        '''
+            In modo PID il calore lo fa l'SSR pilotato da PWM01: il relè 1 (HTR01) è
+            ridondante. Ogni sua eccitazione però resetta l'Arduino - misurato: 39 comandi
+            HTR01 True, 39 silenzi di ~2.44 s (tempo di riavvio della scheda) e 38 NO ACK,
+            zero fallimenti su HTR01 False / PWM01 / ELV01 - quindi in modo PID non va
+            proprio inviato. Il controllore a isteresi continua comunque a girare, così
+            la sua uscita resta visibile in interfaccia e nelle statistiche.
+        '''
         # Se è cambiato e il nuovo stato è stabile da X secondi
         if (
+            not self.pid_temperature_is_activated and
             self._last_output_state_thc != self._debounced_heater_output_thc and
             self._last_output_change_time_thc is not None and
             (time.time() - self._last_output_change_time_thc) >= self._debounce_duration
@@ -1439,7 +1789,10 @@ class MainSoftwareThread(QtCore.QThread):
             
             
         # HUMIDITY CONTROLLER SECTION
-        self.hhc.update(list(current_humidities.values()))
+        # Stessa distinzione fatta per la temperatura: un frame senza letture di umidità
+        # è un frame parziale, non un guasto del sensore.
+        if current_humidities:
+            self.hhc.update(list(current_humidities.values()))
         current_state = self.hhc.get_output_control()
 
         if current_state != self._last_output_state_hhc:
@@ -1461,7 +1814,9 @@ class MainSoftwareThread(QtCore.QThread):
         weights_kg = [math.trunc(w / 1000 * 10) / 10 for w in current_weight.values()]
         
         saturated_weights = self.saturate_values(weights_kg, self.VALID_RANGE_WATER_LEVEL)
-        self.whc.update(saturated_weights)
+        # Idem: senza lettura della cella di carico non si tocca l'elettrovalvola.
+        if weights_kg:
+            self.whc.update(saturated_weights)
         current_state = self.whc.get_output_control()
 
         if current_state != self._last_output_state_whc:
@@ -1484,6 +1839,7 @@ class MainSoftwareThread(QtCore.QThread):
         # i mean value servono per pubblicare il valore che il controllore usa per fare effettivamente il controllo e lo metto nella sezione di isteresi
         # list() se passi un dizionario, mentre [] se vuoi aggiugnere alla lista elementi singoli
         if current_temperatures and current_humidities and weights_kg:
+            _temperature_references = self.get_temperature_references()
             # all_values for MAIN VIEW page
             all_values = (
                 list(current_temperatures.values()) +               # [0 1 2 3] Temperature interne
@@ -1500,7 +1856,12 @@ class MainSoftwareThread(QtCore.QThread):
                 [self.pid_temperature.get_current_value()] +        # [14] Valore di controllo usato dal PIDController per fare i conti
                 [
                     self.pwm if self.pid_temperature_is_activated else 0.0
-                ]                                                   # [15] Valore PWM del sistema per arduino
+                ] +                                                 # [15] Valore PWM del sistema per arduino
+                [
+                    _temperature_references['SETPOINT'],             # [16] Setpoint del PID
+                    _temperature_references['SP_MIN'],               # [17] Limite inferiore isteresi
+                    _temperature_references['SP_MAX'],               # [18] Limite superiore isteresi
+                ]
             )
                         
             self.update_view.emit(all_values)
@@ -1526,8 +1887,15 @@ class MainSoftwareThread(QtCore.QThread):
             self.update_statistics.emit(all_values)
 
             # + saving in parameters file relevan statistics
-            self.save_parameter('TEMPERATURE_HYSTERESIS_CONTROLLER_TIME_ON', self.thc.get_time_on())
-            self.save_parameter('TEMPERATURE_HYSTERESIS_CONTROLLER_TIME_OFF', self.thc.get_time_off())
+            # In modo PID il relè HTR01 non viene mai comandato (vedi la nota sopra,
+            # nella sezione del controllore a isteresi): i suoi tempi di ON/OFF
+            # contano un'accensione che nella realtà non avviene, quindi non c'è
+            # niente da conservare. Saltando il salvataggio si evita anche di
+            # riscrivere parameters.json a ogni frame seriale, che su microSD è
+            # I/O continuo e consuma la scheda.
+            if not self.pid_temperature_is_activated:
+                self.save_parameter('TEMPERATURE_HYSTERESIS_CONTROLLER_TIME_ON', self.thc.get_time_on())
+                self.save_parameter('TEMPERATURE_HYSTERESIS_CONTROLLER_TIME_OFF', self.thc.get_time_off())
         
         # INDUCTOR SECTION
         """
@@ -1555,15 +1923,53 @@ class MainSoftwareThread(QtCore.QThread):
         time_difference = datetime.now() - self.last_saving_time
         
         if (time_difference >= timedelta(minutes = self.saving_interval)):
-                start_time = time.perf_counter()   
-                self.save_data_to_files('External_Temperature', current_external_temperature) #{'EXTT': 25.2}             
-                self.save_data_to_files('Temperatures', current_temperatures) #{'TMP01': 23.1, 'TMP02': 23.1, 'TMP03': 23.1}
-                self.save_data_to_files('Humidity', current_humidities) #{'HUM01': 52.5}
+                start_time = time.perf_counter()
+
+                # Un pacchetto seriale può arrivare incompleto (parsing parziale, ACK
+                # mancante, riga troncata): in quel caso il dizionario corrispondente è
+                # vuoto. Salvarlo lo stesso scriverebbe una riga con il solo timestamp,
+                # quindi ogni scrittura è protetta dalla sua guardia e i dataset saltati
+                # vengono elencati nel log, per poter risalire alla frequenza del problema.
+                skipped = []
+
+                if current_external_temperature:
+                    self.save_data_to_files('External_Temperature', current_external_temperature) #{'EXTT': 25.2}
+                else:
+                    skipped.append('External_Temperature')
+
+                if current_temperatures:
+                    # Alle temperature misurate accodo i riferimenti di controllo, così rileggendo
+                    # il CSV (grafici History) si vede subito a quale target puntava la macchina.
+                    # SETPOINT = riferimento PID; SP_MIN/SP_MAX = banda del controllore a isteresi.
+                    self.save_data_to_files('Temperatures', dict(
+                        list(current_temperatures.items()) + list(self.get_temperature_references().items())
+                    )) #{'TMP01': 23.1, ..., 'SETPOINT': 37.8, 'SP_MIN': 37.5, 'SP_MAX': 37.8}
+                else:
+                    skipped.append('Temperatures')
+
+                if current_humidities:
+                    self.save_data_to_files('Humidity', current_humidities) #{'HUM01': 52.5}
+                else:
+                    skipped.append('Humidity')
+
+                if current_weight:
+                    self.save_data_to_files('Water_Weight', current_weight)
+                else:
+                    skipped.append('Water_Weight')
+
+                # Questi non vengono dal pacchetto seriale ma dallo stato dei controllori,
+                # quindi sono sempre disponibili.
                 self.save_data_to_files('Heater', {'Heater_Status': self.thc.get_output_control()})  # need to pass a dictionary
-                self.save_data_to_files('Humidifier', {'Humidifier_status': self.hhc.get_output_control()}) 
-                self.save_data_to_files('Water_Weight', current_weight) 
+                self.save_data_to_files('Humidifier', {'Humidifier_status': self.hhc.get_output_control()})
                 self.save_data_to_files('PID_Duty_Cycle', {'PID_Duty_Cycle': self.last_pwm_sent}) # need to pass a dictionary
+
                 self.last_saving_time = datetime.now()
+                if skipped:
+                    self.main_software_thread_log_message(
+                        'WARNING',
+                        f"Pacchetto seriale incompleto: nessun dato per {', '.join(skipped)}, "
+                        f"campione saltato. Dati ricevuti: {self.current_data}"
+                    )
                 self.main_software_thread_log_message('SAVING', f"Saved data! {self.last_saving_time}")
                 
                 
@@ -1613,11 +2019,13 @@ class MainSoftwareThread(QtCore.QThread):
         timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         log_file = os.path.join(self.main_software_thread_log_folder_path, f"log_{current_date}.txt")
 
-        with open(log_file, 'a', encoding='utf-8') as file:
-            file.write("\n")
-            file.write("=====================================\n")
-            file.write(f" New Run - {timestamp}\n")
-            file.write("=====================================\n") 
+        append_text_safe(
+            log_file,
+            "\n"
+            "=====================================\n"
+            f" New Run - {timestamp}\n"
+            "=====================================\n"
+        )
 
     def main_software_thread_log_message(self, error_type, message, suppress_terminal_print = False):
         """
@@ -1635,12 +2043,11 @@ class MainSoftwareThread(QtCore.QThread):
         log_file = os.path.join(self.main_software_thread_log_folder_path, f"log_{current_date}.txt")
         
         timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        
-        with open(log_file, 'a', encoding='utf-8') as file:
-            file.write(f"[{error_type}] {message} @ {timestamp}\n")
+
+        append_text_safe(log_file, f"[{error_type}] {message} @ {timestamp}\n")
         '''
         OLD VERSION FOR JSON FORMAT
-        
+
         """
         Logs a message to a log file named with the current date inside the Log folder in plain text format with sections.
 
@@ -1662,6 +2069,71 @@ class MainSoftwareThread(QtCore.QThread):
             file.write(f"-----------------\n\n")
         '''
     
+    def _ensure_csv_header(self, file_path, wanted_header):
+        """
+        Allinea l'header del CSV alle colonne che stiamo per scrivere e
+        restituisce l'header effettivamente presente nel file.
+
+        Le colonne vengono SOLO aggiunte, mai rimosse: se un campione arriva
+        incompleto (es. un pacchetto seriale senza temperature) le sue colonne
+        mancanti restano vuote, ma quelle già nel file non vengono perse.
+        Le righe preesistenti sono conservate, con celle vuote sulle colonne
+        nuove (nei grafici appaiono come buchi).
+        """
+        with open_with_retry(file_path, 'r', newline='') as file:
+            current_header = next(csv.reader(file), None)
+
+        # File presente ma vuoto (es. creato e mai scritto)
+        if current_header is None:
+            with open_with_retry(file_path, 'w', newline='') as file:
+                csv.writer(file).writerow(wanted_header)
+            return list(wanted_header)
+
+        merged_header = list(current_header) + [
+            column for column in wanted_header if column not in current_header
+        ]
+        if merged_header == current_header:
+            return current_header
+
+        with open_with_retry(file_path, 'r', newline='') as file:
+            old_rows = list(csv.DictReader(file))
+
+        with open_with_retry(file_path, 'w', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerow(merged_header)
+            for row in old_rows:
+                writer.writerow([row.get(column) or '' for column in merged_header])
+
+        self.main_software_thread_log_message(
+            'INFO',
+            f"CSV header aggiornato in {os.path.basename(file_path)}: "
+            f"{current_header} -> {merged_header} ({len(old_rows)} righe mantenute)"
+        )
+        return merged_header
+
+    def get_temperature_references(self):
+        """
+        Riferimenti di controllo della temperatura, nell'ordine in cui finiscono
+        nel CSV e nei grafici:
+          SETPOINT → setpoint del PID
+          SP_MIN   → limite inferiore del controllore a isteresi
+          SP_MAX   → limite superiore del controllore a isteresi
+        Vengono restituiti sempre entrambi i riferimenti, indipendentemente da
+        quale dei due controllori è attivo: quello attivo si legge da
+        self.pid_temperature_is_activated.
+        """
+        def _num(value):
+            try:
+                return round(float(value), 2)
+            except (TypeError, ValueError):
+                return None
+
+        return {
+            'SETPOINT': _num(self.pid_temperature.get_reference_value()),
+            'SP_MIN':   _num(self.thc.get_lower_limit()),
+            'SP_MAX':   _num(self.thc.get_upper_limit()),
+        }
+
     def save_data_to_files(self, data_type, data_dictionary): #passo un dictionary di temperature/humidities, dimensione variabile per gestire più o meno sensori dinamicamente
         now = datetime.now()
         current_date = now.strftime('%Y-%m-%d')
@@ -1690,30 +2162,39 @@ class MainSoftwareThread(QtCore.QThread):
             
         file_path = os.path.join(folder_path, f"{current_date}.csv")
 
-        # Initialize the CSV file with headers if it doesn't exist
-        if not os.path.exists(file_path):
-            with open(file_path, mode='w', newline='') as file: # write mode
-                writer = csv.writer(file)
-
-                # Initialize the list with 'Timestamp' as the first element
-                result_list = ['Timestamp']
-
-                # Append the keys from the dictionary to the list
-                result_list.extend(data_dictionary.keys())
-
-                writer.writerow(result_list)
-
         timestamp = now.strftime('%Y-%m-%d %H:%M:%S')
 
-        with open(file_path, mode='a', newline='') as file: # append mode
-            writer = csv.writer(file)
+        # Colonne che questo campione vorrebbe scrivere ('Timestamp' sempre per prima)
+        wanted_header = ['Timestamp'] + list(data_dictionary.keys())
 
-            # Initialize the list with the timestamp as the first element
-            values_list = [timestamp]
+        # Il file è dentro OneDrive: una scrittura può fallire temporaneamente.
+        # Perdere un campione è accettabile, far cadere il thread di controllo no.
+        try:
+            # Initialize the CSV file with headers if it doesn't exist
+            if not os.path.exists(file_path):
+                header = list(wanted_header)
+                with open_with_retry(file_path, 'w', newline='') as file: # write mode
+                    csv.writer(file).writerow(header)
+            else:
+                # Il file di oggi può essere stato creato da una versione del
+                # software con colonne diverse (es. prima dell'aggiunta di
+                # SETPOINT/SP_MIN/SP_MAX): in quel caso va riscritto l'header,
+                # altrimenti le righe nuove risulterebbero disallineate.
+                header = self._ensure_csv_header(file_path, wanted_header)
 
-            # Append the values from the dictionary to the list
-            values_list.extend(data_dictionary.values())
-            writer.writerow(values_list)
+            # La riga viene composta seguendo l'header del file, non l'ordine del
+            # dizionario: un campione con chiavi mancanti lascia celle vuote
+            # invece di sfalsare le colonne.
+            row = dict(data_dictionary)
+            row['Timestamp'] = timestamp
+
+            with open_with_retry(file_path, 'a', newline='') as file: # append mode
+                csv.writer(file).writerow(
+                    [row.get(column, '') if row.get(column) is not None else ''
+                     for column in header]
+                )
+        except Exception as e:
+            print(f"[SAVE-FAIL] {data_type}: impossibile scrivere {file_path}: {e}")
 
     # === GESTIONE PARAMETRI === #
     def parameters_initialization_from_file(self):
@@ -1773,7 +2254,12 @@ class MainSoftwareThread(QtCore.QThread):
             # set GUI
             self.update_spinbox_value.emit("maxHysteresisValue_humidity_spinBox", hhc_upper_limit)
             self.update_spinbox_value.emit("minHysteresisValue_humidity_spinBox", hhc_lower_limit)
-            
+
+        # HUMIDITY SETPOINT (dashboard): centro della banda di isteresi. Va emesso
+        # sempre, anche quando i limiti non erano ancora stati salvati e restano
+        # ai default, altrimenti la dashboard parte senza riferimento.
+        self.publish_humidity_setpoint()
+
         # WATER LEVEL CONTROL SPINBOX MIN/MAX
         whc_upper_limit = self.load_parameter('WATER_LEVEL_CONTROL_HYSTERESIS_CONTROLLER_UPPER_LIMIT')
         whc_lower_limit = self.load_parameter('WATER_LEVEL_CONTROL_HYSTERESIS_CONTROLLER_LOWER_LIMIT')
@@ -1862,6 +2348,24 @@ class MainSoftwareThread(QtCore.QThread):
             self.incubation_duration_days = incubation_duration_days
             self.update_int_spinbox_value.emit("days_duration_spinBox", incubation_duration_days)
             
+        # Refresh rate della pagina web (solo display, nessun controllore da avvisare)
+        web_refresh_interval_ms = self.load_parameter('WEB_REFRESH_INTERVAL_MS')
+        if web_refresh_interval_ms is not None:
+            self.update_spinbox_value.emit("webRefreshInterval_spinBox", web_refresh_interval_ms)
+
+        # Velocità ventole ricircolo aria (0-100%): va rimandata subito ad Arduino,
+        # altrimenti dopo un riavvio del programma le ventole restano ferme finché
+        # l'utente non tocca di nuovo lo spinbox. Se il parametro non è ancora mai
+        # stato salvato (prima esecuzione, parameters.json senza questa chiave), si
+        # usa 100% come default e lo si invia comunque ad Arduino e alla dashboard,
+        # invece di lasciare fan_speed_percent/gauge non inizializzati.
+        fan_speed_percent = self.load_parameter('FAN_SPEED_PERCENT')
+        if fan_speed_percent is None:
+            fan_speed_percent = 100.0
+        self.fan_speed_percent = fan_speed_percent
+        self.queue_command("FAN01", round(fan_speed_percent / 100.0, 3))
+        self.update_spinbox_value.emit("fanSpeed_spinBox", fan_speed_percent)
+
         pid_heating_mode_is_selected = self.load_parameter('PID_HEATING_MODE_IS_SELECTED')
         if pid_heating_mode_is_selected is not None:
             # persistenza nella modalità di riscaldamento scelta
@@ -1877,18 +2381,29 @@ class MainSoftwareThread(QtCore.QThread):
             
             
     def _load_all_parameters(self):
+        # Se il caricamento fallisce mentre il file esiste, NON si deve
+        # sovrascrivere il file con un dizionario vuoto/parziale.
+        self.parameters_load_failed = False
         if os.path.exists(self.parameters_file_path):
             try:
-                with open(self.parameters_file_path, "r") as f:
+                with open_with_retry(self.parameters_file_path, "r") as f:
                     self.parameters = json.load(f)
             except Exception as e:
                 print(f"Errore nel caricamento dei parametri: {e}")
                 self.parameters = {}
+                self._load_from_backup()
+                if not self.parameters:
+                    self.parameters_load_failed = True
+                    print("ATTENZIONE: parametri non caricati, il salvataggio su file è disabilitato "
+                          "per non perdere parameters.json. Usare i valori di default e riavviare.")
         else:
             self.parameters = {}
-    
+
     def _save_all_parameters(self):
         """Salva tutti i parametri nel file, con backup automatico."""
+        if getattr(self, 'parameters_load_failed', False):
+            print("Salvataggio parametri saltato: il file non era leggibile all'avvio.")
+            return
         try:
             # Se il file originale esiste, crea una copia di backup
             '''
@@ -1898,7 +2413,7 @@ class MainSoftwareThread(QtCore.QThread):
             '''
 
             # Ora salva il nuovo contenuto
-            with open(self.parameters_file_path, "w") as f:
+            with open_with_retry(self.parameters_file_path, "w") as f:
                 json.dump(self.parameters, f, indent=4)
         except Exception as e:
             print(f"Errore nel salvataggio dei parametri: {e}")
@@ -1917,7 +2432,7 @@ class MainSoftwareThread(QtCore.QThread):
         backup_path = self.parameters_file_path + ".bak"
         if os.path.exists(backup_path):
             try:
-                with open(backup_path, "r") as f:
+                with open_with_retry(backup_path, "r") as f:
                     self.parameters = json.load(f)
                 print("Parametri caricati dal backup.")
             except Exception as e:
@@ -1997,6 +2512,9 @@ class MainSoftwareThread(QtCore.QThread):
 
         def set_reference_value(self, ref_value):
             self.reference = ref_value
+
+        def get_reference_value(self):
+            return self.reference
 
         def set_output_limits(self, min_value, max_value):
             self.output_min = min_value
@@ -2188,6 +2706,9 @@ class MainSoftwareThread(QtCore.QThread):
 
         def set_reference_value(self, ref_value):
             self.reference = ref_value
+
+        def get_reference_value(self):
+            return self.reference
 
         def set_output_limits(self, min_value, max_value):
             self.output_min = min_value
@@ -2865,10 +3386,7 @@ class MainSoftwareThread(QtCore.QThread):
                     self.last_execution_time = current_time
                     self.turnsCounter += 1
                     self.new_command = "automatic_" + self.rotation_state
-                    print(f"{'Activating' if (self.rotation_state == "CW_rotation_direction" or self.rotation_state == "CCW_rotation_direction") else 'Deactivating'} diagnostics")
-                    
-                
-                    
+                    print(f"{'Activating' if (self.rotation_state == 'CW_rotation_direction' or self.rotation_state == 'CCW_rotation_direction') else 'Deactivating'} diagnostics")                    
                     
                 if self.force_change_rotation_flag:
                     self.force_change_rotation_flag = False # resetting
@@ -2886,7 +3404,7 @@ class MainSoftwareThread(QtCore.QThread):
                             self.rotation_state = "CCW_reached"
                             self.last_stable_position = self.rotation_state
                             self.last_time_stable_position_is_reached = datetime.now()
-                            print(f"{'Activating' if (self.rotation_state == "CW_rotation_direction" or self.rotation_state == "CCW_rotation_direction") else 'Deactivating'} diagnostics")
+                            print(f"{'Activating' if (self.rotation_state == 'CW_rotation_direction' or self.rotation_state == 'CCW_rotation_direction') else 'Deactivating'} diagnostics")
                             print("Reached the IND_CCW limit switch")
                             self.acknowledge_from_external = None # reset
                             
@@ -2894,7 +3412,7 @@ class MainSoftwareThread(QtCore.QThread):
                             self.rotation_state = "CW_reached"
                             self.last_stable_position = self.rotation_state
                             self.last_time_stable_position_is_reached = datetime.now()
-                            print(f"{'Activating' if (self.rotation_state == "CW_rotation_direction" or self.rotation_state == "CCW_rotation_direction") else 'Deactivating'} diagnostics")
+                            print(f"{'Activating' if (self.rotation_state == 'CW_rotation_direction' or self.rotation_state == 'CCW_rotation_direction') else 'Deactivating'} diagnostics")
                             print("Reached the IND_CW limit switch")
                             self.acknowledge_from_external = None # reset
                             
@@ -2988,6 +3506,7 @@ class WebBridge(QtCore.QObject):
             ("minHysteresisValue_temperature_spinBox",      37.5),
             ("maxHysteresisValue_humidity_spinBox",         45.0),
             ("minHysteresisValue_humidity_spinBox",         25.0),
+            ("setPointHumidity_spinBox",                    35.0),   # centro della banda qui sopra
             ("maxHysteresisValue_waterLevelControl_spinBox", 4.0),
             ("minHysteresisValue_waterLevelControl_spinBox", 1.0),
             ("setPointTemperature_PID_spinBox",             37.8),
@@ -2995,6 +3514,7 @@ class WebBridge(QtCore.QObject):
             ("Ki_spinBox",  0.0),
             ("Kd_spinBox",  0.0),
             ("days_duration_spinBox", 0.0),
+            ("webRefreshInterval_spinBox", 1000.0),
         ]
         sb = {}
         for name, val in defaults:
@@ -3047,7 +3567,7 @@ class WebBridge(QtCore.QObject):
             if not os.path.exists(fp):
                 continue
             try:
-                with open(fp, newline='') as f:
+                with open_with_retry(fp, 'r', newline='') as f:
                     for row in csv.DictReader(f):
                         ts_str = row.get('Timestamp', '')
                         try:
@@ -3063,6 +3583,8 @@ class WebBridge(QtCore.QObject):
                             'T3': self._safe_temp(row.get('TMP03')),
                             'T4': self._safe_temp(row.get('TMP04')),
                             'Te': None,
+                            # assente nei CSV scritti prima dell'aggiunta della colonna
+                            'SP': self._safe_temp(row.get('SETPOINT')),
                         }
             except Exception:
                 pass
@@ -3072,7 +3594,7 @@ class WebBridge(QtCore.QObject):
             if not os.path.exists(fp):
                 continue
             try:
-                with open(fp, newline='') as f:
+                with open_with_retry(fp, 'r', newline='') as f:
                     for row in csv.DictReader(f):
                         ts_str = row.get('Timestamp', '')
                         try:
@@ -3088,6 +3610,7 @@ class WebBridge(QtCore.QObject):
                                 'ts': ts.strftime('%Y-%m-%dT%H:%M:%S'),
                                 'T1': None, 'T2': None, 'T3': None, 'T4': None,
                                 'Te': self._safe_temp(row.get('EXTT')),
+                                'SP': None,
                             }
             except Exception:
                 pass
@@ -3110,6 +3633,12 @@ class WebBridge(QtCore.QObject):
             'waterCtrlVal': all_data[12], 'evalveStatus': all_data[13],
             'pidCurrentValue': all_data[14], 'pidDutyCycle': all_data[15],
         }
+        # Riferimenti di controllo (aggiunti in coda ad all_values: restano
+        # opzionali così una view più vecchia non si rompe).
+        if len(all_data) >= 19:
+            d['setpoint'] = all_data[16]
+            d['spMin']    = all_data[17]
+            d['spMax']    = all_data[18]
         self.current_state['view'] = d
         socketio.emit('update_view', d)
 
@@ -3124,6 +3653,7 @@ class WebBridge(QtCore.QObject):
                 'T3': self._safe_temp(all_data[2]),
                 'T4': self._safe_temp(all_data[3]),
                 'Te': self._safe_temp(all_data[10]),
+                'SP': d.get('setpoint'),
             }
             self._chart_buf.append(point)
             socketio.emit('update_chart', point)
@@ -3495,21 +4025,43 @@ if __name__ == "__main__":
     flask_thread.start()
 
     def _open_browser():
-        import time, subprocess, shutil
+        import time, subprocess, shutil, webbrowser
         time.sleep(5)  # wait for Flask to bind port 5000
-        browser = shutil.which('chromium-browser') or shutil.which('chromium') or shutil.which('google-chrome')
-        if not browser:
-            print("No Chromium browser found – open http://localhost:5000 manually")
-            return
+        # Sul Raspberry la pagina viene disegnata dalla macchina che fa anche il
+        # controllo, e su un Pi 3 Chromium rasterizza in software: si parte in
+        # modalità leggera (niente animazioni continue, grafici semplificati,
+        # Plotly caricato solo se si apre una pagina con grafici). Da un PC in
+        # rete si usa http://<ip-del-pi>:5000 e si ha la versione completa.
+        # La scelta resta memorizzata nel browser: per tornare indietro basta
+        # aprire una volta l'indirizzo con ?lite=0
+        lite = BROWSER_LITE_MODE if BROWSER_LITE_MODE is not None else sys.platform.startswith('linux')
+        url = 'http://localhost:5000/?lite=1' if lite else 'http://localhost:5000'
 
-        # Normal, closable window everywhere (Raspberry Pi included) — no kiosk/fullscreen.
-        subprocess.Popen([
-            browser,
-            '--new-window',
-            '--noerrdialogs',
-            '--disable-session-crashed-bubble',
-            'http://localhost:5000'
-        ])
+        # Try Chrome/Chromium with explicit paths (Linux + Windows)
+        chrome_candidates = [
+            shutil.which('chromium-browser'),
+            shutil.which('chromium'),
+            shutil.which('google-chrome'),
+            r'C:\Program Files\Google\Chrome\Application\chrome.exe',
+            r'C:\Program Files (x86)\Google\Chrome\Application\chrome.exe',
+        ]
+        browser = next((p for p in chrome_candidates if p and shutil.os.path.exists(p)), None)
+
+        if browser:
+            subprocess.Popen([
+                browser,
+                '--new-window',
+                '--noerrdialogs',
+                '--disable-session-crashed-bubble',
+                # Evita il popup "Choose password for new keyring": senza questi flag
+                # Chromium tenta di usare gnome-keyring/kwallet e resta bloccato in attesa
+                '--password-store=basic',
+                '--use-mock-keychain',
+                url
+            ])
+        else:
+            # Fallback: use the system default browser (works on Windows, Linux, macOS)
+            webbrowser.open(url)
 
     browser_thread = threading.Thread(target=_open_browser, daemon=True)
     browser_thread.start()
@@ -3517,6 +4069,7 @@ if __name__ == "__main__":
     main_software_thread.start()
 
     print("Incubator web server started → http://localhost:5000")
+    print("Da un altro PC in rete: http://<ip-di-questa-macchina>:5000")
     sys.exit(qt_app.exec_())
 
     sys.exit(app.exec_())
