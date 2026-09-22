@@ -1,0 +1,17 @@
+Rivediamo l'interfaccia grafica html. Nel file /templates/index.html, nella sezione internal temperature, devi mettere anche qui il parametro set point (lo stesso che si trova
+nella pagina temperature PID PARAMETERS Set point (°C). Così è più facile e veloce da regolare la temperatura. Ovviamente i due parametri nelle due 
+pagine devono essere allineati: se uno si modifica, si modifica in automatico anche l'altro. Forse devi mettere mano anche al codice python.
+
+Analogamente, nella dashboard aggiungi, come per la temperatura, un valore di setpoint regolabile (che devo ancora predisporre nel sw python). Aggiungi anche una
+piccola barra indicatrice nel gauge della humidity (come per la temperatura)
+
+infine, nella dashboard, nell'illustrazione della water reservoir aggiungi due linee orizzontali che mostrano il limite massimo e limite minimo, in modo che siano
+facilmente visibili.
+Anche qui aggiungi i parametri regolabili dalla dashboard.
+
+ho un nuovo parametro da aggiungere, sia nel codice arduino /arduinoEggIncubator/arduinoEggIncubator.ino sia nel codice python principale. 
+E' necessario anche fare una nuova sezione nella dashboard. Questo parametro riguarda la velocità di rotazione delle ventole dell'incubatrice.
+Devi provvedere un parametro che va da 0% a 100%. Questo parametro deve essere memorizzato nel file parameters.json come gli altri con la stessa
+logica (quando cambia) e deve essere riletto, quindi mandato ad arduino.
+QUesto parametro deve essere aggiunto anche ad arduino: è un pin PWM che deve essere opportunamente settato.
+
