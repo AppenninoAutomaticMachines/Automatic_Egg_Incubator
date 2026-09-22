@@ -6,8 +6,69 @@
 #include <ProfiloLibrary.h>
 #include <DHT.h>
 #include "HX711.h"
+#include <string.h>
+#include <stdlib.h>
+#include <stdarg.h>
+
+/* ============================================================================
+   PROTEZIONE SUI PIN NON ESISTENTI SULLA SCHEDA IN USO
+
+   Questo sketch è scritto per un Arduino MEGA e usa i pin 22..45 per relè,
+   induttori, sensori e segnalazioni. Su un UNO esistono solo i pin 0..19.
+
+   digitalWrite() del core AVR NON controlla il range: indicizza tabelle in
+   PROGMEM dimensionate su NUM_DIGITAL_PINS e, con un pin fuori scala, ricava un
+   puntatore casuale e ci scrive dentro. Il caso HIGH esegue *out |= bit, quindi
+   ACCENDE un bit in una locazione arbitraria (registro di I/O, stack pointer,
+   variabili): la scheda si corrompe e riparte. Il caso LOW esegue *out &= ~bit,
+   che sulla stessa locazione il più delle volte non cambia nulla.
+
+   È esattamente l'asimmetria osservata: @<HTR01, True># riavvia la scheda ogni
+   volta, @<HTR01, False># non lo fa mai, e PWM01 (pin 13, valido anche su UNO)
+   non ha mai dato problemi.
+
+   Con questi wrapper, su una scheda piccola i pin inesistenti vengono ignorati
+   invece di corrompere la memoria: la simulazione su UNO gira senza danni e sul
+   Mega il comportamento resta identico a prima.
+   ============================================================================ */
+inline bool pinExistsOnThisBoard(uint8_t pin) {
+  return pin < NUM_DIGITAL_PINS;
+}
+
+inline void safePinMode(uint8_t pin, uint8_t mode) {
+  if (!pinExistsOnThisBoard(pin)) return;
+  pinMode(pin, mode);
+}
+
+inline void safeDigitalWrite(uint8_t pin, uint8_t val) {
+  if (!pinExistsOnThisBoard(pin)) return;
+  digitalWrite(pin, val);
+}
+
+inline int safeDigitalRead(uint8_t pin) {
+  if (!pinExistsOnThisBoard(pin)) return LOW;
+  return digitalRead(pin);
+}
+
+inline void safeAnalogWrite(uint8_t pin, int val) {
+  if (!pinExistsOnThisBoard(pin)) return;
+  analogWrite(pin, val);
+}
+
+/* Da qui in poi le chiamate del resto dello sketch passano dai wrapper.
+   Le macro sono definite DOPO le funzioni, così i wrapper chiamano le versioni
+   vere del core e non se stessi. */
+#define pinMode(p, m)      safePinMode((p), (m))
+#define digitalWrite(p, v) safeDigitalWrite((p), (v))
+#define digitalRead(p)     safeDigitalRead((p))
+#define analogWrite(p, v)  safeAnalogWrite((p), (v))
+
+#if NUM_DIGITAL_PINS < 46
+#warning "Scheda con meno di 46 pin (es. Arduino UNO): rele', induttori e segnalazioni sui pin 22..45 sono INERTI. Va bene per la simulazione, NON per la macchina reale, che richiede un Mega."
+#endif
 
 /* General CONSTANTS */
+#define SIMULATION true  // Set to 'true' to run without hardware (all sensor values are simulated)
 #define SERIAL_PRINT_CHECK false
 #define SERIAL_SPEED 115200
 #define NUMBER_OF_TEMPERATURES_SENSORS_ON_ONE_WIRE_BUS 4 //sensori di temperatura
@@ -23,13 +84,17 @@
 #define DEVICE_ERROR 85
 #define DC_MOTOR_ACTIVATED true
 
+/* Simulation constants */
+#define SIM_SENSOR_MS  500UL   // sensor-update cadence in simulation [ms]
+#define SIM_TRAVEL_MS 4000UL   // simulated motor travel time to reach an end stop [ms]
+
 /* ARDUINO MEGA PWM from 0 - 13 + 0 and 1 tx and rx in case of serial communication is needed */
 /* PIN ARDUINO */
 #define DHT_PIN 24   //Pin a cui è connesso il sensore
 #define ONE_WIRE_BUS 26
 #define STEPPER_MOTOR_DIRECTION_PIN 5
 #define STEPPER_MOTOR_STEP_PIN 6
-#define FREE_PC817_PIN 7
+#define FAN_PWM_PIN 7 // ventole ricircolo aria: PWM 0-100% (pin libero, ex FREE_PC817_PIN, mai usato)
 #define CW_INDUCTOR_PIN 45 // induttore finecorsa DESTRO (vista posteriore)
 #define CCW_INDUCTOR_PIN 43 // induttore finecorsa SINISTRO (vista posteriore)
 #define WATER_ELECTROVALVE_PIN 41 // relay 4
@@ -52,54 +117,43 @@
 #define DC_MOTOR_2_IN2 8  //L980N pin IN4
 #define MOTOR_SPEED 50    // Duty cycle: 0 (fermo) … 255 (massima velocità)
 
-
 #define STEPPER_MOTOR_MS1_PIN 2
 #define STEPPER_MOTOR_MS2_PIN 2
 #define STEPPER_MOTOR_MS3_PIN 2
 
 
 /* ALIVE su SERIALE */
-/* se vedo che per più di 3.5s non ricevo segnale seriale, allora 1) allarme  2) inibisco i controlli degli attuatori.
-  Per mantenere viva la comunicazione, ogni tot mando un comando di alive da python (perché altrimenti se non mando comandi manuali non ho motivo di fare niente)*/
 bool alive_bit = false;
 unsigned long last_serial_alive_time = 0;
-unsigned long serial_alive_timeout_ms = 4000; // rpy manda un alive ogni 2secondi
-
-/* se avvio il sistema senza però avviare il proramma di rpy, allora attenzione, non posso fare certe cose come muovere il motore.
-  Finché leggo teperature e le mando al nulla ok, ma se si tratta di azionare attuatori devo aspettare l'alivenowledge dal rpy */
-bool serial_communication_is_ok = false; 
+unsigned long serial_alive_timeout_ms = 4000;
+bool serial_communication_is_ok = false;
 
 /* TEMPERATURES SECTION */
 // GENERAL
-bool deviceOrderingActive = true; // di base prova ad ordinare con i sensori che conosciamo.
-float marginFactor = 5; // fattore moltiplicativo per aspettare un po' più di delay.
+bool deviceOrderingActive = true;
+float marginFactor = 5;
 unsigned long startGetTemperatures;
 
 OneWire oneWire(ONE_WIRE_BUS);
 DallasTemperature sensors(&oneWire);
 DeviceAddress Thermometer[NUMBER_OF_TEMPERATURES_SENSORS_ON_ONE_WIRE_BUS];
 byte numberOfDevices;
-unsigned long conversionTime_DS18B20_sensors; //ms
+unsigned long conversionTime_DS18B20_sensors;
 unsigned long lastTempRequest;
 
-/* Temperature sensors - addresses. LOWEST number = HIGHEST sensor, then follows the decreasing order */
-// RICORDA LA VARIABILE ENABLE_DEVICE_ORDERING
 char temperatureSensor_address0[] = "28FF640E7213DCBE";
 char temperatureSensor_address1[] = "28FF640E7C2E42E0";
 char temperatureSensor_address2[] = "28FF640E7F7492C3";
 char temperatureSensor_address3[] = "28FF640E7F489F5E";
 
-/* Temperature Diagnostic */
 unsigned int deviceDisconnected[NUMBER_OF_TEMPERATURES_SENSORS_ON_ONE_WIRE_BUS];
 unsigned int deviceError[NUMBER_OF_TEMPERATURES_SENSORS_ON_ONE_WIRE_BUS];
 
-float temperatures[4]; 
+float temperatures[4];
 bool gotTemperatures;
 
-DeviceAddress tempDeviceAddress; // We'll use this variable to store a found device address
-
-// Define a char array to store the hexadecimal representation of the address
-char addressCharArray[17]; // 16 characters for the address + 1 for null terminator
+DeviceAddress tempDeviceAddress;
+char addressCharArray[17];
 
 // EXTERNAL TEMPERATURE SENSOR
 #define ENABLE_EXTERNAL_TEMPERATURE_READING true
@@ -110,50 +164,56 @@ DeviceAddress externalTemperatureSensor_address;
 unsigned int deviceDisconnected_externalTemperatureSensor;
 unsigned int deviceError_externalTemperatureSensor;
 
-float temperature_externalTemperatureSensor; 
+float temperature_externalTemperatureSensor;
 /* END TEMPERATURES SECTION */
 
 /* HEATER SECTION */
-// PWM con time proportioning window
-const unsigned long WINDOW_MS = 10000; // Finestra di 10 s (consigliato: 5–10 s)
+const unsigned long WINDOW_MS = 10000;
 const unsigned long FAILSAFE_MS = 30000;
 
-float u_cmd = 0.0f;                    // Duty normalizzato [0..1]
+float u_cmd = 0.0f;
 unsigned long windowStart = 0;
 unsigned long lastCmdMs = 0;
+/* END HEATER SECTION */
+
+/* FAN SECTION - ventole ricircolo aria: PWM diretto (non è un SSR, niente finestra software) */
+float fan_speed_cmd = 0.0f; // 0.0 (spente) ... 1.0 (velocità massima)
+/* END FAN SECTION */
 
 /* CCW_LS */
 antiDebounceInput ccw_inductor_input(CCW_INDUCTOR_PIN, DEFAULT_DEBOUNCE_TIME);
-trigger ccw_trigger;
 
 /* CW_LS */
 antiDebounceInput cw_inductor_input(CW_INDUCTOR_PIN, DEFAULT_DEBOUNCE_TIME);
-trigger cw_trigger;
+
+/*
+   Fronte di salita dei finecorsa rilevato a mano (non più con
+   trigger::catchRisingEdge()): vedi il commento nel loop() dove sono usate.
+*/
+bool _prevCCWLimit = false;
+bool _prevCWLimit  = false;
 
 
 /* MOTORS SECTION */
-#define STEPPER_MOTOR_SPEED_DEFAULT 10 //rpm  opportuno stare sotto i 30rpm, perché il tempo ciclo di arduino prende un po' troppo.
+#define STEPPER_MOTOR_SPEED_DEFAULT 10
 
 float stepper_motor_speed = STEPPER_MOTOR_SPEED_DEFAULT;
 
 stepperMotor eggsTurnerStepperMotor(STEPPER_MOTOR_STEP_PIN, STEPPER_MOTOR_DIRECTION_PIN, STEPPER_MOTOR_MS1_PIN, STEPPER_MOTOR_MS2_PIN, STEPPER_MOTOR_MS3_PIN, 1.8);
 
 bool move = false;
-bool direction = false; 
+bool direction = false;
 bool stepperIsMoving = false;
 
-// DC MOTOR CONFIGURATION
-// --- STATI MOTORE ---
 typedef enum {
   STOPPED_STATUS  = 0,
-  CW_STATUS       = 1,   // Orario
-  CCW_STATUS      = 2    // Antiorario
+  CW_STATUS       = 1,
+  CCW_STATUS      = 2
 } MotorState;
 
-MotorState current_DC_motorState_1 = STOPPED_STATUS; // DC motor 1
-MotorState current_DC_motorState_2 = STOPPED_STATUS; // DC motor 2 FOR FUTURE EXPANSION
+MotorState current_DC_motorState_1 = STOPPED_STATUS;
+MotorState current_DC_motorState_2 = STOPPED_STATUS;
 
-// MOTOR COMMON SECTION
 bool motor_moveCCW_automatic_var = false;
 bool motor_moveCW_automatic_var = false;
 bool motor_stop_automatic_var = false;
@@ -170,59 +230,36 @@ trigger motor_stop_cmd_trigger;
 byte eggsTurnerState = 0;
 bool motorAutomaticControl_var = false;
 
-
 /* END MOTORS SECTION */
 
 /* DHT22 HUMIDITY SENSOR */
-#define DHT_TYPE DHT22   //Tipo di sensore che stiamo utilizzando (DHT22)
-DHT dht(DHT_PIN, DHT_TYPE); //Inizializza oggetto chiamato "dht", parametri: pin a cui è connesso il sensore, tipo di dht 11/22
-
+#define DHT_TYPE DHT22
+DHT dht(DHT_PIN, DHT_TYPE);
 
 int chk;
-float humidity_fromDHT22;  //Variabile in cui verrà inserita la % di umidità
-float temp_fromDHT22; //Variabile in cui verrà inserita la temperatura
+float humidity_fromDHT22;
+float temp_fromDHT22;
 /* END DHT22 HUMIDITY SENSOR */
 
 /* HX711 WEIGHT CONTROL LOAD CELL */
 HX711 scale;
-int32_t calibration_offset = 39679; 
-/* 
-  The HX711’s raw readings are 24-bit signed values, which easily fit inside a 32-bit signed integer.
-  The HX711 Arduino libraries typically use long, long int, or int32_t for offsets and raw data.
-  int32_t guarantees a 32-bit integer on all platforms, which is safer than int (whose size varies).
-*/
-float calibration_scale = 421.390777;//420.0f; // to be extra explicit: In Arduino/C/C++, the f at the end of a number makes it a float literal instead of a double. .f tells the compiler the number is a float.
+int32_t calibration_offset = 39679;
+float calibration_scale = 421.390777f;
 float waterWeight;
-/*
-  La lettura del sensore è decisamente molto lunga, in termini di tempo. Quindi se leggiamo il peso mentre il motore gira si vede molto l'interruzione del treno di step a causa della lettura.
-  Sicuramente non posso fare una lettura del peso in simultanea con la temperatura. 
-  E' necessario fare delle letture molto meno frequenti (magari con una periodicità multipla rispetto alle letture di temperatura).
 
-  09/12/2025
-  Faccio così: la lettura delle temperature avviene circa a 2 Hz.
-  Metto qui una variabile che conta quante letture di temperature vengono fatte. Una volta ogni n letture di temperature, allora faccio anche la lettura del peso.
-  Siccome devo comunque inviare in uscita un valore di peso (per la comunicazione seriale) mando l'ultimo più aggiornato.
+const unsigned long waterWeight_timeInterval = 10000;
+unsigned long last_waterWeight_measurementTime;
 
-  Per evitare che la lettura del peso influenzi la rotazione, prendo questa contromisura:
-  1) SE IL MOTORE FUNZIONA --> saturazione alla lettura massima di 5.0 kg: così RPY se ne accorge e lui stesso comanda a FALSE l'elettrovalvola. Nello stesso momento, bypasso la chiamata
-    alla lettura dell'adc (per risparmiare tempo) + metto in sleep mode.
-  2) SE IL MOTORE SI FERMA --> riprendo la lettura normale a n Hz (multiplo intero della lettura delle temperature), così RPY si ribecca e decide se deve aprire l'elettrovalvola o no.
-
-*/
-const unsigned long waterWeight_timeInterval = 10000; // measure every 10s
-unsigned long last_waterWeight_measurementTime; 
-
-float waterWeight_saturated = 5000.0; // 5000.0 grams = 5.0 kg LIMIT VALUE for this load cell                                                       
+float waterWeight_saturated = 5000.0;
 /* END HX711 WEIGHT CONTROL LOAD CELL */
 
 
-
 /* MACHINE SINGALING DEVICE - SECTION */
-const int lightPins[NUMBER_OF_LIGHTS] = {PIN_RED_LIGHT, PIN_ORANGE_LIGHT, PIN_GREEN_LIGHT}; // Light pins
-const int buzzerPin = PIN_BUZZER; // Buzzer pin
+const int lightPins[NUMBER_OF_LIGHTS] = {PIN_RED_LIGHT, PIN_ORANGE_LIGHT, PIN_GREEN_LIGHT};
+const int buzzerPin = PIN_BUZZER;
 
 unsigned long lastUpdate = 0;
-const unsigned long runInterval = 100; // Run every 100ms
+const unsigned long runInterval = 100;
 
 enum State { OFF, ON, FLASH_FAST, FLASH_SLOW, BEEP_FAST, BEEP_SLOW };
 
@@ -237,26 +274,82 @@ Device buzzer;
 /* END MACHINE SINGALING DEVICE - SECTION */
 
 // SENDING TO RPY
+/*
+   Niente più String qui: su un UNO (2 KB di RAM) l'allocazione/deallocazione
+   continua di String per ogni tag in uscita e ogni comando in ingresso
+   frammentava l'heap. Sintomo osservato: il primo carattere di uno dei tag
+   in uscita arrivava sistematicamente sovrascritto con il primo carattere di
+   un tag diverso già transitato (es. "WGT01" -> "SGT01", "S" da "STPR01") -
+   classico effetto di un blocco di heap riciclato senza essere riscritto per
+   intero. Con buffer char a dimensione fissa non c'è più heap da frammentare.
+*/
 #define MAX_NUMBER_OF_COMMANDS_TO_BOARD 20
+#define OUTGOING_ITEM_LEN 24   // un token "<TAG,valore>" in uscita, incluso il terminatore
+#define INCOMING_CMD_LEN  32   // il contenuto fra < e > di un comando in ingresso
+#define TAG_LEN   10
+#define VALUE_LEN 16
+#define UID_LEN   12
+#define ACK_LEN   48   // "<" + tag + ", " + value + ", " + uid + ">" (vedi TAG/VALUE/UID_LEN)
+
 bool receivingDataFromBoard = false;
-String listofDataToSend[MAX_NUMBER_OF_COMMANDS_TO_BOARD];
+char listofDataToSend[MAX_NUMBER_OF_COMMANDS_TO_BOARD][OUTGOING_ITEM_LEN];
 byte listofDataToSend_numberOfData = 0;
 
-char bufferCharArray[25]; // buffer lo metto qui
-// handling float numbers
-char bufferChar[35];
-char fbuffChar[10];
+char fbuffChar[16];   // scratch per dtostrf(), prima di comporre il token con queueOutgoing()
 
-String receivedCommands[20];
-
-
+char receivedCommands[MAX_NUMBER_OF_COMMANDS_TO_BOARD][INCOMING_CMD_LEN];
 
 unsigned long last_cycle_time, cycle_time;
+
+/* ============================================================
+   SIMULATION MODE – state variables
+   ============================================================ */
+#if SIMULATION
+static float         _sim_wgt_g    = 1500.0f;  // initial water weight [g]
+static bool          _sim_ccw      = true;       // start at CCW (home) limit
+static bool          _sim_cw       = false;
+static bool          _sim_moving   = false;
+static bool          _sim_dir_cw   = false;
+static unsigned long _sim_move_t0  = 0UL;
+static unsigned long _sim_last_upd = 0UL;
+#endif
+
+
+// ============================================================
+// Forward declarations
+// ============================================================
+int  freeRam();
+void byteToHex(uint8_t byteValue, char *hexValue);
+void addressToCharArray(DeviceAddress deviceAddress, char *charArray);
+int  readFromBoard();
+void updateDevice(Device &device, int pin, unsigned long fastInterval, unsigned long slowInterval);
+void queueOutgoing(const char *fmt, ...);
+void trimInPlace(char *s);
+bool splitCommand(const char *input,
+                   char *tag, size_t tagSize,
+                   char *value, size_t valueSize,
+                   char *uid, size_t uidSize);
+void motorCW(int pin_in1, int pin_in2);
+void motorCCW(int pin_in1, int pin_in2);
+void motorStop(int pin_in1, int pin_in2);
+bool getCCW();
+bool getCW();
+#if SIMULATION
+void sim_motor_tick();
+void sim_generateSensors();
+bool sim_getCCW();
+bool sim_getCW();
+void sim_startCW();
+void sim_startCCW();
+#endif
 
 
 void setup() {
   pinMode(HEATER_PWM_PIN, OUTPUT);
   digitalWrite(HEATER_PWM_PIN, LOW);
+
+  pinMode(FAN_PWM_PIN, OUTPUT);
+  digitalWrite(FAN_PWM_PIN, LOW);
 
   pinMode(HEATER_PIN, OUTPUT);
   digitalWrite(HEATER_PIN, LOW);
@@ -274,7 +367,7 @@ void setup() {
   digitalWrite(STEPPER_MOTOR_STEP_PIN, LOW);
 
   pinMode(STEPPER_MOTOR_DIRECTION_PIN, OUTPUT);
-  digitalWrite(STEPPER_MOTOR_DIRECTION_PIN, LOW);  
+  digitalWrite(STEPPER_MOTOR_DIRECTION_PIN, LOW);
 
   pinMode(STEPPER_MOTOR_MS1_PIN, OUTPUT);
   digitalWrite(STEPPER_MOTOR_MS1_PIN, LOW);
@@ -298,7 +391,6 @@ void setup() {
   pinMode(DC_MOTOR_2_IN2, OUTPUT);
   digitalWrite(DC_MOTOR_2_IN2, LOW);
 
-  // Motore fermo all'avvio
   motorStop(DC_MOTOR_1_IN1, DC_MOTOR_1_IN2);
 
   pinMode(CCW_INDUCTOR_PIN, INPUT);
@@ -315,69 +407,66 @@ void setup() {
     buzzer = {OFF, 0, LOW};
 
   Serial.begin(SERIAL_SPEED);
-  //Serial.println("Starting");
 
+#if SIMULATION
+  /* ---- Simulation init: skip all sensor hardware ---- */
+  randomSeed(analogRead(A0));
+  conversionTime_DS18B20_sensors = 0;
+  lastTempRequest   = millis();
+  _sim_last_upd     = millis();
+  last_waterWeight_measurementTime = millis();
+  waterWeight       = _sim_wgt_g;
+  gotTemperatures   = false;
+  sim_generateSensors();
+  gotTemperatures   = true;
+#else
   /* HX 711 initializing water scale */
   scale.begin(LOADCELL_DOUT_PIN, LOADCELL_SCK_PIN);
   scale.set_offset(calibration_offset);
   scale.set_scale(calibration_scale);
-  //scale.tare();
 
   sensors.begin();
-
-  // locate devices on the bus
-  //Serial.print("Locating devices...");
-  //Serial.print("Found ");
-
   numberOfDevices = sensors.getDeviceCount();
 
+  sensors.setWaitForConversion(false);
+  sensors.requestTemperatures();
 
-  sensors.setWaitForConversion(false); // quando richiedi le temperature requestTemperatures() la libreria NON aspetta il delay adeguato, quidni devi aspettarlo tu.
-  sensors.requestTemperatures(); // send command to all the sensors for temperature conversion.
-   
   if (ENABLE_EXTERNAL_TEMPERATURE_READING){
     externalTemperatureSensor.begin();
-    externalTemperatureSensor.setWaitForConversion(false); // quando richiedi le temperature requestTemperatures() la libreria NON aspetta il delay adeguato, quidni devi aspettarlo tu.
-    externalTemperatureSensor.requestTemperatures(); // send command to all the sensor for temperature conversion.
+    externalTemperatureSensor.setWaitForConversion(false);
+    externalTemperatureSensor.requestTemperatures();
   }
-    
 
   lastTempRequest = millis();
-  
-  conversionTime_DS18B20_sensors = 750 / (1 << (12 - TEMPERATURE_PRECISION));  // res in {9,10,11,12}
+  conversionTime_DS18B20_sensors = 750 / (1 << (12 - TEMPERATURE_PRECISION));
 
   for(uint8_t index = 0; index < numberOfDevices; index++){
-    if(sensors.getAddress(tempDeviceAddress, index)){ // fetch dell'indirizzo
-      addressToCharArray(tempDeviceAddress, addressCharArray); // indirizzo convertito
+    if(sensors.getAddress(tempDeviceAddress, index)){
+      addressToCharArray(tempDeviceAddress, addressCharArray);
 
-      // ora ordino il vettore dei sensori.
-      if(strcmp(addressCharArray, temperatureSensor_address0) == 0){ // returns 0 when the two strings are identical
+      if(strcmp(addressCharArray, temperatureSensor_address0) == 0){
         sensors.getAddress(Thermometer[0], index);
       }
-      else if(strcmp(addressCharArray, temperatureSensor_address1) == 0){ 
+      else if(strcmp(addressCharArray, temperatureSensor_address1) == 0){
         sensors.getAddress(Thermometer[1], index);
       }
-      else if(strcmp(addressCharArray, temperatureSensor_address2) == 0){ 
+      else if(strcmp(addressCharArray, temperatureSensor_address2) == 0){
         sensors.getAddress(Thermometer[2], index);
       }
-      else if(strcmp(addressCharArray, temperatureSensor_address3) == 0){ 
+      else if(strcmp(addressCharArray, temperatureSensor_address3) == 0){
         sensors.getAddress(Thermometer[3], index);
       }
       else{
-        // evidentemente indirizzo non presente, allora non procedo con il device ordering
         deviceOrderingActive = false;
-      }       
+      }
 
-      // initializing arrays - l'azzeramento posso farlo senza posizioni, non importa, tanto è tutto a 0.
       deviceDisconnected[index] = 0;
       deviceError[index] = 0;
-
       delay(5);
     }
   }
 
   if(!deviceOrderingActive){
-    // se si è disattivato perché è cambiato un sensore, allora devo riciclarli tutti e metterli nel vettore a caso.
     for(uint8_t index = 0; index < numberOfDevices; index++){
       sensors.getAddress(Thermometer[index], index);
       deviceDisconnected[index] = 0;
@@ -387,170 +476,170 @@ void setup() {
 
   if (ENABLE_EXTERNAL_TEMPERATURE_READING){
     if(externalTemperatureSensor.getAddress(tempDeviceAddress, 0)){
-      addressToCharArray(tempDeviceAddress, addressCharArray); // indirizzo convertito
+      addressToCharArray(tempDeviceAddress, addressCharArray);
       externalTemperatureSensor.getAddress(externalTemperatureSensor_address, 0);
       deviceDisconnected_externalTemperatureSensor = 0;
       deviceError_externalTemperatureSensor = 0;
     }
   }
-    
+
+  dht.begin();
+  last_waterWeight_measurementTime = millis();
+  waterWeight = waterWeight_saturated;
+#endif // SIMULATION
 
   last_serial_alive_time = millis();
-  dht.begin();
-
   cycle_time = millis();
   last_cycle_time = cycle_time;
-
-  last_waterWeight_measurementTime = millis();
-  waterWeight = waterWeight_saturated; // initialization: otherwise first waterWeight comes 10s after startup, then would be 0g.
-
   windowStart = millis();
   lastCmdMs = millis();
+
+  /*
+     Marker di riavvio.
+     A questo punto tutte le uscite sono a riposo (relè LOW, u_cmd = 0.0) e il PC
+     non lo sa: se non gli si dice nulla continua a credere che gli attuatori siano
+     nello stato di prima e, non rinviando comandi a valore invariato, non li
+     ripristina mai. Va stampato fuori dalla guardia serial_communication_is_ok,
+     che a questo punto è ancora false.
+  */
+  Serial.print('@');
+  Serial.print("<BOOT, 1>");
+  Serial.println('#');
 }
 
-void loop() {    
+void loop() {
   // RECEIVING FROM RPI
-  if(Serial.available() > 0){ 
-    int numberOfCommandsFromBoard = readFromBoard(); // from ESP8266. It has @ as terminator character
+  if(Serial.available() > 0){
+    int numberOfCommandsFromBoard = readFromBoard();
     last_serial_alive_time = millis();
-    String pendingACK; // mandiamo un comando per volta, quindi ci sarà un solo comando a ciclo for.
-    // Guardiamo che comandi ci sono arrivati
+    char pendingACK[ACK_LEN] = "";
     for (byte j = 0; j < numberOfCommandsFromBoard; j++) {
-      String tempReceivedCommand = receivedCommands[j];
-      //Serial.println(tempReceivedCommand);
-      String tag, value, uid;
-      if (splitCommand(tempReceivedCommand, tag, value, uid)) {
-        if (tag == "ALIVE") {
+      char tag[TAG_LEN], value[VALUE_LEN], uid[UID_LEN];
+      if (splitCommand(receivedCommands[j], tag, sizeof(tag), value, sizeof(value), uid, sizeof(uid))) {
+        if (strcmp(tag, "ALIVE") == 0) {
           last_serial_alive_time = millis();
-          if (value == "True") {
+          if (strcmp(value, "True") == 0) {
             alive_bit = true;
             serial_communication_is_ok = true;
-          } else if (value == "False") {
+          } else if (strcmp(value, "False") == 0) {
             alive_bit = false;
             serial_communication_is_ok = true;
           }
         }
 
-        if (tag == "HTR01") {
-          if (value == "True") {
+        if (strcmp(tag, "HTR01") == 0) {
+          if (strcmp(value, "True") == 0) {
             digitalWrite(HEATER_PIN, HIGH);
-          } else if (value == "False") {
+          } else if (strcmp(value, "False") == 0) {
             digitalWrite(HEATER_PIN, LOW);
           }
-          // Sposta la generazione ACK qui, fuori dal parsing
-          if(uid.length() > 0){
-              pendingACK = "<" + tag + ", " + value + ", " + uid + ">";
+          if(strlen(uid) > 0){
+              snprintf(pendingACK, sizeof(pendingACK), "<%s, %s, %s>", tag, value, uid);
           }
         }
-          
 
-        if (tag == "HUMER01") {
-          if (value == "True") {
+        if (strcmp(tag, "HUMER01") == 0) {
+          if (strcmp(value, "True") == 0) {
             digitalWrite(HUMIDIFIER_PIN, HIGH);
-          } else if (value == "False") {
+          } else if (strcmp(value, "False") == 0) {
             digitalWrite(HUMIDIFIER_PIN, LOW);
           }
-          // Sposta la generazione ACK qui, fuori dal parsing
-          if(uid.length() > 0){
-              pendingACK = "<" + tag + ", " + value + ", " + uid + ">";
+          if(strlen(uid) > 0){
+              snprintf(pendingACK, sizeof(pendingACK), "<%s, %s, %s>", tag, value, uid);
           }
         }
 
-        if (tag == "STPR01") {
-          // BRUTTO, ma riciclo il comando STPR, è per lo stepper, ma per non cambiare tutto lo uso anche per DC motor
-          if (value == "MCCW") {
+        if (strcmp(tag, "STPR01") == 0) {
+          if (strcmp(value, "MCCW") == 0) {
             motor_moveCCW_automatic_var = true;
             if (DC_MOTOR_ACTIVATED)
             motor_moveCCW_cmd = true;
-          } else if (value == "MCW") {
+          } else if (strcmp(value, "MCW") == 0) {
             motor_moveCW_automatic_var = true;
             motor_moveCW_cmd = true;
-          } else if (value == "STOP") {
+          } else if (strcmp(value, "STOP") == 0) {
             motor_stop_automatic_var = true;
             motor_stop_cmd = true;
           }
-          // Sposta la generazione ACK qui, fuori dal parsing
-          if(uid.length() > 0){
-              pendingACK = "<" + tag + ", " + value + ", " + uid + ">";
+          if(strlen(uid) > 0){
+              snprintf(pendingACK, sizeof(pendingACK), "<%s, %s, %s>", tag, value, uid);
           }
         }
 
-        if (tag == "ELV01") {
-          if (value == "True") {
+        if (strcmp(tag, "ELV01") == 0) {
+          if (strcmp(value, "True") == 0) {
             digitalWrite(WATER_ELECTROVALVE_PIN, HIGH);
-          } else if (value == "False") {
+          } else if (strcmp(value, "False") == 0) {
             digitalWrite(WATER_ELECTROVALVE_PIN, LOW);
           }
-          // Sposta la generazione ACK qui, fuori dal parsing
-          if(uid.length() > 0){
-              pendingACK = "<" + tag + ", " + value + ", " + uid + ">";
+          if(strlen(uid) > 0){
+              snprintf(pendingACK, sizeof(pendingACK), "<%s, %s, %s>", tag, value, uid);
           }
         }
 
-        /* PER CASO CON PWM diretto e NON NORMALIZZATO 
-        if (tag == "PWM01") {
-          int pwm_value = value.toInt();
-          analogWrite(HEATER_PWM_PIN, pwm_value);
-          // Sposta la generazione ACK qui, fuori dal parsing
-          if(uid.length() > 0){
-              pendingACK = "<" + tag + ", " + value + ", " + uid + ">";
-          }
-        }
-        */
-
-        if (tag == "PWM01") {
-          /* per caso in cui mi arriva da RPY il valore normalizzato [0..1]*/
-          float u = value.toFloat();
+        if (strcmp(tag, "PWM01") == 0) {
+          float u = atof(value);
           if (u < 0.0f) u = 0.0f;
           if (u > 1.0f) u = 1.0f;
-
           u_cmd = u;
-          // Sposta la generazione ACK qui, fuori dal parsing
-          if(uid.length() > 0){
-              pendingACK = "<" + tag + ", " + value + ", " + uid + ">";
+          lastCmdMs = millis();   // alimenta il failsafe della sezione HEATER
+          if(strlen(uid) > 0){
+              snprintf(pendingACK, sizeof(pendingACK), "<%s, %s, %s>", tag, value, uid);
+          }
+        }
+
+        if (strcmp(tag, "FAN01") == 0) {
+          float f = atof(value);
+          if (f < 0.0f) f = 0.0f;
+          if (f > 1.0f) f = 1.0f;
+          fan_speed_cmd = f;
+          analogWrite(FAN_PWM_PIN, (int)(fan_speed_cmd * 255.0f + 0.5f));
+          if(strlen(uid) > 0){
+              snprintf(pendingACK, sizeof(pendingACK), "<%s, %s, %s>", tag, value, uid);
           }
         }
       }
       else{
-        // comando malformato, non lo considero valido + eventuale log
         continue;
       }
     }
-    // fuori dal ciclo for, mando gli ack
-    if(pendingACK.length() > 0){
+    if(pendingACK[0] != '\0'){
         Serial.print('@');
         Serial.print(pendingACK);
         Serial.println('#');
-        pendingACK = "";
+        pendingACK[0] = '\0';
         delay(1);
     }
   }
   else{
     if(millis() - last_serial_alive_time > serial_alive_timeout_ms){
-      // se per più di 1secondo non ricevo roba dalla seriale (che significa che non sta arrivando più nemmeno alive), allora inibisci le cose da inibire
       serial_communication_is_ok = false;
       eggsTurnerStepperMotor.stopMotor();
       digitalWrite(HEATER_PIN, LOW);
       digitalWrite(HUMIDIFIER_PIN, LOW);
       digitalWrite(WATER_ELECTROVALVE_PIN, LOW);
       analogWrite(HEATER_PWM_PIN, 0);
+      analogWrite(FAN_PWM_PIN, 0);
+      fan_speed_cmd = 0.0f;
     }
   }
 
   /* TEMPERATURES SECTION */
-  /*
-    - Attesa di un delay sufficiente per la conversione di temperatura fatta simultaneamente da tutti i sensori di temperatura.
-    - Una volta passato il tempo, iterativamente, chiedo a tutti i sensori la temperatura.
-
-  */
+#if SIMULATION
+  if (millis() - _sim_last_upd >= SIM_SENSOR_MS) {
+    sim_generateSensors();   // updates temperatures[], humidity_fromDHT22, temp_fromDHT22,
+                             //            temperature_externalTemperatureSensor, waterWeight
+    gotTemperatures = true;
+    _sim_last_upd = millis();
+  }
+#else
   if(millis() - lastTempRequest >= (conversionTime_DS18B20_sensors * marginFactor)){
-    startGetTemperatures = millis(); // per calcolare quanto tempo impiego a fetchare tutte le temperature dai sensori.
+    startGetTemperatures = millis();
     if (SERIAL_PRINT_CHECK){
       Serial.print("Time passed btw two T readings: ");
       Serial.print(millis()-lastTempRequest);
     }
     for(uint8_t index = 0; index < numberOfDevices; index++){
-      /* Memorize all temperatures in an ordered array */
       temperatures[index] = sensors.getTempC(Thermometer[index]);
 
       if(temperatures[index] <= DEVICE_DISCONNECTED){
@@ -558,10 +647,10 @@ void loop() {
       }
       if(temperatures[index] >= DEVICE_ERROR){
         deviceError[index] ++;
-      }      
+      }
     }
 
-    gotTemperatures = true;  
+    gotTemperatures = true;
     sensors.requestTemperatures();
 
     if (ENABLE_EXTERNAL_TEMPERATURE_READING){
@@ -571,9 +660,9 @@ void loop() {
       }
       if(temperature_externalTemperatureSensor >= DEVICE_ERROR){
         deviceError_externalTemperatureSensor ++;
-      }       
+      }
       externalTemperatureSensor.requestTemperatures();
-    }      
+    }
 
     lastTempRequest = millis();
 
@@ -581,13 +670,23 @@ void loop() {
       Serial.print(" Time needed to read temperatures: ");
       Serial.println(lastTempRequest - startGetTemperatures);
     }
-  }   
+  }
+#endif
   /* END TEMPERATURES SECTION */
 
   /* HEATER SECTION */
   unsigned long now = millis();
 
-  // --- Gestione finestra non-bloccante ---
+  /*
+     Failsafe: se il PC smette di aggiornare il duty (crash, cavo staccato, thread
+     bloccato) il riscaldatore non deve restare acceso con l'ultimo valore ricevuto.
+     Il PC rinvia PWM01 ogni 5 s anche a valore invariato, quindi FAILSAFE_MS = 30 s
+     è un margine ampio: scatta solo se la comunicazione è davvero interrotta.
+  */
+  if (now - lastCmdMs > FAILSAFE_MS) {
+    u_cmd = 0.0f;
+  }
+
   if (now - windowStart >= WINDOW_MS) {
     windowStart = now;
   }
@@ -597,147 +696,158 @@ void loop() {
 
 
   /* HX 711 WATER WEIGHT MEASUREMENT - LOAD CELL */
+  /* In simulation, waterWeight is updated by sim_generateSensors() every SIM_SENSOR_MS */
+#if !SIMULATION
   if (stepperIsMoving && (!DC_MOTOR_ACTIVATED)){
     waterWeight = waterWeight_saturated;
   }
   else{
     if ((millis() - last_waterWeight_measurementTime) >= waterWeight_timeInterval){
-      // facciamo passare almeno 10s per la lettura della cella di carico
-      // NOTA: abilitiamo la letura del peso ok una volta ogni 10, ma anche in fase con la lettura delle temperature
       if (gotTemperatures){
-        // motore non va, allora possiamo leggere il dato dall'ADC (MOLTO TIME CONSUMING!)
-        scale.power_up();	
+        scale.power_up();
         waterWeight = scale.get_units(5);
-        waterWeight = round(waterWeight * 10.0) / 10.0; // arrotondamento ad una cifra decimale
+        waterWeight = round(waterWeight * 10.0) / 10.0;
         scale.power_down();
         last_waterWeight_measurementTime = millis();
       }
     }
-  }    
+  }
+#endif
 
   /* DHT22 HUMIDITY SENSOR */
-  /* DHT22 sensor */    
+  /* In simulation, humidity_fromDHT22 and temp_fromDHT22 are updated by sim_generateSensors() */
+#if !SIMULATION
   humidity_fromDHT22 = dht.readHumidity();
-  temp_fromDHT22 = dht.readTemperature();   
+  temp_fromDHT22 = dht.readTemperature();
+#endif
   /* END DHT22 HUMIDITY SENSOR */
 
   /* INDUCTOR INPUT SECTION */
+#if SIMULATION
+  sim_motor_tick();  // advance motor travel timer and update virtual limit flags
+#else
   ccw_inductor_input.periodicRun();
   cw_inductor_input.periodicRun();
+#endif
   /* END INDUCTOR INPUT SECTION */
 
-  ccw_trigger.periodicRun(ccw_inductor_input.getInputState());
-  cw_trigger.periodicRun(cw_inductor_input.getInputState());
-
-  if(ccw_trigger.catchRisingEdge()){
-    listofDataToSend[listofDataToSend_numberOfData] = "<IND_CCW, 1>"; // converting bool to string - "<IND_CW, 0>"
-    listofDataToSend_numberOfData++;
+  /*
+     Notifica al PC quando un finecorsa viene raggiunto, una volta sola per
+     arrivo. Prima usava trigger::catchRisingEdge() (libreria esterna,
+     ProfiloLibrary, sorgente non disponibile in questo repo): una volta
+     raggiunto un finecorsa getCCW()/getCW() restano "true" finché non
+     riparte un movimento nella direzione opposta, e se quella libreria si
+     comportasse come un rilevamento di livello invece che di fronte,
+     riaccoderebbe <IND_CCW,1>/<IND_CW,1> a ogni giro di loop() invece che una
+     volta sola. Sintomo osservato: flusso continuo di ACK "IND_CW"/"IND_CCW"
+     pur avendo inviato un solo comando STPR01. Il confronto col valore
+     precedente qui sotto è autosufficiente, non dipende da quella libreria.
+  */
+  bool nowCCW = getCCW();
+  bool nowCW  = getCW();
+  if(nowCCW && !_prevCCWLimit){
+    queueOutgoing("<IND_CCW, 1>");
   }
-
-  if(cw_trigger.catchRisingEdge()){
-    listofDataToSend[listofDataToSend_numberOfData] = "<IND_CW, 1>"; // converting bool to string - "<IND_CW, 0>"
-    listofDataToSend_numberOfData++;
+  if(nowCW && !_prevCWLimit){
+    queueOutgoing("<IND_CW, 1>");
   }
+  _prevCCWLimit = nowCCW;
+  _prevCWLimit  = nowCW;
 
   /* STEPPER MOTOR CONTROL SECTION */
   if (!DC_MOTOR_ACTIVATED){
     eggsTurnerStepperMotor.periodicRun();
     stepperIsMoving = eggsTurnerStepperMotor.isMovingBackward() || eggsTurnerStepperMotor.isMovingForward();
   }
-    
-  // direzione oraria = forward = clock wise rotation direction (vista posteriore incubatrice)
+
   switch(eggsTurnerState){
     case 0:
-      // stato in cui dobbiamo aspettare che il pogramma lato python sia partito --> guardiamo la comunicazione seriale
       if(serial_communication_is_ok){
         eggsTurnerState = 1;
       }
       break;
-    case 1: // waiting: prima di iniziare la procedura, voglio aspettare un po' che le comunicazioni siano partite e tutto...
+    case 1:
       if(millis() >= 5000){
-        // apena passano 5secondi, fai muovere il motore per azzerare
-        eggsTurnerState = 9;        
+        eggsTurnerState = 9;
       }
-      
       break;
     case 9: // ZEROING
-      // lascio stato aperto per eventuale abilitazione della procedura di azzeramento da parte dell'operatore.
-      if(ccw_inductor_input.getInputState()){ // se leggo già induttore, inutile comandare un bw. Sono già azzerato.  Devo però notificarlo a RPI!
-        // home position is reached - full left
-        listofDataToSend[listofDataToSend_numberOfData] = "<IND_CCW, 1>"; 
-        listofDataToSend_numberOfData++;
+      if(getCCW()){
+        queueOutgoing("<IND_CCW, 1>");
 
         if (DC_MOTOR_ACTIVATED){
           motorStop(DC_MOTOR_1_IN1, DC_MOTOR_1_IN2);
         }
         else{
-          eggsTurnerStepperMotor.stopMotor(); 
+          eggsTurnerStepperMotor.stopMotor();
         }
-              
+
         eggsTurnerState = 20;
       }
-      else if(cw_inductor_input.getInputState()){ // se leggo già induttore. Sono già azzerato.  Devo però notificarlo a RPI!
-        // home position is reached - full right
-        listofDataToSend[listofDataToSend_numberOfData] = "<IND_CW, 1>";
-        listofDataToSend_numberOfData++;
-        
+      else if(getCW()){
+        queueOutgoing("<IND_CW, 1>");
+
         if (DC_MOTOR_ACTIVATED){
           motorStop(DC_MOTOR_1_IN1, DC_MOTOR_1_IN2);
         }
         else{
-          eggsTurnerStepperMotor.stopMotor(); 
+          eggsTurnerStepperMotor.stopMotor();
         }
 
         eggsTurnerState = 20;
       }
       else{
-        // azzeramento di default lo si fa in senso ANTIORARIO CCW
         if (DC_MOTOR_ACTIVATED){
           motorCCW(DC_MOTOR_1_IN1, DC_MOTOR_1_IN2);
           current_DC_motorState_1 = CCW_STATUS;
+#if SIMULATION
+          sim_startCCW();
+#endif
         }
         else{
           eggsTurnerStepperMotor.moveBackward(STEPPER_MOTOR_SPEED_DEFAULT);
         }
-        
+
         eggsTurnerState = 10;
-      }        
+      }
       break;
     case 10: // WAIT_TO_REACH_LEFT_SIDE_INDUCTOR
-      if(ccw_inductor_input.getInputState()){
-        // home position is reached - full left
+      if(getCCW()){
         if (DC_MOTOR_ACTIVATED){
           motorStop(DC_MOTOR_1_IN1, DC_MOTOR_1_IN2);
         }
         else{
-          eggsTurnerStepperMotor.stopMotor(); 
+          eggsTurnerStepperMotor.stopMotor();
         }
         eggsTurnerState = 20;
       }
       break;
-    case 20: 
+    case 20:
       if(motorAutomaticControl_var){
-        /* FULLY AUTOMATIC MODE in arduino side*/
-        // WAIT_FOR_TURN_EGGS_COMMAND_STATE --> wait for RPI command
-
         if(motor_moveCCW_automatic_var){
           if (DC_MOTOR_ACTIVATED){
             motorCCW(DC_MOTOR_1_IN1, DC_MOTOR_1_IN2);
             current_DC_motorState_1 = CCW_STATUS;
+#if SIMULATION
+            sim_startCCW();
+#endif
           }
           else{
             eggsTurnerStepperMotor.moveBackward(STEPPER_MOTOR_SPEED_DEFAULT);
-          }            
+          }
           eggsTurnerState = 50;
         }
         if(motor_moveCW_automatic_var){
           if (DC_MOTOR_ACTIVATED){
             motorCW(DC_MOTOR_1_IN1, DC_MOTOR_1_IN2);
             current_DC_motorState_1 = CW_STATUS;
+#if SIMULATION
+            sim_startCW();
+#endif
           }
           else{
             eggsTurnerStepperMotor.moveForward(STEPPER_MOTOR_SPEED_DEFAULT);
-          } 
+          }
           eggsTurnerState = 30;
         }
         if(motor_stop_automatic_var){
@@ -747,15 +857,14 @@ void loop() {
           else{
             eggsTurnerStepperMotor.stopMotor();
           }
-        }        
+        }
       }
       else{
-        /* MANUAL MODE - tutti i comandi vengono da RPI */
         eggsTurnerState = 100;
       }
       break;
     case 30: // WAIT_TO_REACH_RIGHT_SIDE_INDUCTOR
-        if(cw_inductor_input.getInputState()){
+        if(getCW()){
           if (DC_MOTOR_ACTIVATED){
             motorStop(DC_MOTOR_1_IN1, DC_MOTOR_1_IN2);
           }
@@ -766,7 +875,7 @@ void loop() {
         }
       break;
     case 50: // WAIT_TO_REACH_LEFT_SIDE_INDUCTOR
-        if(ccw_inductor_input.getInputState()){
+        if(getCCW()){
           if (DC_MOTOR_ACTIVATED){
             motorStop(DC_MOTOR_1_IN1, DC_MOTOR_1_IN2);
           }
@@ -782,39 +891,37 @@ void loop() {
       motor_stop_cmd_trigger.periodicRun(motor_stop_cmd);
 
       if(motor_moveCCW_cmd_trigger.catchRisingEdge()){
-        if(ccw_inductor_input.getInputState()){
-          // se leggo già, allora non fare nulla (meccanicamente impossibile..io a mano che ciapino). Devo solo notificarlo a RPY
-          // home position is reached - full CCW
-          listofDataToSend[listofDataToSend_numberOfData] = "<IND_CCW, 1>"; 
-          listofDataToSend_numberOfData++;
+        if(getCCW()){
+          queueOutgoing("<IND_CCW, 1>");
         }
         else{
-          /* MECHANICAL SAFETY - abilito il movimento solo se NON sto già leggendo */
           if (DC_MOTOR_ACTIVATED){
             motorCCW(DC_MOTOR_1_IN1, DC_MOTOR_1_IN2);
             current_DC_motorState_1 = CCW_STATUS;
+#if SIMULATION
+            sim_startCCW();
+#endif
           }
           else{
             eggsTurnerStepperMotor.moveBackward(STEPPER_MOTOR_SPEED_DEFAULT);
-          } 
+          }
         }
       }
       else if(motor_moveCW_cmd_trigger.catchRisingEdge()){
-        if(cw_inductor_input.getInputState()){
-          // se leggo già, allora non fare nulla (meccanicamente impossibile..io a mano che ciapino). Devo solo notificarlo a RPY
-          // home position is reached - full CW
-          listofDataToSend[listofDataToSend_numberOfData] = "<IND_CW, 1>"; 
-          listofDataToSend_numberOfData++;
+        if(getCW()){
+          queueOutgoing("<IND_CW, 1>");
         }
         else{
-          /* MECHANICAL SAFETY - abilito il movimento solo se NON sto già leggendo */
           if (DC_MOTOR_ACTIVATED){
             motorCW(DC_MOTOR_1_IN1, DC_MOTOR_1_IN2);
             current_DC_motorState_1 = CW_STATUS;
+#if SIMULATION
+            sim_startCW();
+#endif
           }
           else{
             eggsTurnerStepperMotor.moveForward(STEPPER_MOTOR_SPEED_DEFAULT);
-          } 
+          }
         }
       }
       else if(motor_stop_cmd_trigger.catchRisingEdge()){
@@ -827,9 +934,8 @@ void loop() {
       }
 
       /* MECHANICAL SAFETY */
-      
-      if(ccw_inductor_input.getInputState() 
-          and 
+      if(getCCW()
+          and
           (
             (
               (!DC_MOTOR_ACTIVATED)
@@ -851,8 +957,8 @@ void loop() {
           eggsTurnerStepperMotor.stopMotor();
         }
       }
-      if(cw_inductor_input.getInputState() 
-          and 
+      if(getCW()
+          and
           (
             (
               (!DC_MOTOR_ACTIVATED)
@@ -866,14 +972,15 @@ void loop() {
               current_DC_motorState_1 == CW_STATUS
             )
           )
-        ){if (DC_MOTOR_ACTIVATED){
+        ){
+        if (DC_MOTOR_ACTIVATED){
           motorStop(DC_MOTOR_1_IN1, DC_MOTOR_1_IN2);
         }
         else{
           eggsTurnerStepperMotor.stopMotor();
         }
       }
-      
+
       break;
     default:
       break;
@@ -888,65 +995,58 @@ void loop() {
         lastUpdate = currentTime;
     }
   /* END MACHINE SINGALING DEVICE - SECTION */
-  
-  
-  if(gotTemperatures){        
-    strcpy(bufferChar, "<TMP01,");
-    dtostrf( temperatures[0], 1, 1, fbuffChar); 
-    listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(bufferChar, fbuffChar), ">");
-    listofDataToSend_numberOfData++;
 
-    strcpy(bufferChar, "<TMP02,");
-    dtostrf( temperatures[1], 1, 1, fbuffChar); 
-    listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(bufferChar, fbuffChar), ">");
-    listofDataToSend_numberOfData++; 
 
-    strcpy(bufferChar, "<TMP03,");
-    dtostrf( temperatures[2], 1, 1, fbuffChar); 
-    listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(bufferChar, fbuffChar), ">");
-    listofDataToSend_numberOfData++;
+  if(gotTemperatures){
+    dtostrf(temperatures[0], 1, 1, fbuffChar);
+    queueOutgoing("<TMP01,%s>", fbuffChar);
 
-    strcpy(bufferChar, "<TMP04,");
-    dtostrf( temperatures[3], 1, 1, fbuffChar); 
-    listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(bufferChar, fbuffChar), ">");
-    listofDataToSend_numberOfData++;
+    dtostrf(temperatures[1], 1, 1, fbuffChar);
+    queueOutgoing("<TMP02,%s>", fbuffChar);
 
-    strcpy(bufferChar, "<HUM01,");
-    dtostrf(humidity_fromDHT22, 1, 1, fbuffChar); 
-    listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(bufferChar, fbuffChar), ">");
-    listofDataToSend_numberOfData++;
+    dtostrf(temperatures[2], 1, 1, fbuffChar);
+    queueOutgoing("<TMP03,%s>", fbuffChar);
 
-    strcpy(bufferChar, "<HTP01,"); // temperatura che viene letta dal sensore di umidità
-    dtostrf(temp_fromDHT22, 1, 1, fbuffChar); 
-    listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(bufferChar, fbuffChar), ">");
-    listofDataToSend_numberOfData++;
+    dtostrf(temperatures[3], 1, 1, fbuffChar);
+    queueOutgoing("<TMP04,%s>", fbuffChar);
 
-    strcpy(bufferChar, "<EXTT,");
-    dtostrf(temperature_externalTemperatureSensor, 1, 1, fbuffChar); 
-    listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(bufferChar, fbuffChar), ">");
-    listofDataToSend_numberOfData++;
+    dtostrf(humidity_fromDHT22, 1, 1, fbuffChar);
+    queueOutgoing("<HUM01,%s>", fbuffChar);
 
-    strcpy(bufferChar, "<WGT01,");
-    dtostrf(waterWeight, 1, 1, fbuffChar); 
-    listofDataToSend[listofDataToSend_numberOfData] = strcat(strcat(bufferChar, fbuffChar), ">");
-    listofDataToSend_numberOfData++;
+    dtostrf(temp_fromDHT22, 1, 1, fbuffChar);
+    queueOutgoing("<HTP01,%s>", fbuffChar);
+
+    dtostrf(temperature_externalTemperatureSensor, 1, 1, fbuffChar);
+    queueOutgoing("<EXTT,%s>", fbuffChar);
+
+    dtostrf(waterWeight, 1, 1, fbuffChar);
+    queueOutgoing("<WGT01,%s>", fbuffChar);
 
     /*
-    // feedback about auxHeater state
-    listofDataToSend[listofDataToSend_numberOfData] = switch1_state ? "<SWT01, 1>":"<SWT01, 0>"; // converting bool to string
-    listofDataToSend_numberOfData++;
-      */
+       DIAGNOSTICA - si può togliere quando il problema dei silenzi è chiuso.
+       UPT = millis() della scheda, MEM = RAM libera. Servono a distinguere tre
+       cause che dal PC appaiono identiche (nessun dato per ~2.4 s):
+         - uptime che riparte da ~0   -> la scheda si è riavviata
+         - uptime continuo ma con un salto di ~2400 ms -> firmware bloccato
+         - uptime che avanza regolare  -> la scheda non ha mai smesso di
+                                          trasmettere: il problema è lato PC
+       MEM basso è normale su un UNO (2 KB totali): qui non indica più
+       frammentazione da String (eliminata), resta comunque utile come
+       margine generale di sicurezza.
+    */
+    queueOutgoing("<UPT,%lu>", millis());
+    queueOutgoing("<MEM,%d>", freeRam());
+
     gotTemperatures = false;
   }
-  
+
   // SENDING TO RPY
-  
   if(listofDataToSend_numberOfData > 0 && serial_communication_is_ok){
-    Serial.print('@'); // SYMBOL TO START BOARDS TRANSMISSION
+    Serial.print('@');
     for(byte i = 0; i < listofDataToSend_numberOfData; i++){
-      Serial.print(listofDataToSend[i]); 
+      Serial.print(listofDataToSend[i]);
     }
-    Serial.println('#'); // SYMBOL TO END BOARDS TRANSMISSION
+    Serial.println('#');
   }
   listofDataToSend_numberOfData = 0;
 
@@ -955,7 +1055,7 @@ void loop() {
     last_cycle_time = millis();
     if (cycle_time > 20){
         Serial.println(cycle_time);
-    }    
+    }
   }
   delay(1);
 
@@ -967,10 +1067,6 @@ void loop() {
   motor_moveCCW_cmd = false;
   motor_moveCW_cmd = false;
   motor_stop_cmd = false;
-
-  /* DEBUG */
-  //digitalWrite(RED_LED, !serial_communication_is_ok);
-  //digitalWrite(ALIVE, alive_bit);
 
   if(!ENABLE_HEATER){
     digitalWrite(HEATER_PIN, LOW);
@@ -986,7 +1082,156 @@ void loop() {
 }
 
 
-// Function to convert a byte to its hexadecimal representation
+// ============================================================
+//  Inductor read helpers – single call point for sim vs hardware
+// ============================================================
+bool getCCW() {
+#if SIMULATION
+  return sim_getCCW();
+#else
+  return ccw_inductor_input.getInputState();
+#endif
+}
+
+bool getCW() {
+#if SIMULATION
+  return sim_getCW();
+#else
+  return cw_inductor_input.getInputState();
+#endif
+}
+
+
+// ============================================================
+//  SIMULATION MODE – implementation
+// ============================================================
+#if SIMULATION
+
+bool sim_getCCW() { return _sim_ccw; }
+bool sim_getCW()  { return _sim_cw;  }
+
+void sim_startCCW() {
+  _sim_moving  = true;
+  _sim_dir_cw  = false;
+  _sim_move_t0 = millis();
+  _sim_ccw     = false;
+  _sim_cw      = false;
+}
+
+void sim_startCW() {
+  _sim_moving  = true;
+  _sim_dir_cw  = true;
+  _sim_move_t0 = millis();
+  _sim_ccw     = false;
+  _sim_cw      = false;
+}
+
+// Advance the virtual motor: set the appropriate limit flag when travel time elapses
+void sim_motor_tick() {
+  if (_sim_moving && (millis() - _sim_move_t0 >= SIM_TRAVEL_MS)) {
+    _sim_moving = false;
+    if (_sim_dir_cw) { _sim_cw  = true;  _sim_ccw = false; }
+    else             { _sim_ccw = true;   _sim_cw  = false; }
+  }
+}
+
+/*
+  sim_generateSensors() – called every SIM_SENSOR_MS from loop().
+  Fills all the same global variables that real sensor reads would fill:
+    temperatures[0..3]                 – 4 internal DS18B20  (35-39 °C)
+    humidity_fromDHT22                 – DHT22 humidity       (50-60 %)
+    temp_fromDHT22                     – DHT22 temperature    (~36.5 °C)
+    temperature_externalTemperatureSensor – external DS18B20  (~20 °C)
+    waterWeight                        – HX711 load cell      (g)
+*/
+void sim_generateSensors() {
+  float t = millis() / 1000.0f;  // seconds since boot
+
+  // ── Internal DS18B20 temperatures ──────────────────────────────────────
+  // Centre 37 °C, slow sine ±1 °C (period 60 s), per-sensor placement
+  // offset, gaussian-ish noise ±0.1 °C.
+  float tBase = 37.0f + sinf(2.0f * PI * t / 60.0f);
+  const float kOff[4] = { 0.3f, 0.0f, -0.3f, 0.1f };
+  for (int i = 0; i < 4; i++)
+    temperatures[i] = tBase + kOff[i] + (random(-10, 11) / 100.0f);
+
+  // ── DHT22 humidity ──────────────────────────────────────────────────────
+  // Centre 55 %, ±3 % sine (period 90 s), ±0.3 % noise.
+  humidity_fromDHT22 = 55.0f
+      + 3.0f * sinf(2.0f * PI * t / 90.0f + 1.0f)
+      + (random(-30, 31) / 100.0f);
+
+  // ── DHT22 co-located temperature ───────────────────────────────────────
+  // Centre 36.5 °C (slightly lower than DS18B20 due to sensor placement),
+  // ±0.5 °C (period 70 s).
+  temp_fromDHT22 = 36.5f
+      + 0.5f * sinf(2.0f * PI * t / 70.0f + 0.5f)
+      + (random(-15, 16) / 100.0f);
+
+  // ── External DS18B20 ───────────────────────────────────────────────────
+  // Centre 20 °C, ±2 °C slow drift (period 300 s, simulates ambient
+  // day/night variation), ±0.1 °C noise.
+  temperature_externalTemperatureSensor = 20.0f
+      + 2.0f * sinf(2.0f * PI * t / 300.0f + 2.0f)
+      + (random(-10, 11) / 100.0f);
+
+  // ── Water weight (load cell) ────────────────────────────────────────────
+  // Slow evaporation: −0.1 g per SIM_SENSOR_MS interval (~12 g/hr).
+  // When electrovalve is open: +10 g per interval (~72 g/min fill rate).
+  // Clamped to [100 g … 3000 g].
+  bool valveOpen = (digitalRead(WATER_ELECTROVALVE_PIN) == HIGH);
+  _sim_wgt_g += valveOpen ? 10.0f : -0.1f;
+  _sim_wgt_g   = constrain(_sim_wgt_g, 100.0f, 3000.0f);
+  waterWeight  = round(_sim_wgt_g * 10.0f) / 10.0f;
+}
+
+#endif  // SIMULATION
+
+
+// ============================================================
+//  Utility functions (unchanged from original)
+// ============================================================
+
+/*
+   RAM libera fra lo heap e lo stack. Il percorso comandi non usa più String
+   (vedi commento su MAX_NUMBER_OF_COMMANDS_TO_BOARD), quindi qui non c'è più
+   frammentazione da temere; resta comunque utile come diagnostica generale.
+*/
+int freeRam() {
+  extern int __heap_start, *__brkval;
+  int v;
+  return (int)&v - (__brkval == 0 ? (int)&__heap_start : (int)__brkval);
+}
+
+/*
+   Accoda un token "<TAG,valore>" in listofDataToSend, format-string in stile
+   printf. Sostituisce le vecchie sequenze strcpy/strcat su un buffer globale
+   condiviso + assegnazione a String: niente più heap, e vsnprintf tronca da
+   solo se il risultato supera OUTGOING_ITEM_LEN invece di scrivere fuori dal
+   buffer.
+*/
+void queueOutgoing(const char *fmt, ...) {
+  if (listofDataToSend_numberOfData >= MAX_NUMBER_OF_COMMANDS_TO_BOARD) return;
+  va_list args;
+  va_start(args, fmt);
+  vsnprintf(listofDataToSend[listofDataToSend_numberOfData], OUTGOING_ITEM_LEN, fmt, args);
+  va_end(args);
+  listofDataToSend_numberOfData++;
+}
+
+// Equivalente in-place di String::trim(): toglie spazi/tab/CR/LF iniziali e finali.
+void trimInPlace(char *s) {
+  char *start = s;
+  while (*start == ' ' || *start == '\t' || *start == '\r' || *start == '\n') start++;
+  size_t len = strlen(start);
+  if (start != s) memmove(s, start, len + 1);
+  while (len > 0) {
+    char c = s[len - 1];
+    if (c != ' ' && c != '\t' && c != '\r' && c != '\n') break;
+    s[--len] = '\0';
+  }
+}
+
 void byteToHex(uint8_t byteValue, char *hexValue) {
   uint8_t highNibble = byteValue >> 4;
   uint8_t lowNibble = byteValue & 0x0F;
@@ -994,62 +1239,60 @@ void byteToHex(uint8_t byteValue, char *hexValue) {
   hexValue[1] = lowNibble < 10 ? '0' + lowNibble : 'A' + (lowNibble - 10);
 }
 
-// Function to print a device address
 void addressToCharArray(DeviceAddress deviceAddress, char *charArray) {
   for (uint8_t i = 0; i < 8; i++) {
     byteToHex(deviceAddress[i], &charArray[i * 2]);
   }
-  // Add null terminator at the end of the char array
   charArray[16] = '\0';
 }
 
-int readFromBoard(){ // returns the number of commands received
+int readFromBoard(){
   receivingDataFromBoard = true;
   byte rcIndex = 0;
-  char bufferChar[30];
   bool saving = false;
   bool enableReading = false;
   byte receivedCommandsIndex = 0;
 
-  unsigned long  startReceiving = millis(); // mi ricordo appena entro in while loop
+  unsigned long  startReceiving = millis();
 
   while(receivingDataFromBoard){
-    // qui è bloccante...assumo che prima o poi arduino pubblichi
-    if(Serial.available() > 0){ // no while, perché potrei avere un attimo il buffer vuoto...senza aver ancora ricevuto il terminatore
-      startReceiving = millis(); // ogni volta in cui leggo resetto il timer
-      char rc = Serial.read(); 
+    if(Serial.available() > 0){
+      startReceiving = millis();
+      char rc = Serial.read();
 
-      if(rc == '@'){ // // SYMBOL TO START TRANSMISSION (tutto quello che c'era prima era roba spuria che ho pulito)
+      if(rc == '@'){
         enableReading = true;
       }
 
       if(enableReading){
-        if(rc == '<'){ // SYMBOL TO START MESSAGE
+        if(rc == '<'){
           saving = true;
-        }
-        else if(rc == '>'){ // SYMBOL TO END MESSAGE
-          bufferChar[rcIndex] = '\0';
-          receivedCommands[receivedCommandsIndex] = bufferChar;
-          receivedCommandsIndex ++;
           rcIndex = 0;
-          saving = false;// starting char
         }
-        else if(rc == '#'){ // SYMBOL TO END BOARDS TRANSMISSION
-          receivingDataFromBoard = false; // buffer vuoto, vado avanti
-          //enableReading = false
+        else if(rc == '>'){
+          // Scrive direttamente nel buffer fisso del comando corrente: niente
+          // più buffer di appoggio da ricopiare in una String.
+          if (receivedCommandsIndex < MAX_NUMBER_OF_COMMANDS_TO_BOARD) {
+            receivedCommands[receivedCommandsIndex][rcIndex] = '\0';
+            receivedCommandsIndex ++;
+          }
+          rcIndex = 0;
+          saving = false;
+        }
+        else if(rc == '#'){
+          receivingDataFromBoard = false;
         }
         else{
-          if(saving){
-            bufferChar[rcIndex] = rc;
+          if(saving && receivedCommandsIndex < MAX_NUMBER_OF_COMMANDS_TO_BOARD
+                    && rcIndex < (INCOMING_CMD_LEN - 1)){
+            receivedCommands[receivedCommandsIndex][rcIndex] = rc;
             rcIndex ++;
           }
         }
       }
     }
     else{
-      // timer che conta perché non riceviamo più e mi fa uscire??
-      // se sono qui è perché sto aspettando, ma non ricevendo
-      if((millis() - startReceiving) > 150){ // se passo in attesa più di 750ms, allora intervengo e mando fuori
+      if((millis() - startReceiving) > 150){
         receivingDataFromBoard = false;
       }
     }
@@ -1060,7 +1303,7 @@ int readFromBoard(){ // returns the number of commands received
 void updateDevice(Device &device, int pin, unsigned long fastInterval, unsigned long slowInterval) {
     unsigned long currentTime = millis();
     unsigned long interval = (device.state == FLASH_FAST || device.state == BEEP_FAST) ? fastInterval : slowInterval;
-    
+
     switch (device.state) {
         case OFF:
             digitalWrite(pin, LOW);
@@ -1083,49 +1326,56 @@ void updateDevice(Device &device, int pin, unsigned long fastInterval, unsigned 
     }
 }
 
-bool splitCommand(String input, String &tag, String &value, String &uid) {
-  // funzione di parsing
-  input.trim();
-  
-  int firstComma = input.indexOf(',');
-  int secondComma = input.indexOf(',', firstComma + 1);
+bool splitCommand(const char *input,
+                   char *tag, size_t tagSize,
+                   char *value, size_t valueSize,
+                   char *uid, size_t uidSize) {
+  const char *firstComma = strchr(input, ',');
+  if (!firstComma) return false;
+  const char *secondComma = strchr(firstComma + 1, ',');
 
-  if (firstComma < 0) return false;
+  size_t tagLen = (size_t)(firstComma - input);
+  if (tagLen >= tagSize) tagLen = tagSize - 1;
+  strncpy(tag, input, tagLen);
+  tag[tagLen] = '\0';
 
-  tag = input.substring(0, firstComma);
-  
-  if (secondComma < 0) {
-    value = input.substring(firstComma + 1);
-    uid = "";
+  const char *valueStart = firstComma + 1;
+  const char *valueEnd = secondComma ? secondComma : (input + strlen(input));
+  size_t valueLen = (size_t)(valueEnd - valueStart);
+  if (valueLen >= valueSize) valueLen = valueSize - 1;
+  strncpy(value, valueStart, valueLen);
+  value[valueLen] = '\0';
+
+  if (secondComma) {
+    size_t uidLen = strlen(secondComma + 1);
+    if (uidLen >= uidSize) uidLen = uidSize - 1;
+    strncpy(uid, secondComma + 1, uidLen);
+    uid[uidLen] = '\0';
   } else {
-    value = input.substring(firstComma + 1, secondComma);
-    uid = input.substring(secondComma + 1);
+    uid[0] = '\0';
   }
 
-  tag.trim();
-  value.trim();
-  uid.trim();
+  trimInPlace(tag);
+  trimInPlace(value);
+  trimInPlace(uid);
 
   return true;
 }
 
 // ============================================================
-//  Funzioni di controllo motore DC
+//  DC motor control functions
 // ============================================================
 
-// Senso orario (Clockwise)
 void motorCW(int pin_in1, int pin_in2) {
   analogWrite(pin_in1, MOTOR_SPEED);
   digitalWrite(pin_in2, LOW);
 }
 
-// Senso antiorario (Counter-Clockwise)
 void motorCCW(int pin_in1, int pin_in2) {
   digitalWrite(pin_in1, LOW);
   analogWrite(pin_in2, MOTOR_SPEED);
 }
 
-// Fermo (brake: IN1=LOW, IN2=LOW, ENA=0)
 void motorStop(int pin_in1, int pin_in2) {
   digitalWrite(pin_in1, LOW);
   digitalWrite(pin_in2, LOW);
